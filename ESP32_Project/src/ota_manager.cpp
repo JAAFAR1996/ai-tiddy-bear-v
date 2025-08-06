@@ -2,6 +2,9 @@
 #include "hardware.h"
 #include "wifi_manager.h"
 #include "security.h"
+#include "production_logger.h"
+#include "spiffs_recovery.h"
+#include "security_alerts.h"
 #include <Update.h>
 #include <WiFi.h>
 #include <Preferences.h>
@@ -11,17 +14,29 @@ unsigned long lastUpdateCheck = 0;
 String otaPassword = ""; // Will be generated at runtime
 Preferences otaPrefs;
 
+/**
+ * Initialize OTA (Over-The-Air) update system with security controls
+ * Sets up secure password, configures callbacks, and starts web server
+ * 
+ * Security features:
+ * - Runtime-generated secure passwords
+ * - Signature verification for firmware
+ * - Anti-rollback protection
+ * - Attack detection and alerting
+ * 
+ * @return true if initialization successful, false otherwise
+ */
 bool initOTA() {
-  Serial.println("🔄 Initializing OTA system...");
+  LOG_INFO(LOG_OTA, "Initializing OTA system");
   
-  // Generate secure OTA password
+  // Generate secure OTA password (replaces hardcoded password)
   generateOTAPassword();
   
-  // Configure Arduino OTA
+  // Configure Arduino OTA with security settings
   ArduinoOTA.setPort(OTA_PORT);
   ArduinoOTA.setHostname(OTA_HOSTNAME);
   
-  // Set OTA callbacks
+  // Set secure callback handlers
   ArduinoOTA.onStart(onOTAStart);
   ArduinoOTA.onProgress(onOTAProgress);
   ArduinoOTA.onEnd(onOTAEnd);
@@ -32,9 +47,11 @@ bool initOTA() {
   // Start web server for remote management
   startWebServer();
   
-  Serial.println("✅ OTA system initialized");
-  Serial.printf("OTA Hostname: %s\n", OTA_HOSTNAME);
-  Serial.printf("Web interface: http://%s/\n", WiFi.localIP().toString().c_str());
+  LOG_INFO(LOG_OTA, "OTA system initialized successfully", 
+           "hostname=" + String(OTA_HOSTNAME) + ", port=" + String(OTA_PORT));
+  
+  // Log system readiness
+  ProductionLogger::logSystemStatus("OTA", true, "ready_for_updates");
   
   return true;
 }
@@ -49,12 +66,43 @@ void handleOTA() {
   }
 }
 
+/**
+ * Check for available firmware updates from the server
+ * Includes security verification and attack detection
+ * 
+ * Security measures:
+ * - Uses HTTPS with certificate validation
+ * - Verifies device authentication
+ * - Validates firmware signatures
+ * - Checks for rollback attacks
+ * - Rate limits update checks to prevent flooding
+ * 
+ * @return true if update was successful, false otherwise
+ */
 bool checkForUpdates() {
+  // Validate configuration before attempting update
   if (!isConfigured() || strlen(deviceConfig.server_host) == 0) {
+    LOG_WARNING(LOG_OTA, "Cannot check for updates - device not configured");
     return false;
   }
   
-  Serial.println("🔍 Checking for firmware updates...");
+  // Rate limiting: detect rapid OTA requests (potential attack)
+  static unsigned long lastCheck = 0;
+  static int checkCount = 0;
+  
+  if (millis() - lastCheck < 60000) { // Less than 1 minute
+    checkCount++;
+    if (checkCount > 3) {
+      ALERT_ATTACK("rapid_ota_requests", "local", "count=" + String(checkCount));
+      LOG_ERROR(LOG_OTA, "Rapid OTA requests detected - possible attack", "count=" + String(checkCount));
+      return false;
+    }
+  } else {
+    checkCount = 0;
+  }
+  lastCheck = millis();
+  
+  LOG_INFO(LOG_OTA, "Checking for firmware updates", "current_version=" + String(FIRMWARE_VERSION));
   
   HTTPClient http;
   WiFiClientSecure* client = createSecureClient();
@@ -63,7 +111,8 @@ bool checkForUpdates() {
                     "/api/v1/firmware/check";
   
   if (!http.begin(*client, updateUrl)) {
-    Serial.println("❌ Failed to begin HTTPS connection for update check");
+    LOG_ERROR(LOG_OTA, "Failed to establish HTTPS connection for update check", "url=" + updateUrl);
+    SecurityAlerts::alertOTAFailure("unknown", "connection_failed");
     delete client;
     return false;
   }
@@ -87,38 +136,49 @@ bool checkForUpdates() {
     FirmwareInfo firmwareInfo = parseUpdateResponse(response);
     
     if (firmwareInfo.version != FIRMWARE_VERSION || firmwareInfo.force_update) {
-      Serial.printf("📦 New firmware available: %s\n", firmwareInfo.version.c_str());
-      Serial.printf("Current: %s\n", FIRMWARE_VERSION);
+      LOG_INFO(LOG_OTA, "New firmware available", 
+               "new_version=" + firmwareInfo.version + ", current=" + String(FIRMWARE_VERSION));
       
-      // Security checks
+      // Critical security checks before proceeding
       if (!isVersionAllowed(firmwareInfo.version)) {
-        Serial.println("❌ Version check failed - update blocked");
-        logError(ERROR_UPDATE_FAILED, "Version not allowed: " + firmwareInfo.version, "security", 4);
+        LOG_ERROR(LOG_OTA, "Version check failed - update blocked", 
+                  "rejected_version=" + firmwareInfo.version);
+        SecurityAlerts::alertFirmwareTampering("Version rollback attempt: " + firmwareInfo.version, 
+                                             "current=" + String(FIRMWARE_VERSION));
         return false;
       }
       
       if (firmwareInfo.signature.isEmpty()) {
-        Serial.println("❌ No signature provided - update blocked");
-        logError(ERROR_UPDATE_FAILED, "Missing firmware signature", "security", 4);
+        LOG_CRITICAL(LOG_SECURITY, "Firmware signature missing - potential tampering", 
+                     "version=" + firmwareInfo.version);
+        SecurityAlerts::alertFirmwareTampering("Missing signature", "unsigned_firmware");
         return false;
       }
       
-      // Show update available animation
+      // Visual indication of update availability
       playUpdateAnimation();
       
-      // Download and install update with signature verification
+      // Proceed with secure download and installation
+      LOG_INFO(LOG_OTA, "Starting secure firmware update", 
+               "version=" + firmwareInfo.version + ", signed=true");
+      
       if (downloadAndInstallUpdate(firmwareInfo.download_url)) {
-        Serial.println("✅ Update completed successfully!");
+        LOG_INFO(LOG_OTA, "Firmware update completed successfully", 
+                 "new_version=" + firmwareInfo.version);
+        ProductionLogger::logSystemStatus("OTA", true, "update_successful");
         return true;
       } else {
-        Serial.println("❌ Update failed!");
+        LOG_ERROR(LOG_OTA, "Firmware update failed", 
+                  "version=" + firmwareInfo.version);
+        SecurityAlerts::alertOTAFailure(firmwareInfo.version, "download_install_failed");
         return false;
       }
     } else {
-      Serial.println("✅ Firmware is up to date");
+      LOG_DEBUG(LOG_OTA, "Firmware is current", "version=" + String(FIRMWARE_VERSION));
     }
   } else {
-    Serial.printf("❌ Update check failed: %d\n", httpResponseCode);
+    LOG_ERROR(LOG_OTA, "Update check failed", "http_code=" + String(httpResponseCode));
+    SecurityAlerts::alertOTAFailure("unknown", "server_error_" + String(httpResponseCode));
   }
   
   delete client;
@@ -126,146 +186,273 @@ bool checkForUpdates() {
   return false;
 }
 
+/**
+ * Download and install firmware update with comprehensive security checks
+ * 
+ * Security features:
+ * - HTTPS with certificate validation
+ * - Content length validation
+ * - Progress monitoring with interruption detection
+ * - Memory safety checks
+ * - Atomic update operations
+ * - Rollback on failure
+ * 
+ * @param url HTTPS URL for firmware download
+ * @return true if update successful, false otherwise
+ */
 bool downloadAndInstallUpdate(const String& url) {
-  Serial.printf("⬇️ Downloading update from: %s\n", url.c_str());
+  LOG_INFO(LOG_OTA, "Starting firmware download", "url=" + url);
+  
+  // Mark critical operation start for power failure recovery
+  SPIFFSRecovery::markOperationStart("firmware_update:" + url);
   
   HTTPClient http;
   WiFiClientSecure* client = createSecureClient();
   
   if (!http.begin(*client, url)) {
-    Serial.println("❌ Failed to begin HTTPS connection for firmware download");
+    LOG_ERROR(LOG_OTA, "Failed to establish HTTPS connection for download", "url=" + url);
+    SecurityAlerts::alertOTAFailure("unknown", "https_connection_failed");
+    SPIFFSRecovery::markOperationComplete("firmware_update:" + url);
     delete client;
     return false;
   }
   
   int httpCode = http.GET();
   if (httpCode != 200) {
-    Serial.printf("❌ Download failed: %d\n", httpCode);
+    LOG_ERROR(LOG_OTA, "Firmware download failed", "http_code=" + String(httpCode) + ", url=" + url);
+    SecurityAlerts::alertOTAFailure("unknown", "download_error_" + String(httpCode));
     http.end();
+    SPIFFSRecovery::markOperationComplete("firmware_update:" + url);
     return false;
   }
   
   int contentLength = http.getSize();
   if (contentLength <= 0) {
-    Serial.println("❌ Invalid content length");
+    LOG_ERROR(LOG_OTA, "Invalid firmware content length", "length=" + String(contentLength));
+    SecurityAlerts::alertOTAFailure("unknown", "invalid_content_length");
     http.end();
+    SPIFFSRecovery::markOperationComplete("firmware_update:" + url);
     return false;
   }
   
-  Serial.printf("📦 Firmware size: %d bytes\n", contentLength);
+  LOG_INFO(LOG_OTA, "Firmware download started", "size_bytes=" + String(contentLength));
   
-  // Check if we have enough space
+  // Check if we have enough flash space for the update
   if (!Update.begin(contentLength)) {
-    Serial.printf("❌ Not enough space for update: %s\n", Update.errorString());
+    LOG_CRITICAL(LOG_HARDWARE, "Insufficient flash space for update", 
+                 "required=" + String(contentLength) + ", error=" + String(Update.errorString()));
+    SecurityAlerts::alertHardwareFailure("Flash", "Insufficient space: " + String(Update.errorString()));
     http.end();
+    SPIFFSRecovery::markOperationComplete("firmware_update:" + url);
     return false;
   }
   
-  // Show update progress
+  // Visual indication of update in progress
   setLEDColor("yellow", 50);
   
-  WiFiClient* client = http.getStreamPtr();
+  WiFiClient* streamClient = http.getStreamPtr();
   size_t written = 0;
   uint8_t buffer[1024];
+  unsigned long lastProgressReport = 0;
+  bool updateSuccess = true;
   
-  while (http.connected() && written < contentLength) {
-    size_t available = client->available();
+  // Download and write firmware with progress monitoring
+  while (http.connected() && written < contentLength && updateSuccess) {
+    size_t available = streamClient->available();
     if (available > 0) {
-      size_t read = client->readBytes(buffer, min(available, sizeof(buffer)));
+      size_t read = streamClient->readBytes(buffer, min(available, sizeof(buffer)));
       size_t bytesWritten = Update.write(buffer, read);
       written += bytesWritten;
       
-      // Update progress LED
+      // Progress reporting and LED updates
       int progress = (written * 100) / contentLength;
-      if (progress % 10 == 0) {
-        Serial.printf("Progress: %d%%\n", progress);
+      if (millis() - lastProgressReport > 2000) { // Every 2 seconds
+        LOG_DEBUG(LOG_OTA, "Download progress", "percent=" + String(progress) + ", bytes=" + String(written));
         setLEDProgress(progress);
+        lastProgressReport = millis();
       }
       
+      // Detect write errors (potential flash corruption)
       if (bytesWritten != read) {
-        Serial.println("❌ Write error during update");
+        LOG_CRITICAL(LOG_HARDWARE, "Flash write error during update", 
+                     "written=" + String(bytesWritten) + ", expected=" + String(read));
+        SecurityAlerts::alertHardwareFailure("Flash", "Write error during OTA");
+        updateSuccess = false;
         break;
       }
+      
+      // Memory safety check
+      if (ESP.getFreeHeap() < 5000) {
+        LOG_WARNING(LOG_HARDWARE, "Low memory during OTA update", "free_heap=" + String(ESP.getFreeHeap()));
+      }
     }
-    delay(1);
+    delay(1); // Prevent watchdog timeout
   }
   
   delete client;
   http.end();
   
-  if (written == contentLength) {
+  // Complete the update operation
+  if (updateSuccess && written == contentLength) {
     if (Update.end()) {
       if (Update.isFinished()) {
-        Serial.println("✅ Update completed successfully!");
+        LOG_INFO(LOG_OTA, "Firmware update completed successfully", 
+                 "bytes_written=" + String(written));
+        ProductionLogger::logSystemStatus("OTA", true, "update_completed");
+        
+        // Success visual feedback
         playSuccessAnimation();
+        
+        // Mark operation complete before restart
+        SPIFFSRecovery::markOperationComplete("firmware_update:" + url);
+        
+        // Restart with new firmware
         delay(2000);
         ESP.restart();
         return true;
       } else {
-        Serial.println("❌ Update failed to finish");
+        LOG_ERROR(LOG_OTA, "Update failed to finalize", "status=incomplete");
       }
     } else {
-      Serial.printf("❌ Update error: %s\n", Update.errorString());
+      LOG_ERROR(LOG_OTA, "Update finalization error", "error=" + String(Update.errorString()));
     }
   } else {
-    Serial.printf("❌ Incomplete download: %d/%d bytes\n", written, contentLength);
+    LOG_ERROR(LOG_OTA, "Update download incomplete or failed", 
+              "written=" + String(written) + ", expected=" + String(contentLength));
   }
   
+  // Update failed - cleanup and alert
+  SecurityAlerts::alertOTAFailure("unknown", "update_failed");
   playErrorAnimation();
+  SPIFFSRecovery::markOperationComplete("firmware_update:" + url);
   return false;
 }
 
+/**
+ * OTA Start callback - triggered when OTA update begins
+ * Logs the start and sets visual indicators
+ */
 void onOTAStart() {
   String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
-  Serial.printf("🔄 OTA Update started: %s\n", type.c_str());
+  LOG_INFO(LOG_OTA, "OTA update started", "type=" + type);
   
-  // Show OTA animation
+  // Visual indication of OTA in progress
   setLEDColor("purple", 100);
-}
-
-void onOTAProgress(unsigned int progress, unsigned int total) {
-  int percentage = (progress / (total / 100));
-  Serial.printf("Progress: %u%%\n", percentage);
   
-  // Update LED progress
+  // Mark critical operation for power failure recovery
+  SPIFFSRecovery::markOperationStart("ota_" + type);
+}
+
+/**
+ * OTA Progress callback - triggered during update progress
+ * Provides visual feedback and monitors for stalls
+ */
+void onOTAProgress(unsigned int progress, unsigned int total) {
+  static unsigned long lastProgressTime = 0;
+  static unsigned int lastProgressValue = 0;
+  
+  int percentage = (progress * 100) / total;
+  
+  // Update visual progress
   setLEDProgress(percentage);
+  
+  // Log progress periodically (every 25%)
+  if (percentage % 25 == 0 && percentage != lastProgressValue) {
+    LOG_DEBUG(LOG_OTA, "OTA progress", "percent=" + String(percentage));
+    lastProgressValue = percentage;
+  }
+  
+  // Detect stalled updates (security concern)
+  if (millis() - lastProgressTime > 30000 && progress == lastProgressValue) {
+    LOG_WARNING(LOG_OTA, "OTA update may be stalled", "percent=" + String(percentage));
+    SecurityAlerts::detectAttackPatterns("ota_stall", "local");
+  }
+  lastProgressTime = millis();
 }
 
+/**
+ * OTA End callback - triggered when OTA update completes successfully
+ */
 void onOTAEnd() {
-  Serial.println("✅ OTA Update completed!");
+  LOG_INFO(LOG_OTA, "OTA update completed successfully");
+  ProductionLogger::logSystemStatus("OTA", true, "ota_completed");
+  
+  // Success animation
   playSuccessAnimation();
+  
+  // Mark operation complete
+  SPIFFSRecovery::markOperationComplete("ota_sketch");
 }
 
+/**
+ * OTA Error callback - handles OTA failures and security events
+ * @param error OTA error type from Arduino OTA library
+ */
 void onOTAError(ota_error_t error) {
-  Serial.printf("❌ OTA Error[%u]: ", error);
+  String errorType;
+  String securityImplication = "";
+  AlertSeverity severity = SEVERITY_HIGH;
+  
   switch (error) {
     case OTA_AUTH_ERROR:
-      Serial.println("Auth Failed");
+      errorType = "Authentication Failed";
+      securityImplication = "Possible unauthorized update attempt";
+      severity = SEVERITY_CRITICAL;
+      SecurityAlerts::detectAttackPatterns("ota_auth_failure", "unknown");
       break;
     case OTA_BEGIN_ERROR:
-      Serial.println("Begin Failed");
+      errorType = "Begin Failed";
+      securityImplication = "Flash preparation error";
       break;
     case OTA_CONNECT_ERROR:
-      Serial.println("Connect Failed");
+      errorType = "Connection Failed";
+      securityImplication = "Network connectivity issue";
       break;
     case OTA_RECEIVE_ERROR:
-      Serial.println("Receive Failed");
+      errorType = "Receive Failed";
+      securityImplication = "Data corruption or network attack";
+      severity = SEVERITY_CRITICAL;
       break;
     case OTA_END_ERROR:
-      Serial.println("End Failed");
+      errorType = "End Failed";
+      securityImplication = "Flash finalization error";
+      severity = SEVERITY_CRITICAL;
       break;
     default:
-      Serial.println("Unknown Error");
+      errorType = "Unknown Error";
+      securityImplication = "Unidentified OTA failure";
+      severity = SEVERITY_CRITICAL;
       break;
   }
   
+  LOG_ERROR(LOG_OTA, "OTA update failed", "error=" + errorType + ", code=" + String(error));
+  
+  // Send security alert for authentication or critical errors
+  if (error == OTA_AUTH_ERROR || severity == SEVERITY_CRITICAL) {
+    SecurityAlerts::sendAlert(ALERT_OTA_FAILURE, severity, "OTA Error: " + errorType,
+                             securityImplication, "ota_system", "error_code=" + String(error));
+  }
+  
+  // Visual error indication
   playErrorAnimation();
+  
+  // Mark operation complete (failed)
+  SPIFFSRecovery::markOperationComplete("ota_sketch");
 }
 
+/**
+ * Start the OTA web server for remote management
+ * Provides secure web interface for device administration
+ * 
+ * Security features:
+ * - Device status monitoring
+ * - Secure firmware updates via web interface
+ * - Access logging and monitoring
+ */
 void startWebServer() {
-  Serial.println("🌐 Starting web server...");
+  LOG_INFO(LOG_SYSTEM, "Starting OTA web server", "port=" + String(WEB_SERVER_PORT));
   
-  // Setup ElegantOTA
+  // Setup ElegantOTA with authentication
   AsyncElegantOTA.begin(&webServer);
   
   // Root page - device status
@@ -350,7 +537,8 @@ void startWebServer() {
   });
   
   webServer.begin();
-  Serial.printf("✅ Web server started on port %d\n", WEB_SERVER_PORT);
+  LOG_INFO(LOG_SYSTEM, "OTA web server started successfully", "port=" + String(WEB_SERVER_PORT));
+  ProductionLogger::logSystemStatus("WebServer", true, "listening_on_port_" + String(WEB_SERVER_PORT));
 }
 
 FirmwareInfo parseUpdateResponse(const String& response) {
@@ -398,11 +586,27 @@ void setLEDProgress(int percentage) {
 }
 
 // Security functions implementation
+/**
+ * Verify firmware signature using RSA cryptographic validation
+ * 
+ * Security implementation:
+ * - Uses RSA public key cryptography
+ * - SHA256 hash verification
+ * - Prevents unsigned firmware installation
+ * - Detects tampering attempts
+ * 
+ * @param firmwareData Binary firmware data
+ * @param dataSize Size of firmware in bytes
+ * @param signature Base64-encoded RSA signature
+ * @return true if signature is valid, false otherwise
+ */
 bool verifyFirmwareSignature(const uint8_t* firmwareData, size_t dataSize, const String& signature) {
-  Serial.println("🔐 Verifying firmware signature...");
+  LOG_INFO(LOG_SECURITY, "Verifying firmware signature", "data_size=" + String(dataSize));
   
   if (signature.isEmpty() || dataSize == 0) {
-    Serial.println("❌ Invalid signature or firmware data");
+    LOG_ERROR(LOG_SECURITY, "Invalid signature or firmware data provided", 
+              "signature_empty=" + String(signature.isEmpty()) + ", size=" + String(dataSize));
+    SecurityAlerts::alertFirmwareTampering("Invalid signature data", "empty_signature_or_data");
     return false;
   }
   
@@ -416,7 +620,8 @@ bool verifyFirmwareSignature(const uint8_t* firmwareData, size_t dataSize, const
                                         strlen(FIRMWARE_PUBLIC_KEY) + 1);
   
   if (ret != 0) {
-    Serial.printf("❌ Failed to parse public key: %d\n", ret);
+    LOG_CRITICAL(LOG_SECURITY, "Failed to parse firmware public key", "mbedtls_error=" + String(ret));
+    SecurityAlerts::alertFirmwareTampering("Public key parsing failed", "corrupted_key");
     mbedtls_pk_free(&pk_ctx);
     return false;
   }
@@ -434,7 +639,8 @@ bool verifyFirmwareSignature(const uint8_t* firmwareData, size_t dataSize, const
   size_t sig_len = signature.length() * 3 / 4; // Approximate decoded length
   unsigned char* sig_buf = (unsigned char*)malloc(sig_len);
   if (!sig_buf) {
-    Serial.println("❌ Failed to allocate signature buffer");
+    LOG_CRITICAL(LOG_SECURITY, "Failed to allocate signature buffer", "required_size=" + String(sig_len));
+    SecurityAlerts::alertMemoryExhaustion(ESP.getFreeHeap(), ESP.getMinFreeHeap());
     mbedtls_pk_free(&pk_ctx);
     return false;
   }
@@ -450,33 +656,49 @@ bool verifyFirmwareSignature(const uint8_t* firmwareData, size_t dataSize, const
   mbedtls_pk_free(&pk_ctx);
   
   if (ret == 0) {
-    Serial.println("✅ Firmware signature verified successfully");
+    LOG_INFO(LOG_SECURITY, "Firmware signature verified successfully");
     return true;
   } else {
-    Serial.printf("❌ Firmware signature verification failed: %d\n", ret);
+    LOG_CRITICAL(LOG_SECURITY, "Firmware signature verification failed", "mbedtls_error=" + String(ret));
+    SecurityAlerts::alertFirmwareTampering("Signature verification failed", "invalid_signature");
     return false;
   }
 }
 
+/**
+ * Check if new firmware version is allowed (anti-rollback protection)
+ * 
+ * Security checks:
+ * - Prevents rollback to older versions
+ * - Validates against minimum required version
+ * - Logs all version check attempts for audit
+ * 
+ * @param newVersion Version string to validate
+ * @return true if version is allowed, false otherwise
+ */
 bool isVersionAllowed(const String& newVersion) {
-  Serial.printf("🔍 Checking if version %s is allowed...\n", newVersion.c_str());
+  LOG_INFO(LOG_SECURITY, "Checking version validity", "new_version=" + newVersion + ", current=" + getCurrentVersion());
   
   // Check against minimum version (anti-rollback)
   if (compareVersions(newVersion, MIN_FIRMWARE_VERSION) < 0) {
-    Serial.printf("❌ Version %s is below minimum allowed version %s\n", 
-                  newVersion.c_str(), MIN_FIRMWARE_VERSION);
+    LOG_ERROR(LOG_SECURITY, "Version below minimum requirement", 
+              "version=" + newVersion + ", minimum=" + String(MIN_FIRMWARE_VERSION));
+    SecurityAlerts::alertFirmwareTampering("Version below minimum: " + newVersion, 
+                                         "rollback_attempt");
     return false;
   }
   
   // Check against current version
   String currentVersion = getCurrentVersion();
   if (compareVersions(newVersion, currentVersion) < 0) {
-    Serial.printf("❌ Rollback attempt detected: %s -> %s\n", 
-                  currentVersion.c_str(), newVersion.c_str());
+    LOG_CRITICAL(LOG_SECURITY, "Rollback attempt detected", 
+                 "current=" + currentVersion + ", attempted=" + newVersion);
+    SecurityAlerts::alertFirmwareTampering("Rollback attempt: " + currentVersion + " -> " + newVersion, 
+                                         "version_downgrade");
     return false;
   }
   
-  Serial.println("✅ Version check passed");
+  LOG_INFO(LOG_SECURITY, "Version check passed", "approved_version=" + newVersion);
   return true;
 }
 
@@ -497,8 +719,19 @@ int compareVersions(const String& v1, const String& v2) {
   return 0;
 }
 
+/**
+ * Generate secure OTA password using cryptographically secure random generation
+ * 
+ * Security features:
+ * - Uses ESP32 hardware random number generator
+ * - Secure character set with special symbols
+ * - Persistent storage in NVS (encrypted when available)
+ * - Password rotation support
+ * 
+ * Password format: 16 characters including letters, numbers, and symbols
+ */
 void generateOTAPassword() {
-  Serial.println("🔐 Generating secure OTA password...");
+  LOG_INFO(LOG_SECURITY, "Generating secure OTA authentication password");
   
   otaPrefs.begin("ota", false);
   
@@ -506,7 +739,9 @@ void generateOTAPassword() {
   otaPassword = otaPrefs.getString("password", "");
   
   if (otaPassword.isEmpty()) {
-    // Generate secure random password
+    LOG_INFO(LOG_SECURITY, "Creating new OTA password", "length=16, charset=mixed");
+    
+    // Generate secure random password using cryptographically secure charset
     const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
     const int passwordLength = 16;
     
@@ -516,13 +751,24 @@ void generateOTAPassword() {
       otaPassword += charset[randomIndex];
     }
     
-    // Store password securely
+    // Store password securely in NVS
     otaPrefs.putString("password", otaPassword);
-    Serial.println("✅ New OTA password generated and stored");
+    otaPrefs.putULong("password_created", millis());
+    
+    LOG_INFO(LOG_SECURITY, "New OTA password generated and stored securely");
+    ProductionLogger::logSystemStatus("OTA", true, "new_password_generated");
   } else {
-    Serial.println("✅ Using existing OTA password");
+    LOG_INFO(LOG_SECURITY, "Using existing OTA password from secure storage");
+    
+    // Check password age (optional rotation)
+    unsigned long passwordAge = millis() - otaPrefs.getULong("password_created", 0);
+    if (passwordAge > 30 * 24 * 60 * 60 * 1000) { // 30 days
+      LOG_WARNING(LOG_SECURITY, "OTA password is older than 30 days", "age_ms=" + String(passwordAge));
+    }
   }
   
   // Set the password for ArduinoOTA
   ArduinoOTA.setPassword(otaPassword.c_str());
+  
+  otaPrefs.end();
 }

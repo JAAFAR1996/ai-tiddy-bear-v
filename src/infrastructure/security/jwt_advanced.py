@@ -177,7 +177,7 @@ class AdvancedJWTManager:
             self.algorithm = "RS256"
             self.fallback_algorithm = None  # NO FALLBACK IN PRODUCTION
         else:
-            # Development/Testing only
+            # For development environments only
             self.algorithm = env_algorithm
             self.fallback_algorithm = "HS256" if env_mode != "production" else None
 
@@ -428,7 +428,7 @@ class AdvancedJWTManager:
                 headers={"kid": self._current_key_pair.key_id}
             )
         else:
-            # Development/Testing fallback only
+            # Fallback for development environments only
             if os.getenv("ENVIRONMENT") == "production":
                 raise Exception("SECURITY VIOLATION: HS256 not allowed in production")
             
@@ -516,7 +516,7 @@ class AdvancedJWTManager:
                 if os.getenv("ENVIRONMENT") == "production":
                     raise jwt.InvalidTokenError("SECURITY VIOLATION: Invalid token format in production")
                 
-                # Development/Testing fallback only
+                # Fallback for development environments only
                 if not self.fallback_algorithm:
                     raise jwt.InvalidTokenError("No valid signing key available")
                     

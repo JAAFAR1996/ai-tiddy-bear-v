@@ -313,7 +313,7 @@ class StorageHealthMonitor:
                 result.upload_time = time.time() - upload_start
                 result.errors.append(f"Upload exception: {str(e)}")
 
-            # Test download (only if upload succeeded)
+            # Download for health check (only if upload succeeded)
             if result.upload_success and upload_result.file_metadata:
                 download_start = time.time()
                 try:

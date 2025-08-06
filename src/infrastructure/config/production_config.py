@@ -564,7 +564,7 @@ def reload_config(env_file: Optional[str] = None) -> ProductionConfig:
 def generate_secure_key() -> str:
     """Generate a cryptographically secure key.
 
-    WARNING: This function is for development/testing only.
+    WARNING: This function is for development only.
     In production, use proper key management systems.
     """
     return secrets.token_urlsafe(32)

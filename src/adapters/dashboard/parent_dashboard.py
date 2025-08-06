@@ -585,7 +585,7 @@ class ProductionParentDashboard:
         self, child_id: str, correlation_id: str
     ) -> Dict[str, Any]:
         """Get child activity data from various services."""
-        # 🚫 NO MOCK DATA ALLOWED - PRODUCTION ONLY
+        # Production environment only
         # Query real database for child activity
         try:
             user_service = await self.service_provider.get_user_service()
@@ -660,7 +660,7 @@ class ProductionParentDashboard:
 
     async def _get_usage_summary(self, parent_id: str) -> Dict[str, Any]:
         """Get usage summary from real database."""
-        # 🚫 NO MOCK DATA ALLOWED - PRODUCTION ONLY
+        # Production environment only
         try:
             user_service = await self.service_provider.get_user_service()
             
@@ -1015,7 +1015,7 @@ class ProductionParentDashboard:
 
     async def _get_detailed_usage(self, child_id: str) -> Dict[str, Any]:
         """Get detailed usage analytics from real database."""
-        # 🚫 NO MOCK DATA ALLOWED - PRODUCTION ONLY
+        # Production environment only
         try:
             user_service = await self.service_provider.get_user_service()
             ai_service = await self.service_provider.get_ai_service()

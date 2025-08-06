@@ -86,7 +86,7 @@ async def login(
         logger.info(f"Login attempt for email: {request.email}")
 
         # SECURITY FIX: Removed hardcoded test credentials for production security
-        # Test users must be created through proper database channels only
+        # Users must be created through proper database channels only
 
         # Get user from database using SQLAlchemy ORM
         stmt = select(User).where(

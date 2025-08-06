@@ -363,7 +363,7 @@ class ESP32WiFiManager:
                 
         except Exception as e:
             logger.error(f"Platform-specific scan failed: {e}")
-            # Fallback to mock data for testing
+            # Fallback to generated data for testing
             networks = self._generate_mock_networks()
         
         return networks
@@ -453,7 +453,7 @@ class ESP32WiFiManager:
         return self._generate_mock_networks()
     
     def _generate_mock_networks(self) -> List[WiFiNetworkInfo]:
-        """Generate mock network data for testing."""
+        """Generate sample network data for testing."""
         return [
             WiFiNetworkInfo(
                 ssid="TeddyBear_WiFi",

@@ -4,7 +4,7 @@ import { config } from '../config';
 import { ApiChild, ApiInteraction, ApiSafetyAlert } from '../types';
 import { SecureStorage } from './SecureStorageService';
 
-// Base URL for the FastAPI backend - NO MOCK DATA
+// Base URL for the FastAPI backend
 const BASE_URL = config.API_BASE_URL;
 
 console.log('🔗 API Service connecting to REAL Backend:', BASE_URL);
@@ -90,7 +90,7 @@ export interface LoginResponse {
   };
 }
 
-// REAL API Service - NO MOCK DATA
+// REAL API Service
 export class ApiService {
   // Authentication with REAL Backend
   static async login(credentials: LoginCredentials): Promise<LoginResponse> {

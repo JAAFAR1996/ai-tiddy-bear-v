@@ -5,6 +5,9 @@
 #include "ota_manager.h"
 #include "hardware.h"
 #include "config.h"
+#include "production_logger.h"
+#include "security_alerts.h"
+#include "spiffs_recovery.h"
 #include <WiFi.h>
 #include <Preferences.h>
 #include <SPIFFS.h>
@@ -22,13 +25,23 @@ const int DIAGNOSTICS_TIMEOUT = 30000; // 30 seconds
 
 Preferences managementPrefs;
 
+/**
+ * Initialize device management system with security and monitoring
+ * 
+ * Management features:
+ * - Remote management server configuration
+ * - Auto-update system setup  
+ * - Device registration and check-in system
+ * - Secure configuration storage
+ * - Management web interface
+ */
 bool initDeviceManagement() {
-  Serial.println("🔧 Initializing device management...");
+  LOG_INFO(LOG_SYSTEM, "Initializing device management system");
   
-  // Initialize preferences
+  // Initialize preferences for persistent management configuration
   managementPrefs.begin("device_mgmt", false);
   
-  // Load management configuration
+  // Load management configuration from secure storage
   managementConfig.remote_management_enabled = managementPrefs.getBool("remote_enabled", true);
   managementConfig.auto_update_enabled = managementPrefs.getBool("auto_update", true);
   managementConfig.diagnostics_enabled = managementPrefs.getBool("diagnostics", true);
@@ -37,26 +50,36 @@ bool initDeviceManagement() {
   managementConfig.checkin_interval = managementPrefs.getULong("checkin_interval", DEFAULT_CHECKIN_INTERVAL);
   managementConfig.last_checkin = 0;
   
-  // Initialize device info
+  LOG_DEBUG(LOG_SYSTEM, "Management configuration loaded", 
+            "remote_enabled=" + String(managementConfig.remote_management_enabled) +
+            ", auto_update=" + String(managementConfig.auto_update_enabled) +
+            ", checkin_interval=" + String(managementConfig.checkin_interval));
+  
+  // Initialize device hardware and system information
   updateDeviceInfo();
   
-  // Initialize SPIFFS for configuration storage
-  if (!SPIFFS.begin(true)) {
-    Serial.println("❌ Failed to initialize SPIFFS");
+  // Initialize secure filesystem for configuration storage
+  if (!SPIFFSRecovery::init()) {
+    LOG_CRITICAL(LOG_HARDWARE, "Failed to initialize secure filesystem for device management");
+    SecurityAlerts::alertHardwareFailure("SPIFFS", "Management filesystem initialization failed");
     return false;
   }
   
-  // Start management web server if enabled
+  // Start management web server if remote management is enabled
   if (managementConfig.remote_management_enabled) {
+    LOG_INFO(LOG_SYSTEM, "Starting management web server");
     startManagementServer();
   }
   
-  // Register device with management server
+  // Register device with management server if connected
   if (WiFi.isConnected()) {
+    LOG_INFO(LOG_SYSTEM, "Registering device with management server");
     registerDevice();
   }
   
-  Serial.println("✅ Device management initialized");
+  LOG_INFO(LOG_SYSTEM, "Device management system initialized successfully");
+  ProductionLogger::logSystemStatus("DeviceManagement", true, "management_system_ready");
+  
   return true;
 }
 

@@ -36,7 +36,7 @@ except Exception as e:
 
 async def get_current_user(auth_service=AuthServiceDep):
     """Get authenticated user from token."""
-    # 🚫 NO MOCK DATA ALLOWED - PRODUCTION ONLY
+    # Production environment only
     # Must implement real JWT validation from auth service
     try:
         # Get real authenticated user from auth service

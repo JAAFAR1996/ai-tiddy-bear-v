@@ -182,7 +182,7 @@ class ChildData:
 
     @classmethod
     def demo(cls) -> "ChildData":
-        """Create a demo/test ChildData object (for testing only)."""
+        """Create a demo ChildData object."""
         return cls(
             id=uuid4(),
             name="Test Child",

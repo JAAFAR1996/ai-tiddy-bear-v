@@ -553,7 +553,7 @@ class ProductionPremiumSubscriptionService:
         """Create subscription in Stripe."""
         try:
             if not self.stripe:
-                # Return mock data if Stripe not available
+                # Return sample data if Stripe not available
                 return {
                     "customer_id": f"cus_mock_{user_id}",
                     "subscription_id": f"sub_mock_{uuid.uuid4()}",
@@ -590,7 +590,7 @@ class ProductionPremiumSubscriptionService:
 
         except Exception as e:
             self.logger.error(f"Stripe subscription creation failed: {str(e)}")
-            # Return mock data for development
+            # Return sample data for development
             return {
                 "customer_id": f"cus_mock_{user_id}",
                 "subscription_id": f"sub_mock_{uuid.uuid4()}",

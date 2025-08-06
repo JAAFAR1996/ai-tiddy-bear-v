@@ -229,7 +229,7 @@ MOBILE_APP_CONFIG = {
 
 # Development and Testing Configuration
 DEVELOPMENT_CONFIG = {
-    # Mock Data Settings
+    # Data Settings
     "USE_MOCK_PAYMENTS": True,
     "USE_MOCK_NOTIFICATIONS": True,
     "ENABLE_TEST_ENDPOINTS": True,

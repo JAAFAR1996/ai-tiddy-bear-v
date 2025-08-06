@@ -1017,7 +1017,7 @@ async def get_security_status():
 
 
 # SECURITY FIX: Removed test-guardrails endpoint - production should not expose security testing endpoints
-# Security testing should be done in development/staging environments only
+# Security testing should be done in development or staging environments only
 
 
 # TODO: ESP32 WebSocket endpoint will be implemented here
