@@ -75,85 +75,53 @@ class TokenManager:
                 f"Redis initialization failed, advanced features disabled: {e}"
             )
 
-    def create_access_token(self, data: Dict[str, Any]) -> str:
-        """Create JWT access token using advanced JWT manager."""
+    async def create_access_token(self, data: Dict[str, Any]) -> str:
+        """Create JWT access token using advanced JWT manager (async)."""
         try:
-            # Convert sync call to async if needed
-            import asyncio
-
-            async def create_token():
-                return await self.advanced_jwt.create_token(
-                    user_id=str(data.get("sub") or data.get("id")),
-                    email=data.get("email", ""),
-                    role=data.get("role", "parent"),
-                    user_type=data.get("user_type", "parent"),
-                    token_type=TokenType.ACCESS,
-                    permissions=data.get("permissions", []),
-                )
-
-            try:
-                loop = asyncio.get_event_loop()
-                return loop.run_until_complete(create_token())
-            except RuntimeError:
-                # No event loop, create new one
-                return asyncio.run(create_token())
-
+            return await self.advanced_jwt.create_token(
+                user_id=str(data.get("sub") or data.get("id")),
+                email=data.get("email", ""),
+                role=data.get("role", "parent"),
+                user_type=data.get("user_type", "parent"),
+                token_type=TokenType.ACCESS,
+                permissions=data.get("permissions", []),
+            )
         except Exception as e:
             auth_logger.error(f"Failed to create access token - Error: {str(e)}")
             raise AuthenticationError("Token creation failed")
 
-    def create_refresh_token(self, data: Dict[str, Any]) -> str:
-        """Create JWT refresh token using advanced JWT manager."""
+    async def create_refresh_token(self, data: Dict[str, Any]) -> str:
+        """Create JWT refresh token using advanced JWT manager (async)."""
         try:
-            import asyncio
-
-            async def create_token():
-                return await self.advanced_jwt.create_token(
-                    user_id=str(data.get("sub") or data.get("id")),
-                    email=data.get("email", ""),
-                    role=data.get("role", "parent"),
-                    user_type=data.get("user_type", "parent"),
-                    token_type=TokenType.REFRESH,
-                    permissions=data.get("permissions", []),
-                )
-
-            try:
-                loop = asyncio.get_event_loop()
-                return loop.run_until_complete(create_token())
-            except RuntimeError:
-                return asyncio.run(create_token())
-
+            return await self.advanced_jwt.create_token(
+                user_id=str(data.get("sub") or data.get("id")),
+                email=data.get("email", ""),
+                role=data.get("role", "parent"),
+                user_type=data.get("user_type", "parent"),
+                token_type=TokenType.REFRESH,
+                permissions=data.get("permissions", []),
+            )
         except Exception as e:
             auth_logger.error(f"Failed to create refresh token - Error: {str(e)}")
             raise AuthenticationError("Token creation failed")
 
-    def verify_token(self, token: str) -> Dict[str, Any]:
-        """Verify and decode JWT token using advanced JWT manager."""
+    async def verify_token(self, token: str) -> Dict[str, Any]:
+        """Verify and decode JWT token using advanced JWT manager (async)."""
         try:
-            import asyncio
-
-            async def verify():
-                claims = await self.advanced_jwt.verify_token(token)
-                # Convert JWTClaims to dictionary for backward compatibility
-                return {
-                    "sub": claims.sub,
-                    "email": claims.email,
-                    "role": claims.role,
-                    "user_type": claims.user_type,
-                    "type": claims.type.value,
-                    "iat": claims.iat,
-                    "exp": claims.exp,
-                    "jti": claims.jti,
-                    "permissions": claims.permissions,
-                    "metadata": claims.metadata,
-                }
-
-            try:
-                loop = asyncio.get_event_loop()
-                return loop.run_until_complete(verify())
-            except RuntimeError:
-                return asyncio.run(verify())
-
+            claims = await self.advanced_jwt.verify_token(token)
+            # Convert JWTClaims to dictionary for backward compatibility
+            return {
+                "sub": claims.sub,
+                "email": claims.email,
+                "role": claims.role,
+                "user_type": claims.user_type,
+                "type": claims.type.value,
+                "iat": claims.iat,
+                "exp": claims.exp,
+                "jti": claims.jti,
+                "permissions": claims.permissions,
+                "metadata": claims.metadata,
+            }
         except jwt.ExpiredSignatureError:
             auth_logger.warning(f"Token expired - TokenJTI: {token[-10:]}")
             raise AuthenticationError("Token expired")
@@ -191,10 +159,10 @@ class TokenManager:
             auth_logger.error(f"Token refresh failed - Error: {str(e)}")
             raise AuthenticationError("Token refresh failed")
 
-    def validate_token_permissions(self, token: str, required_permission: str) -> bool:
-        """Validate if token has required permission."""
+    async def validate_token_permissions(self, token: str, required_permission: str) -> bool:
+        """Validate if token has required permission (async)."""
         try:
-            payload = self.verify_token(token)
+            payload = await self.verify_token(token)
             permissions = payload.get("permissions", [])
             user_role = payload.get("role", "")
 
@@ -515,11 +483,11 @@ def get_authorization_manager():
 async def get_current_user(
     request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> Dict[str, Any]:
-    """Get current authenticated user from JWT token."""
+    """Get current authenticated user from JWT token (async)."""
 
     try:
-        # Verify token
-        payload = get_token_manager().verify_token(credentials.credentials)
+        # Verify token (now async)
+        payload = await get_token_manager().verify_token(credentials.credentials)
 
         # Extract user info
         user_data = {

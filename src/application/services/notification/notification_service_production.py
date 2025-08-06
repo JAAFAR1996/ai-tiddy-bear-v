@@ -7,12 +7,17 @@ Fully implemented with real providers and proper error handling.
 
 import logging
 import uuid
+import json
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Set
 from enum import Enum
 from dataclasses import dataclass, field
 
 from src.core.entities.subscription import NotificationType, NotificationPriority
+from src.infrastructure.database.notification_repository import (
+    NotificationRepository,
+    DeliveryRecordRepository,
+)
 
 # Production imports - all real implementations
 try:
@@ -149,6 +154,10 @@ class ProductionNotificationService:
         self._delivery_tracking: Dict[str, Set[NotificationChannel]] = {}
         self._retry_queue: List[Dict[str, Any]] = []
         self._scheduled_notifications: Dict[str, NotificationRequest] = {}
+        
+        # Initialize production database repositories
+        self._notification_repo = NotificationRepository()
+        self._delivery_repo = DeliveryRecordRepository()
 
         # Production provider configurations
         self._email_config = self._load_email_config()
@@ -546,19 +555,22 @@ class ProductionNotificationService:
                 extra={"notification_id": notification_id},
             )
 
-            # TODO: Store in production database when available
-            # notification_data = {
-            #     "notification_id": notification_id,
-            #     "user_id": recipient.user_id,
-            #     "title": content.title,
-            #     "body": content.body,
-            #     "data": json.dumps(content.data),
-            #     "notification_type": request.notification_type.value,
-            #     "priority": request.priority.value,
-            #     "created_at": datetime.utcnow().isoformat(),
-            #     "read": False
-            # }
-            # await self._store_in_app_notification(notification_data)
+            # Store in production database
+            notification_data = {
+                "notification_id": notification_id,
+                "user_id": recipient.user_id,
+                "title": content.title,
+                "body": content.body,
+                "data": json.dumps(content.data) if content.data else "{}",
+                "notification_type": request.notification_type.value,
+                "priority": request.priority.value,
+                "created_at": datetime.utcnow(),
+                "read": False
+            }
+            await self._notification_repo.create_notification(
+                notification_data, 
+                user_id=uuid.UUID(recipient.user_id) if recipient.user_id else None
+            )
 
             return DeliveryResult(
                 notification_id=notification_id,
@@ -651,20 +663,23 @@ class ProductionNotificationService:
                     },
                 )
 
-                # TODO: Store in production database when available
-                # record_data = {
-                #     "notification_id": notification_id,
-                #     "user_id": request.recipient.user_id,
-                #     "channel": channel,
-                #     "status": result.status.value,
-                #     "delivered_at": result.delivered_at.isoformat(),
-                #     "provider_response": json.dumps(result.provider_response),
-                #     "error_message": result.error_message,
-                #     "retry_count": result.retry_count,
-                #     "notification_type": request.notification_type.value,
-                #     "priority": request.priority.value,
-                # }
-                # await self._insert_delivery_record(record_data)
+                # Store in production database
+                record_data = {
+                    "notification_id": notification_id,
+                    "user_id": request.recipient.user_id,
+                    "channel": channel,
+                    "status": result.status.value,
+                    "delivered_at": result.delivered_at,
+                    "provider_response": json.dumps(result.provider_response) if result.provider_response else "{}",
+                    "error_message": result.error_message,
+                    "retry_count": result.retry_count,
+                    "notification_type": request.notification_type.value,
+                    "priority": request.priority.value,
+                }
+                await self._delivery_repo.create_delivery_record(
+                    record_data,
+                    user_id=uuid.UUID(request.recipient.user_id) if request.recipient.user_id else None
+                )
 
             self.logger.info(
                 "Delivery records processed for notification %s",
@@ -697,10 +712,28 @@ class ProductionNotificationService:
                 extra={"user_id": user_id, "limit": limit},
             )
 
-            # TODO: Implement actual database query
-            # return await self._query_notification_history(user_id, limit, notification_type)
-
-            return []  # Placeholder until database is implemented
+            # Query from production database
+            notifications = await self._notification_repo.get_user_notifications(
+                user_id=uuid.UUID(user_id),
+                limit=limit,
+                notification_type=notification_type.value if notification_type else None
+            )
+            
+            # Convert to dictionary format
+            return [
+                {
+                    "notification_id": str(n.notification_id),
+                    "user_id": str(n.user_id),
+                    "title": n.title,
+                    "body": n.body,
+                    "data": json.loads(n.data) if n.data else {},
+                    "notification_type": n.notification_type,
+                    "priority": n.priority,
+                    "created_at": n.created_at.isoformat(),
+                    "read": n.read
+                }
+                for n in notifications
+            ]
 
         except Exception as e:
             self.logger.error("Failed to get notification history: %s", str(e))
@@ -714,19 +747,49 @@ class ProductionNotificationService:
     ) -> Dict[str, Any]:
         """Get production delivery analytics."""
         try:
-            # TODO: Implement actual analytics query
-            # return await self._query_delivery_analytics(user_id, start_date, end_date)
+            # Query analytics from production database
+            total_sent = 0
+            total_delivered = 0
+            channel_stats = {}
+            
+            if user_id:
+                # Get user-specific notifications
+                notifications = await self._notification_repo.get_user_notifications(
+                    user_id=uuid.UUID(user_id),
+                    limit=1000
+                )
+                
+                for notification in notifications:
+                    total_sent += 1
+                    if hasattr(notification, 'status') and notification.status == 'delivered':
+                        total_delivered += 1
+                    
+                    # Count by channel
+                    channel = getattr(notification, 'channel', 'unknown')
+                    channel_stats[channel] = channel_stats.get(channel, 0) + 1
+            
+            delivery_rate = (total_delivered / total_sent * 100) if total_sent > 0 else 0.0
+            error_rate = ((total_sent - total_delivered) / total_sent * 100) if total_sent > 0 else 0.0
+            
+            return {
+                "total_notifications": total_sent,
+                "delivery_rate": delivery_rate,
+                "channel_stats": channel_stats,
+                "error_rate": error_rate,
+                "period": {
+                    "start": start_date.isoformat() if start_date else None,
+                    "end": end_date.isoformat() if end_date else None
+                }
+            }
 
+        except Exception as e:
+            self.logger.error("Failed to get delivery analytics: %s", str(e))
             return {
                 "total_notifications": 0,
                 "delivery_rate": 0.0,
                 "channel_stats": {},
-                "error_rate": 0.0,
-            }  # Placeholder until database is implemented
-
-        except Exception as e:
-            self.logger.error("Failed to get delivery analytics: %s", str(e))
-            return {}
+                "error_rate": 0.0
+            }
 
 
 # Production service instance management

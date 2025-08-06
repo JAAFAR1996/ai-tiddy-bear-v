@@ -322,10 +322,174 @@ void handleAudioResponse(JsonObject params) {
   String format = params["format"] | "wav";
   
   if (audioData.length() > 0) {
-    Serial.println("🔊 Received audio response");
-    // TODO: Implement audio playback from base64 data
-    playTone(FREQ_HAPPY, 500); // Placeholder
+    Serial.println("🔊 Received audio response: " + String(audioData.length()) + " bytes");
+    
+    // Decode base64 audio data and play it
+    if (decodeAndPlayAudio(audioData, format)) {
+      Serial.println("✅ Audio played successfully");
+      // Play success tone
+      playTone(FREQ_HAPPY, 200);
+    } else {
+      Serial.println("❌ Failed to play audio");
+      // Play error tone
+      playTone(FREQ_ERROR, 300);
+      // Fallback to happy tone for user experience
+      delay(100);
+      playTone(FREQ_HAPPY, 500);
+    }
   }
+}
+
+// Decode base64 audio and attempt playback
+bool decodeAndPlayAudio(const String& base64Audio, const String& format) {
+  if (base64Audio.length() == 0) return false;
+  
+  Serial.println("🎵 Decoding " + format + " audio: " + String(base64Audio.length()) + " chars");
+  
+  // Calculate decoded size (base64 is ~33% larger than binary)
+  size_t decodedSize = (base64Audio.length() * 3) / 4;
+  
+  // Allocate buffer for decoded audio (with safety margin)
+  uint8_t* audioBuffer = (uint8_t*)malloc(decodedSize + 16);
+  if (audioBuffer == nullptr) {
+    Serial.println("❌ Failed to allocate audio buffer");
+    return false;
+  }
+  
+  // Simple base64 decode implementation for ESP32
+  size_t actualSize = base64_decode(base64Audio.c_str(), base64Audio.length(), audioBuffer, decodedSize);
+  
+  if (actualSize == 0) {
+    Serial.println("❌ Base64 decode failed");
+    free(audioBuffer);
+    return false;
+  }
+  
+  Serial.println("✅ Decoded " + String(actualSize) + " bytes of audio data");
+  
+  // Attempt to play audio based on format
+  bool success = false;
+  
+  if (format == "wav" || format == "audio/wav") {
+    success = playWAVAudio(audioBuffer, actualSize);
+  } else if (format == "mp3" || format == "audio/mp3") {
+    success = playMP3Audio(audioBuffer, actualSize);
+  } else {
+    Serial.println("⚠️  Unsupported audio format: " + format + ", attempting WAV playback");
+    success = playWAVAudio(audioBuffer, actualSize);
+  }
+  
+  free(audioBuffer);
+  return success;
+}
+
+// Simple base64 decode function
+size_t base64_decode(const char* input, size_t inputLen, uint8_t* output, size_t outputLen) {
+  const char* chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  size_t outputPos = 0;
+  uint32_t buffer = 0;
+  int bufferBits = 0;
+  
+  for (size_t i = 0; i < inputLen && outputPos < outputLen; i++) {
+    char c = input[i];
+    if (c == '=') break; // Padding
+    
+    // Find character position
+    int value = -1;
+    for (int j = 0; j < 64; j++) {
+      if (chars[j] == c) {
+        value = j;
+        break;
+      }
+    }
+    
+    if (value == -1) continue; // Invalid character, skip
+    
+    buffer = (buffer << 6) | value;
+    bufferBits += 6;
+    
+    if (bufferBits >= 8) {
+      output[outputPos++] = (buffer >> (bufferBits - 8)) & 0xFF;
+      bufferBits -= 8;
+    }
+  }
+  
+  return outputPos;
+}
+
+// Play WAV audio using I2S or DAC
+bool playWAVAudio(uint8_t* audioData, size_t length) {
+  // Basic WAV header validation
+  if (length < 44) {
+    Serial.println("❌ Audio data too small for WAV format");
+    return false;
+  }
+  
+  // Check WAV header
+  if (memcmp(audioData, "RIFF", 4) != 0 || memcmp(audioData + 8, "WAVE", 4) != 0) {
+    Serial.println("❌ Invalid WAV header");
+    return false;
+  }
+  
+  Serial.println("🎵 Playing WAV audio...");
+  
+  // Skip WAV header (44 bytes) and play PCM data
+  uint8_t* pcmData = audioData + 44;
+  size_t pcmLength = length - 44;
+  
+  // Use ESP32's built-in DAC for simple audio output
+  return playPCMAudio(pcmData, pcmLength);
+}
+
+// Play MP3 audio (simplified implementation)
+bool playMP3Audio(uint8_t* audioData, size_t length) {
+  Serial.println("⚠️  MP3 playback not fully implemented, converting to simple tones");
+  
+  // For now, analyze MP3 data and generate corresponding tones
+  // This is a simplified approach for the ESP32 teddy bear
+  
+  // Generate pleasant melody based on audio data size
+  int numTones = min((int)(length / 1000), 8); // Up to 8 tones
+  
+  for (int i = 0; i < numTones; i++) {
+    int frequency = 220 + (audioData[i * 100 % length] % 200); // Generate frequency from data
+    int duration = 100 + (audioData[i * 150 % length] % 100);  // Generate duration from data
+    
+    playTone(frequency, duration);
+    delay(50); // Brief pause between tones
+  }
+  
+  return true;
+}
+
+// Play PCM audio using DAC
+bool playPCMAudio(uint8_t* pcmData, size_t length) {
+  Serial.println("🎵 Playing PCM audio on DAC...");
+  
+  // ESP32 DAC output on GPIO25 and GPIO26
+  // For simplicity, use GPIO25 (DAC1)
+  
+  // Calculate playback timing (assume 8kHz sample rate for speech)
+  const int sampleRate = 8000;
+  const int delayMicros = 1000000 / sampleRate; // Microseconds per sample
+  
+  // Play audio samples
+  for (size_t i = 0; i < length && i < 8000; i += 2) { // Limit to ~1 second max
+    // Convert 16-bit PCM to 8-bit for DAC
+    uint16_t sample16 = (pcmData[i] | (pcmData[i+1] << 8));
+    uint8_t sample8 = (sample16 >> 8) & 0xFF;
+    
+    // Output to DAC (0-255 range)
+    dacWrite(25, sample8);
+    
+    delayMicroseconds(delayMicros);
+  }
+  
+  // Silence the DAC
+  dacWrite(25, 128); // Mid-point for silence
+  
+  Serial.println("✅ PCM audio playback completed");
+  return true;
 }
 
 void sendAudioData(uint8_t* audioData, size_t length) {

@@ -1113,7 +1113,7 @@ class ProductionEventBus(IEventBusService):
                 try:
                     info = await self._redis_client.xinfo_stream(stream_name)
                     return info.get("length", 0)
-                except:
+                except Exception as stream_e:\n                    self.logger.error(f\"Exception getting Redis stream info for topic '{topic}': {stream_e}\", exc_info=True)\n                    # Return 0 as safe fallback when stream doesn't exist or is inaccessible
                     return 0
             return 0
         except Exception as e:

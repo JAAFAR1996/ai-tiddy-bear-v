@@ -38,10 +38,11 @@ async def parent_notification_websocket(
 
     Connection flow:
     1. Accept WebSocket connection
-    2. Authenticate parent (token in query params or headers)
-    3. Register for real-time notifications
-    4. Handle incoming subscription preferences
-    5. Send real-time alerts and updates
+    2. Authenticate parent (token in query params or Authorization header)
+    3. Verify parent_id matches token user_id
+    4. Register for real-time notifications  
+    5. Handle incoming subscription preferences
+    6. Send real-time alerts and updates
 
     Message Types:
     - safety_alert: Immediate safety concerns
@@ -54,8 +55,63 @@ async def parent_notification_websocket(
     connection_id = None
 
     try:
-        # TODO: Add authentication via token in query params or headers
-        # For now, we'll accept any connection with valid parent_id
+        # Authentication via token in query params or headers
+        token = None
+        
+        # Try to get token from query params first
+        token = websocket.query_params.get("token")
+        
+        # If not in query params, try headers
+        if not token:
+            auth_header = websocket.headers.get("authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+                token = auth_header[7:]  # Remove "Bearer " prefix
+        
+        if not token:
+            await websocket.close(code=1008)
+            logger.warning(
+                f"Parent WebSocket rejected: missing token for parent {parent_id}"
+            )
+            return
+        
+        # Import TokenManager here to avoid circular imports  
+        from src.infrastructure.security.auth import TokenManager, AuthenticationError
+        
+        token_manager = TokenManager()
+        try:
+            # Use async verify_token (following the auth.py pattern)
+            payload = await token_manager.verify_token(token)
+            
+            # Ensure token is for a parent and matches parent_id
+            token_user_id = payload.get("sub")
+            token_user_type = payload.get("user_type", "parent")
+            
+            if token_user_type != "parent":
+                await websocket.close(code=1008)
+                logger.warning(
+                    f"Parent WebSocket rejected: token is not for parent user (type: {token_user_type})"
+                )
+                return
+                
+            if not token_user_id or token_user_id != parent_id:
+                await websocket.close(code=1008)
+                logger.warning(
+                    f"Parent WebSocket rejected: parent_id mismatch (token: {token_user_id}, param: {parent_id})"
+                )
+                return
+                
+        except AuthenticationError as e:
+            await websocket.close(code=1008)
+            logger.warning(
+                f"Parent WebSocket rejected: invalid token for parent {parent_id} ({e})"
+            )
+            return
+        except Exception as e:
+            await websocket.close(code=1011)
+            logger.error(
+                f"Parent WebSocket error during token verification for {parent_id}: {e}"
+            )
+            return
 
         # Register WebSocket connection
         websocket_adapter = real_time_service.websocket_adapter
@@ -345,7 +401,7 @@ async def esp32_websocket_endpoint(
 
     token_manager = TokenManager()
     try:
-        payload = token_manager.verify_token(token)
+        payload = await token_manager.verify_token(token)
         # Ensure token is for a device and matches device_id
         token_device_id = payload.get("device_id")
         if not token_device_id or token_device_id != device_id:

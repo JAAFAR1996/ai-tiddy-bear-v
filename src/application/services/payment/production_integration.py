@@ -14,9 +14,14 @@ This is the main integration point for the production payment system.
 
 import logging
 import asyncio
+import os
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from pathlib import Path
+
+# Redis imports
+import redis.asyncio as aioredis
+from redis.asyncio import ConnectionPool
 
 # Core dependencies
 from .config.production_config import (
@@ -65,6 +70,7 @@ class PaymentSystemIntegration:
         """Initialize the payment system integration."""
         self.config: Optional[ProductionPaymentConfig] = None
         self.security_service: Optional[PaymentSecurityManager] = None
+        self.redis_client: Optional[aioredis.Redis] = None
         self.payment_repository: Optional[PaymentRepository] = None
         self.payment_service: Optional[ProductionPaymentService] = None
         self.providers: Dict[PaymentProvider, Any] = {}
@@ -87,16 +93,19 @@ class PaymentSystemIntegration:
             # 2. Initialize security services
             await self._initialize_security()
 
-            # 3. Initialize database and repositories
+            # 3. Initialize Redis client
+            await self._initialize_redis_client()
+
+            # 4. Initialize database and repositories
             await self._initialize_database()
 
-            # 4. Initialize payment providers
+            # 5. Initialize payment providers
             await self._initialize_providers()
 
-            # 5. Initialize main payment service
+            # 6. Initialize main payment service
             await self._initialize_payment_service()
 
-            # 6. Run health checks
+            # 7. Run health checks
             await self._run_health_checks()
 
             self.is_initialized = True
@@ -141,21 +150,68 @@ class PaymentSystemIntegration:
 
         logger.info("✅ Security services initialized")
 
+    async def _initialize_redis_client(self):
+        """Initialize Redis client with connection pooling."""
+        logger.info("🔴 Initializing Redis client...")
+        
+        # Use exact pattern from production_redis_cache.py
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        redis_password = os.getenv("REDIS_PASSWORD")
+        redis_db = int(os.getenv("REDIS_DB", "0"))
+        max_connections = int(os.getenv("REDIS_MAX_CONNECTIONS", "50"))
+        connection_timeout = int(os.getenv("REDIS_TIMEOUT", "10"))
+        
+        try:
+            # Create connection pool (exact pattern match)
+            connection_pool = ConnectionPool.from_url(
+                redis_url,
+                password=redis_password,
+                db=redis_db,
+                max_connections=max_connections,
+                retry_on_timeout=True,
+                socket_connect_timeout=connection_timeout,
+                socket_keepalive=True,
+                socket_keepalive_options={
+                    1: 1,  # TCP_KEEPIDLE
+                    2: 3,  # TCP_KEEPINTVL  
+                    3: 5,  # TCP_KEEPCNT
+                },
+            )
+            
+            # Create Redis client
+            self.redis_client = aioredis.Redis(connection_pool=connection_pool)
+            
+            # Test connection
+            await self.redis_client.ping()
+            
+            logger.info("✅ Redis client initialized successfully")
+            
+        except Exception as e:
+            logger.error(f"❌ Redis initialization failed: {e}")
+            raise ConnectionError(f"Redis connection failed: {e}")
+
     async def _initialize_database(self):
         """Initialize database connections and repositories."""
         logger.info("🗄️ Initializing database connections...")
-
-        # TODO: Database initialization needs proper session setup
-        logger.info(
-            "⚠️ Database initialization skipped - requires proper session configuration"
+        
+        # Get database adapter from DI container (matches container.py pattern)
+        from src.adapters.database_production import ProductionDatabaseAdapter
+        database_adapter = ProductionDatabaseAdapter()
+        await database_adapter.initialize()
+        
+        # Create PaymentRepository with proper session manager
+        from src.adapters.database_production import _connection_manager
+        self.payment_repository = PaymentRepository(
+            db_session=_connection_manager.get_async_session,  # Context manager
+            logger=logger
         )
-
-        # Placeholder for database health check
-        # db_health = await self.payment_repository.health_check()
-        # if not db_health:
-        #     raise ConnectionError("Database connection failed")
-
-        logger.info("✅ Database connections ready (placeholder)")
+        
+        # Test database connectivity
+        db_health = await database_adapter.health_check()
+        if not db_health:
+            raise ConnectionError("Database connection failed")
+            
+        logger.info("✅ Database connections ready")
 
     async def _initialize_providers(self):
         """Initialize payment providers."""
@@ -216,19 +272,18 @@ class PaymentSystemIntegration:
     async def _initialize_payment_service(self):
         """Initialize main payment service."""
         logger.info("🏦 Initializing payment service...")
-
-        # TODO: Initialize with proper dependencies when available
-        logger.info("⚠️ Payment service initialization skipped - requires dependencies")
-
-        # Note: ProductionPaymentService needs proper arguments which will be provided during initialization
-        # self.payment_service = ProductionPaymentService(
-        #     security_manager=self.security_service,
-        #     provider_configs=self.config.get_provider_configs(),
-        #     redis_client=None,  # TODO: Add Redis client
-        #     logger=logger
-        # )
-
-        logger.info("✅ Payment service ready (placeholder)")
+        
+        # Based on ProductionPaymentService constructor analysis:
+        # ProductionPaymentService(security_manager, provider_configs, redis_client, logger)
+        
+        self.payment_service = ProductionPaymentService(
+            security_manager=self.security_service,  # Already initialized in step 2
+            provider_configs=self.config.get_provider_configs(),  # From config
+            redis_client=self.redis_client,  # From step 3 initialization
+            logger=logger
+        )
+        
+        logger.info("✅ Payment service ready")
 
     async def _run_health_checks(self):
         """Run comprehensive health checks."""

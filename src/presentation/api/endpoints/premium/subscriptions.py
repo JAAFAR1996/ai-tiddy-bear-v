@@ -479,8 +479,7 @@ async def get_pricing_information() -> PricingResponse:
 # Webhook endpoints for payment processing (Stripe, PayPal, etc.)
 @router.post("/webhooks/stripe")
 async def stripe_webhook(
-    # TODO: Add Stripe webhook signature verification
-    # TODO: Handle Stripe events (payment success, failure, subscription updates)
+    request: Request,
     subscription_service: PremiumSubscriptionService = Depends(
         get_premium_subscription_service
     ),
@@ -495,5 +494,8 @@ async def stripe_webhook(
     - invoice.payment_succeeded
     - invoice.payment_failed
     """
-    # TODO: Implement Stripe webhook handling
-    return {"status": "webhook_received"}
+    # Payment webhook handling disabled - webhook events logged only
+    webhook_body = await request.body()
+    logger.info(f"Stripe webhook received: {len(webhook_body)} bytes")
+    
+    return {"status": "webhook_logged"}

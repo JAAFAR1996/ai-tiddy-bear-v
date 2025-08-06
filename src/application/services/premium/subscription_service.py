@@ -449,16 +449,79 @@ class ProductionPremiumSubscriptionService:
             raise SubscriptionException(f"Cancellation failed: {e}")
 
     async def check_feature_access(self, user_id: str, feature: str) -> bool:
-        """Check if user has access to specific feature."""
+        """Check if user has access to specific feature with comprehensive validation."""
         try:
             subscription = await self._get_user_subscription(user_id)
-            if not subscription:
-                # Free tier access
-                return (
-                    feature in self._pricing_config[SubscriptionTier.FREE]["features"]
-                )
+            
+            # Determine user tier
+            user_tier = SubscriptionTier.FREE
+            if subscription:
+                user_tier = subscription.tier
+                
+                # Check subscription status
+                if subscription.status not in [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIAL]:
+                    self.logger.info(
+                        "User %s subscription is not active (status: %s) - defaulting to free tier",
+                        user_id,
+                        subscription.status.value,
+                        extra={
+                            "user_id": user_id,
+                            "subscription_status": subscription.status.value,
+                            "feature": feature,
+                        }
+                    )
+                    user_tier = SubscriptionTier.FREE
+                
+                # Check if subscription has expired
+                if (subscription.current_period_end and 
+                    subscription.current_period_end < datetime.utcnow() and
+                    subscription.status != SubscriptionStatus.TRIAL):
+                    
+                    self.logger.info(
+                        "User %s subscription has expired - defaulting to free tier",
+                        user_id,
+                        extra={
+                            "user_id": user_id,
+                            "expired_at": subscription.current_period_end.isoformat(),
+                            "feature": feature,
+                        }
+                    )
+                    user_tier = SubscriptionTier.FREE
 
-            return feature in subscription.features_enabled
+            # Use the comprehensive feature entitlement checking
+            has_access = self._check_feature_entitlement(user_id, feature, user_tier)
+            
+            # Additional usage limit checks for certain features
+            if has_access and subscription:
+                usage_limited = await self._check_usage_limits(user_id, feature, subscription)
+                if not usage_limited:
+                    self.logger.info(
+                        "User %s hit usage limit for feature %s",
+                        user_id,
+                        feature,
+                        extra={
+                            "user_id": user_id,
+                            "feature": feature,
+                            "tier": user_tier.value,
+                            "usage_exceeded": True,
+                        }
+                    )
+                    return False
+
+            self.logger.debug(
+                "Feature access check for user %s, feature %s: %s",
+                user_id,
+                feature,
+                has_access,
+                extra={
+                    "user_id": user_id,
+                    "feature": feature,
+                    "tier": user_tier.value,
+                    "has_access": has_access,
+                }
+            )
+
+            return has_access
 
         except (SubscriptionException, ValueError, ConnectionError) as e:
             self.logger.error(
@@ -466,7 +529,87 @@ class ProductionPremiumSubscriptionService:
                 str(e),
                 extra={"user_id": user_id, "feature": feature},
             )
-            return False
+            # Default to free tier access on error
+            return self._check_feature_entitlement(user_id, feature, SubscriptionTier.FREE)
+
+    async def _check_usage_limits(self, user_id: str, feature: str, subscription: Subscription) -> bool:
+        """Check if user has not exceeded usage limits for the feature."""
+        try:
+            # Features that have usage limits
+            usage_limited_features = {
+                "daily_messages": "daily_messages",
+                "monthly_reports": "monthly_reports", 
+                "children_profiles": "children_profiles",
+                "api_calls": "api_calls",
+                "storage_mb": "storage_mb"
+            }
+            
+            if feature not in usage_limited_features:
+                return True  # No usage limit for this feature
+            
+            limit_key = usage_limited_features[feature]
+            usage_limit = subscription.usage_limits.get(limit_key, 0)
+            
+            # -1 means unlimited
+            if usage_limit == -1:
+                return True
+            
+            # Get current usage (this would integrate with your usage tracking system)
+            current_usage = await self._get_current_usage(user_id, limit_key)
+            
+            # Check if limit exceeded
+            if current_usage >= usage_limit:
+                return False
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(
+                "Error checking usage limits: %s",
+                str(e),
+                extra={
+                    "user_id": user_id,
+                    "feature": feature,
+                }
+            )
+            # Default to allowing access if we can't check limits
+            return True
+
+    async def _get_current_usage(self, user_id: str, usage_type: str) -> int:
+        """Get current usage count for user and usage type."""
+        try:
+            # This would integrate with your actual usage tracking system
+            # For now, return 0 as placeholder
+            
+            # In a real implementation, you would:
+            # 1. Query your usage tracking database/cache
+            # 2. Calculate usage based on time period (daily/monthly)
+            # 3. Return actual usage count
+            
+            self.logger.debug(
+                "Retrieved usage count for user %s, type %s: %d",
+                user_id,
+                usage_type,
+                0,
+                extra={
+                    "user_id": user_id,
+                    "usage_type": usage_type,
+                    "current_usage": 0,
+                }
+            )
+            
+            return 0
+            
+        except Exception as e:
+            self.logger.error(
+                "Failed to get current usage: %s",
+                str(e),
+                extra={
+                    "user_id": user_id,
+                    "usage_type": usage_type,
+                }
+            )
+            return 0
 
     async def get_subscription_analytics(
         self, start_date: datetime, end_date: datetime
@@ -1440,15 +1583,279 @@ class ProductionPremiumSubscriptionService:
         new_tier: SubscriptionTier,
         payment_method_id: Optional[str] = None,
     ):
-        """Update Stripe subscription."""
+        """Update Stripe subscription with new tier and pricing."""
         if not self._stripe_client:
+            self.logger.warning("Stripe client not available - subscription update skipped")
             return
 
         try:
-            # TODO: Implement Stripe subscription update
-            pass
+            self.logger.info(
+                "Updating Stripe subscription %s to tier %s",
+                stripe_subscription_id,
+                new_tier.value,
+                extra={
+                    "stripe_subscription_id": stripe_subscription_id,
+                    "new_tier": new_tier.value,
+                    "payment_method_id": payment_method_id,
+                }
+            )
+
+            # Get current subscription from Stripe
+            current_subscription = self._stripe_client.Subscription.retrieve(
+                stripe_subscription_id
+            )
+            
+            if not current_subscription:
+                raise SubscriptionException(f"Stripe subscription {stripe_subscription_id} not found")
+
+            # Get the new price for the tier
+            new_price = self._pricing_config[new_tier]["monthly_price"]
+            
+            # Create or retrieve the price object in Stripe
+            price_id = await self._get_or_create_stripe_price(new_tier, new_price)
+            
+            # Prepare subscription update data
+            update_data = {
+                "items": [
+                    {
+                        "id": current_subscription["items"]["data"][0]["id"],
+                        "price": price_id,
+                    }
+                ],
+                "proration_behavior": "create_prorations",  # Enable prorated billing
+            }
+            
+            # Update payment method if provided
+            if payment_method_id:
+                update_data["default_payment_method"] = payment_method_id
+                
+                # Update customer's default payment method
+                self._stripe_client.Customer.modify(
+                    current_subscription["customer"],
+                    invoice_settings={"default_payment_method": payment_method_id}
+                )
+                
+                self.logger.info(
+                    "Updated payment method for Stripe subscription %s",
+                    stripe_subscription_id,
+                    extra={
+                        "stripe_subscription_id": stripe_subscription_id,
+                        "payment_method_id": payment_method_id,
+                    }
+                )
+
+            # Update the subscription in Stripe
+            updated_subscription = self._stripe_client.Subscription.modify(
+                stripe_subscription_id,
+                **update_data
+            )
+            
+            # Verify the update was successful
+            if updated_subscription["status"] in ["active", "trialing"]:
+                self.logger.info(
+                    "Successfully updated Stripe subscription %s to %s tier",
+                    stripe_subscription_id,
+                    new_tier.value,
+                    extra={
+                        "stripe_subscription_id": stripe_subscription_id,
+                        "new_tier": new_tier.value,
+                        "new_status": updated_subscription["status"],
+                        "new_amount": new_price,
+                    }
+                )
+            else:
+                self.logger.warning(
+                    "Stripe subscription update resulted in unexpected status: %s",
+                    updated_subscription["status"],
+                    extra={
+                        "stripe_subscription_id": stripe_subscription_id,
+                        "status": updated_subscription["status"],
+                    }
+                )
+                
+        except self._stripe_client.error.StripeError as e:
+            error_msg = f"Stripe API error during subscription update: {e.user_message or str(e)}"
+            self.logger.error(
+                "Stripe error updating subscription: %s",
+                error_msg,
+                extra={
+                    "stripe_subscription_id": stripe_subscription_id,
+                    "stripe_error_code": getattr(e, 'code', None),
+                    "stripe_error_type": getattr(e, 'type', None),
+                }
+            )
+            raise SubscriptionException(error_msg, error_code="stripe_error")
+            
         except (SubscriptionException, ValueError, ConnectionError) as e:
-            self.logger.error("Failed to update Stripe subscription: %s", str(e))
+            self.logger.error(
+                "Failed to update Stripe subscription: %s",
+                str(e),
+                extra={
+                    "stripe_subscription_id": stripe_subscription_id,
+                    "new_tier": new_tier.value,
+                }
+            )
+            raise
+
+    async def _get_or_create_stripe_price(self, tier: SubscriptionTier, amount: Decimal) -> str:
+        """Get existing or create new Stripe price for subscription tier."""
+        if not self._stripe_client:
+            raise SubscriptionException("Stripe client not available")
+        
+        try:
+            # Create a consistent price lookup key
+            price_lookup_key = f"ai-teddy-{tier.value}-monthly-{amount}"
+            
+            # First try to find existing price by lookup_key
+            try:
+                existing_prices = self._stripe_client.Price.list(
+                    lookup_keys=[price_lookup_key],
+                    active=True,
+                    limit=1
+                )
+                
+                if existing_prices.data:
+                    existing_price = existing_prices.data[0]
+                    self.logger.debug(
+                        "Found existing Stripe price for tier %s: %s",
+                        tier.value,
+                        existing_price.id,
+                        extra={
+                            "tier": tier.value,
+                            "price_id": existing_price.id,
+                            "amount": amount,
+                        }
+                    )
+                    return existing_price.id
+                    
+            except self._stripe_client.error.InvalidRequestError:
+                # lookup_keys not found, continue to create new price
+                pass
+            
+            # Create new price if not found
+            self.logger.info(
+                "Creating new Stripe price for tier %s with amount %s",
+                tier.value,
+                amount,
+                extra={
+                    "tier": tier.value,
+                    "amount": amount,
+                    "lookup_key": price_lookup_key,
+                }
+            )
+            
+            # Create product if doesn't exist
+            product_id = await self._get_or_create_stripe_product(tier)
+            
+            # Create the price
+            new_price = self._stripe_client.Price.create(
+                unit_amount=int(amount * 100),  # Convert to cents
+                currency="usd",
+                recurring={"interval": "month"},
+                product=product_id,
+                lookup_key=price_lookup_key,
+                active=True,
+                metadata={
+                    "tier": tier.value,
+                    "app": "ai-teddy-bear",
+                    "price_type": "monthly_subscription",
+                }
+            )
+            
+            self.logger.info(
+                "Created new Stripe price for tier %s: %s",
+                tier.value,
+                new_price.id,
+                extra={
+                    "tier": tier.value,
+                    "price_id": new_price.id,
+                    "amount": amount,
+                    "lookup_key": price_lookup_key,
+                }
+            )
+            
+            return new_price.id
+            
+        except self._stripe_client.error.StripeError as e:
+            error_msg = f"Stripe error creating/retrieving price: {e.user_message or str(e)}"
+            self.logger.error(
+                "Failed to get or create Stripe price: %s",
+                error_msg,
+                extra={
+                    "tier": tier.value,
+                    "amount": amount,
+                    "stripe_error_code": getattr(e, 'code', None),
+                }
+            )
+            raise SubscriptionException(error_msg, error_code="stripe_price_error")
+
+    async def _get_or_create_stripe_product(self, tier: SubscriptionTier) -> str:
+        """Get existing or create new Stripe product for subscription tier."""
+        if not self._stripe_client:
+            raise SubscriptionException("Stripe client not available")
+            
+        try:
+            product_id = f"ai-teddy-{tier.value}-subscription"
+            
+            # Try to retrieve existing product
+            try:
+                existing_product = self._stripe_client.Product.retrieve(product_id)
+                if existing_product and existing_product.active:
+                    return existing_product.id
+            except self._stripe_client.error.InvalidRequestError:
+                # Product not found, will create new one
+                pass
+            
+            # Create new product
+            tier_names = {
+                SubscriptionTier.FREE: "AI Teddy Free",
+                SubscriptionTier.BASIC: "AI Teddy Basic",
+                SubscriptionTier.PREMIUM: "AI Teddy Premium", 
+                SubscriptionTier.FAMILY: "AI Teddy Family"
+            }
+            
+            tier_descriptions = {
+                SubscriptionTier.FREE: "Free tier with basic AI companion features",
+                SubscriptionTier.BASIC: "Basic subscription with unlimited conversations and analytics",
+                SubscriptionTier.PREMIUM: "Premium subscription with advanced features and priority support",
+                SubscriptionTier.FAMILY: "Family subscription for multiple children with comprehensive dashboard"
+            }
+            
+            new_product = self._stripe_client.Product.create(
+                id=product_id,
+                name=tier_names.get(tier, f"AI Teddy {tier.value.title()}"),
+                description=tier_descriptions.get(tier, f"AI Teddy {tier.value} subscription"),
+                active=True,
+                metadata={
+                    "tier": tier.value,
+                    "app": "ai-teddy-bear",
+                    "features": ",".join(self._pricing_config[tier]["features"]),
+                }
+            )
+            
+            self.logger.info(
+                "Created new Stripe product for tier %s: %s",
+                tier.value,
+                new_product.id,
+                extra={
+                    "tier": tier.value,
+                    "product_id": new_product.id,
+                }
+            )
+            
+            return new_product.id
+            
+        except self._stripe_client.error.StripeError as e:
+            error_msg = f"Stripe error creating/retrieving product: {e.user_message or str(e)}"
+            self.logger.error(
+                "Failed to get or create Stripe product: %s",
+                error_msg,
+                extra={
+                    "tier": tier.value,
+                    "stripe_error_code": getattr(e, 'code', None),
+                }
+            )
+            raise SubscriptionException(error_msg, error_code="stripe_product_error")
 
     async def _cancel_stripe_subscription(
         self, stripe_subscription_id: str, immediate: bool
@@ -1470,9 +1877,237 @@ class ProductionPremiumSubscriptionService:
     def _check_feature_entitlement(
         self, user_id: str, feature: str, tier: SubscriptionTier
     ) -> bool:
-        """Check if feature is entitled for tier."""
-        # TODO: Implement detailed feature checking logic
-        return True
+        """Check if feature is entitled for tier with detailed validation."""
+        try:
+            # Get the features available for this tier
+            tier_config = self._pricing_config.get(tier)
+            if not tier_config:
+                self.logger.warning(
+                    "Unknown subscription tier for feature check: %s",
+                    tier.value,
+                    extra={
+                        "user_id": user_id,
+                        "feature": feature,
+                        "tier": tier.value,
+                    }
+                )
+                return False
+            
+            # Check if feature is explicitly enabled for this tier
+            enabled_features = tier_config.get("features", [])
+            if feature in enabled_features:
+                self.logger.debug(
+                    "Feature %s is entitled for user %s with tier %s",
+                    feature,
+                    user_id,
+                    tier.value,
+                    extra={
+                        "user_id": user_id,
+                        "feature": feature,
+                        "tier": tier.value,
+                        "entitled": True,
+                    }
+                )
+                return True
+            
+            # Check for feature inheritance (higher tiers include lower tier features)
+            tier_hierarchy = [
+                SubscriptionTier.FREE,
+                SubscriptionTier.BASIC,
+                SubscriptionTier.PREMIUM,
+                SubscriptionTier.FAMILY
+            ]
+            
+            current_tier_index = tier_hierarchy.index(tier)
+            
+            # Check if feature is available in any lower tier (inheritance)
+            for lower_tier in tier_hierarchy[:current_tier_index]:
+                lower_tier_features = self._pricing_config[lower_tier].get("features", [])
+                if feature in lower_tier_features:
+                    self.logger.debug(
+                        "Feature %s inherited from tier %s for user %s with tier %s",
+                        feature,
+                        lower_tier.value,
+                        user_id,
+                        tier.value,
+                        extra={
+                            "user_id": user_id,
+                            "feature": feature,
+                            "tier": tier.value,
+                            "inherited_from": lower_tier.value,
+                            "entitled": True,
+                        }
+                    )
+                    return True
+            
+            # Check for special feature categories
+            special_entitlements = self._check_special_feature_entitlements(feature, tier, user_id)
+            if special_entitlements is not None:
+                return special_entitlements
+            
+            # Feature not entitled
+            self.logger.info(
+                "Feature %s is not entitled for user %s with tier %s",
+                feature,
+                user_id,
+                tier.value,
+                extra={
+                    "user_id": user_id,
+                    "feature": feature,
+                    "tier": tier.value,
+                    "entitled": False,
+                    "available_features": enabled_features,
+                }
+            )
+            return False
+            
+        except ValueError as e:
+            # Tier not in hierarchy
+            self.logger.error(
+                "Invalid tier in feature entitlement check: %s",
+                str(e),
+                extra={
+                    "user_id": user_id,
+                    "feature": feature,
+                    "tier": tier.value,
+                }
+            )
+            return False
+        
+        except Exception as e:
+            self.logger.error(
+                "Error checking feature entitlement: %s",
+                str(e),
+                extra={
+                    "user_id": user_id,
+                    "feature": feature,
+                    "tier": tier.value,
+                }
+            )
+            # Default to deny access on error
+            return False
+
+    def _check_special_feature_entitlements(
+        self, feature: str, tier: SubscriptionTier, user_id: str
+    ) -> Optional[bool]:
+        """Check special feature entitlements and usage-based features."""
+        
+        # API and usage-based features
+        usage_features = {
+            "api_access": {
+                SubscriptionTier.FREE: False,
+                SubscriptionTier.BASIC: False,
+                SubscriptionTier.PREMIUM: True,
+                SubscriptionTier.FAMILY: True,
+            },
+            "bulk_operations": {
+                SubscriptionTier.FREE: False,
+                SubscriptionTier.BASIC: False,
+                SubscriptionTier.PREMIUM: True,
+                SubscriptionTier.FAMILY: True,
+            },
+            "advanced_analytics": {
+                SubscriptionTier.FREE: False,
+                SubscriptionTier.BASIC: False,
+                SubscriptionTier.PREMIUM: True,
+                SubscriptionTier.FAMILY: True,
+            },
+            "priority_support": {
+                SubscriptionTier.FREE: False,
+                SubscriptionTier.BASIC: False,
+                SubscriptionTier.PREMIUM: True,
+                SubscriptionTier.FAMILY: True,
+            },
+            "multiple_children": {
+                SubscriptionTier.FREE: False,
+                SubscriptionTier.BASIC: False,
+                SubscriptionTier.PREMIUM: False,
+                SubscriptionTier.FAMILY: True,
+            },
+            "family_dashboard": {
+                SubscriptionTier.FREE: False,
+                SubscriptionTier.BASIC: False,
+                SubscriptionTier.PREMIUM: False,
+                SubscriptionTier.FAMILY: True,
+            },
+            "custom_responses": {
+                SubscriptionTier.FREE: False,
+                SubscriptionTier.BASIC: False,
+                SubscriptionTier.PREMIUM: True,
+                SubscriptionTier.FAMILY: True,
+            },
+            "unlimited_storage": {
+                SubscriptionTier.FREE: False,
+                SubscriptionTier.BASIC: False,
+                SubscriptionTier.PREMIUM: True,
+                SubscriptionTier.FAMILY: True,
+            },
+        }
+        
+        if feature in usage_features:
+            entitled = usage_features[feature].get(tier, False)
+            self.logger.debug(
+                "Special feature %s entitlement for tier %s: %s",
+                feature,
+                tier.value,
+                entitled,
+                extra={
+                    "user_id": user_id,
+                    "feature": feature,
+                    "tier": tier.value,
+                    "entitled": entitled,
+                    "feature_type": "usage_based",
+                }
+            )
+            return entitled
+        
+        # Time-based features (trial extensions, etc.)
+        time_based_features = ["extended_trial", "grace_period", "premium_trial"]
+        if feature in time_based_features:
+            # These features might have special logic based on user history
+            # For now, only available to premium tiers
+            entitled = tier in [SubscriptionTier.PREMIUM, SubscriptionTier.FAMILY]
+            self.logger.debug(
+                "Time-based feature %s entitlement for tier %s: %s",
+                feature,
+                tier.value,
+                entitled,
+                extra={
+                    "user_id": user_id,
+                    "feature": feature,
+                    "tier": tier.value,
+                    "entitled": entitled,
+                    "feature_type": "time_based",
+                }
+            )
+            return entitled
+        
+        # Child safety and COPPA features (available to all paying tiers)
+        child_safety_features = [
+            "advanced_safety_filters", 
+            "parental_controls", 
+            "detailed_safety_reports",
+            "real_time_monitoring"
+        ]
+        if feature in child_safety_features:
+            entitled = tier != SubscriptionTier.FREE
+            self.logger.debug(
+                "Child safety feature %s entitlement for tier %s: %s",
+                feature,
+                tier.value,
+                entitled,
+                extra={
+                    "user_id": user_id,
+                    "feature": feature,
+                    "tier": tier.value,
+                    "entitled": entitled,
+                    "feature_type": "child_safety",
+                }
+            )
+            return entitled
+        
+        # Return None for features not covered by special logic
+        return None
 
 
 # Production service instance management

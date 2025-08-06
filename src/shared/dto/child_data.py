@@ -120,6 +120,7 @@ class ChildData:
     def encrypt_name(self) -> "ChildData":
         """Return a new ChildData instance with the name encrypted using unified encryption service."""
         from src.utils.crypto_utils import EncryptionService
+
         service = EncryptionService()
         encrypted_name = service.encrypt_message_content(self.name)
         # Return a new instance with encrypted name and encrypted_data=True
@@ -139,6 +140,7 @@ class ChildData:
     def decrypt_name(self) -> str:
         """Decrypt the name field using unified encryption service and return the plaintext name."""
         from src.utils.crypto_utils import EncryptionService
+
         service = EncryptionService()
         try:
             return service.decrypt_message_content(self.name)

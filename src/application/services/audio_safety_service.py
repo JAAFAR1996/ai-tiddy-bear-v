@@ -119,9 +119,77 @@ class AudioSafetyService:
         return filtered
     
     def _assess_audio_quality(self, audio_data: bytes) -> float:
-        """Assess audio quality for child comprehension."""
+        """Assess audio quality for child comprehension using real audio analysis."""
         if len(audio_data) < 1000:
             return 0.1  # Too short
         
-        # Simplified quality assessment
-        return 0.7  # Would use actual audio analysis in production
+        try:
+            # Real audio analysis implementation
+            import librosa
+            import numpy as np
+            import io
+            
+            # Load audio data
+            audio, sample_rate = librosa.load(io.BytesIO(audio_data), sr=22050)
+            
+            if len(audio) == 0:
+                return 0.0
+            
+            # Calculate audio quality metrics
+            quality_score = 1.0
+            
+            # 1. Check for silence (too quiet)
+            rms_energy = np.sqrt(np.mean(audio**2))
+            if rms_energy < 0.01:  # Too quiet
+                quality_score *= 0.3
+            elif rms_energy > 0.8:  # Too loud/distorted
+                quality_score *= 0.5
+            
+            # 2. Check frequency content
+            stft = librosa.stft(audio)
+            magnitude = np.abs(stft)
+            
+            # Look for good speech frequency range (300-3000 Hz)
+            freqs = librosa.fft_frequencies(sr=sample_rate)
+            speech_range = (freqs >= 300) & (freqs <= 3000)
+            speech_energy = np.mean(magnitude[speech_range])
+            
+            if speech_energy < 0.1:  # Weak speech content
+                quality_score *= 0.4
+            
+            # 3. Check for clipping/distortion
+            clipping_ratio = np.sum(np.abs(audio) > 0.95) / len(audio)
+            if clipping_ratio > 0.01:  # More than 1% clipped samples
+                quality_score *= (1.0 - clipping_ratio * 10)
+            
+            # 4. Check audio length - should be reasonable for children
+            duration = len(audio) / sample_rate
+            if duration < 0.5:  # Too short
+                quality_score *= 0.5
+            elif duration > 30:  # Too long for child attention span
+                quality_score *= 0.7
+            
+            # Ensure score is between 0 and 1
+            quality_score = max(0.0, min(1.0, quality_score))
+            
+            self.logger.debug(f"Audio quality assessment: {quality_score:.2f} "
+                            f"(RMS: {rms_energy:.3f}, Duration: {duration:.1f}s)")
+            
+            return quality_score
+            
+        except ImportError:
+            self.logger.warning("librosa not available, using basic quality assessment")
+            # Fallback to basic analysis
+            duration_seconds = len(audio_data) / (44100 * 2)  # Assume 44.1kHz, 16-bit
+            
+            if duration_seconds < 0.5:
+                return 0.3
+            elif duration_seconds > 30:
+                return 0.6
+            else:
+                return 0.8
+                
+        except Exception as e:
+            self.logger.error(f"Audio quality assessment failed: {e}")
+            # Safe fallback
+            return 0.5

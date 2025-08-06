@@ -301,13 +301,20 @@ class ConfigurationError(AITeddyBearException):
     error_code = "configuration_error"
     default_severity = "critical"
 
-    def __init__(self, config_key: str = None, **kwargs):
-        message = "Configuration error"
+    def __init__(
+        self,
+        *,
+        message: str = None,
+        config_key: str = None,
+        context: dict = None,
+        **kwargs,
+    ):
+        msg = message or "Configuration error"
         if config_key:
-            message += f" for key '{config_key}'"
-        context = kwargs.get("context", {})
-        context.update({"config_key": config_key})
-        super().__init__(message, context=context, **kwargs)
+            msg += f" for key '{config_key}'"
+        ctx = context or {}
+        ctx.update({"config_key": config_key})
+        super().__init__(msg, context=ctx, **kwargs)
 
 
 class DatabaseError(AITeddyBearException):

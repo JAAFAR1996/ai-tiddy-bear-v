@@ -67,30 +67,146 @@ class TextProcessor:
         }
 
     def analyze_sentiment(self, text: str) -> Dict[str, Any]:
-        """Analyze sentiment of text (mock implementation)."""
-        # This would use a real sentiment analysis library in production
-        positive_words = ["happy", "love", "fun", "great", "wonderful", "amazing"]
-        negative_words = ["sad", "angry", "hate", "bad", "terrible", "awful"]
+        """Analyze sentiment of text using production NLP models."""
+        try:
+            # Try to use transformers library for real sentiment analysis
+            from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
+            
+            # Use a pre-trained sentiment analysis model
+            model_name = "cardiffnlp/twitter-roberta-base-sentiment-latest"
+            
+            # Initialize sentiment analyzer
+            sentiment_analyzer = pipeline(
+                "sentiment-analysis",
+                model=model_name,
+                tokenizer=model_name,
+                return_all_scores=True
+            )
+            
+            # Analyze sentiment
+            results = sentiment_analyzer(text[:512])  # Limit text length
+            
+            # Convert to our format
+            scores = {result['label'].lower(): result['score'] for result in results[0]}
+            
+            # Determine primary sentiment
+            primary_sentiment = max(scores, key=scores.get)
+            confidence = scores[primary_sentiment]
+            
+            # Map model labels to our format
+            label_mapping = {
+                'negative': 'negative',
+                'neutral': 'neutral', 
+                'positive': 'positive',
+                'label_0': 'negative',
+                'label_1': 'neutral',
+                'label_2': 'positive'
+            }
+            
+            mapped_sentiment = label_mapping.get(primary_sentiment, 'neutral')
+            
+            return {
+                "sentiment": mapped_sentiment,
+                "confidence": float(confidence),
+                "emotions": self._detect_emotions_advanced(text),
+                "scores": {k: float(v) for k, v in scores.items()},
+                "model_used": "transformers_roberta"
+            }
+            
+        except ImportError:
+            self.logger.warning("transformers library not available, using fallback analysis")
+            return self._analyze_sentiment_fallback(text)
+            
+        except Exception as e:
+            self.logger.error(f"Sentiment analysis failed: {e}")
+            return self._analyze_sentiment_fallback(text)
+    
+    def _analyze_sentiment_fallback(self, text: str) -> Dict[str, Any]:
+        """Fallback sentiment analysis using enhanced word lists."""
+        # Enhanced word lists for more accurate analysis
+        positive_words = [
+            "happy", "love", "fun", "great", "wonderful", "amazing", "excited", 
+            "joy", "smile", "laugh", "fantastic", "awesome", "brilliant", "perfect",
+            "beautiful", "friend", "play", "adventure", "discover", "learn", "grow"
+        ]
+        
+        negative_words = [
+            "sad", "angry", "hate", "bad", "terrible", "awful", "scared", "fear",
+            "worry", "upset", "hurt", "pain", "dangerous", "scary", "frightening",
+            "violence", "fight", "monster", "nightmare", "cry", "lonely"
+        ]
+        
+        neutral_words = [
+            "okay", "fine", "normal", "regular", "standard", "typical", "usual",
+            "maybe", "perhaps", "possibly", "probably", "might", "could"
+        ]
 
         text_lower = text.lower()
-        positive_count = sum(1 for word in positive_words if word in text_lower)
-        negative_count = sum(1 for word in negative_words if word in text_lower)
-
-        if positive_count > negative_count:
-            sentiment = "positive"
-            confidence = min(0.9, 0.5 + (positive_count - negative_count) * 0.1)
-        elif negative_count > positive_count:
-            sentiment = "negative"
-            confidence = min(0.9, 0.5 + (negative_count - positive_count) * 0.1)
-        else:
+        
+        # Count word occurrences with weights
+        positive_score = 0
+        negative_score = 0
+        neutral_score = 0
+        
+        for word in positive_words:
+            count = text_lower.count(word)
+            positive_score += count * 1.0
+            
+        for word in negative_words:
+            count = text_lower.count(word)
+            negative_score += count * 1.2  # Weight negative words more heavily for safety
+            
+        for word in neutral_words:
+            count = text_lower.count(word)
+            neutral_score += count * 0.8
+        
+        total_score = positive_score + negative_score + neutral_score
+        
+        if total_score == 0:
             sentiment = "neutral"
             confidence = 0.5
+        elif negative_score > positive_score and negative_score > neutral_score:
+            sentiment = "negative"
+            confidence = min(0.95, 0.6 + (negative_score / total_score) * 0.3)
+        elif positive_score > negative_score and positive_score > neutral_score:
+            sentiment = "positive"
+            confidence = min(0.95, 0.6 + (positive_score / total_score) * 0.3)
+        else:
+            sentiment = "neutral"
+            confidence = min(0.85, 0.5 + (neutral_score / total_score) * 0.3)
 
         return {
             "sentiment": sentiment,
             "confidence": confidence,
             "emotions": self._detect_emotions(text_lower),
+            "scores": {
+                "positive": positive_score / max(1, total_score),
+                "negative": negative_score / max(1, total_score),
+                "neutral": neutral_score / max(1, total_score)
+            },
+            "model_used": "enhanced_wordlist"
         }
+    
+    def _detect_emotions_advanced(self, text: str) -> List[str]:
+        """Advanced emotion detection using NLP patterns."""
+        emotions = []
+        text_lower = text.lower()
+        
+        emotion_patterns = {
+            "joy": ["happy", "excited", "thrilled", "delighted", "joyful", "cheerful"],
+            "sadness": ["sad", "unhappy", "depressed", "down", "blue", "melancholy"],
+            "anger": ["angry", "mad", "furious", "annoyed", "irritated", "upset"],
+            "fear": ["scared", "afraid", "frightened", "worried", "anxious", "nervous"],
+            "surprise": ["surprised", "amazed", "shocked", "astonished", "stunned"],
+            "curiosity": ["curious", "wonder", "interested", "intrigued", "questioning"],
+            "love": ["love", "adore", "care", "affection", "like", "fond"]
+        }
+        
+        for emotion, words in emotion_patterns.items():
+            if any(word in text_lower for word in words):
+                emotions.append(emotion)
+        
+        return emotions if emotions else ["neutral"]
 
     def extract_keywords(self, text: str) -> List[str]:
         """Extract important keywords from text."""

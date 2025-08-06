@@ -27,6 +27,7 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
 import logging
+from src.infrastructure.database.repository import ChildRepository
 
 try:
     import redis.asyncio as redis
@@ -639,6 +640,9 @@ class RateLimitingService:
         self.enable_cleanup = enable_cleanup
         self._cleanup_task = None
         self._started = False
+        
+        # Initialize database repository
+        self.child_repo = ChildRepository()
 
         logger.info(f"RateLimitingService initialized with {self.backend_type} backend")
 
@@ -884,8 +888,33 @@ class RateLimitingService:
         return None
 
     def _get_age_group_for_child(self, child_id: str) -> Optional[ChildAgeLimits]:
-        """Get age group for a child (would integrate with child service in production)."""
-        # In production, this would look up the child's age from the database
+        """Get age group for a child from production database."""
+        try:
+            # Get child from database
+            import asyncio
+            import uuid
+            
+            # Create async context if needed
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Already in async context
+                child = asyncio.create_task(self.child_repo.get_by_id(uuid.UUID(child_id))).result()
+            else:
+                # Sync context - run async method
+                child = loop.run_until_complete(self.child_repo.get_by_id(uuid.UUID(child_id)))
+            
+            if child and hasattr(child, 'age'):
+                age = child.age
+                if age <= 5:
+                    return self.child_age_limits["young_child"]
+                elif age <= 8:
+                    return self.child_age_limits["middle_child"]
+                else:
+                    return self.child_age_limits["older_child"]
+        except Exception as e:
+            logger.warning(f"Failed to get child age from database: {e}")
+        
+        # Default to middle child limits if lookup fails
         return self.child_age_limits["middle_child"]
 
     def _get_scaling_factor(self, operation: OperationType, age_group: ChildAgeLimits) -> float:
@@ -1233,9 +1262,13 @@ class RateLimitingService:
 
     async def _get_usage_count(self, key: str, since_timestamp: int) -> int:
         """Get usage count since timestamp."""
-        # This would need to be implemented based on the storage backend
-        # For now, return 0 as placeholder
-        return 0
+        # Get all requests for the key
+        requests = await self.storage.get_requests(key, window_seconds=86400)  # 24 hours
+        
+        # Count requests since the given timestamp
+        count = sum(1 for req_time in requests if req_time >= since_timestamp)
+        
+        return count
 
     async def _is_in_safety_cooldown(self, child_id: str) -> bool:
         """Check if child is currently in safety cooldown."""

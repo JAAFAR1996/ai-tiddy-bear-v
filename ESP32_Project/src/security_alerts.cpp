@@ -558,10 +558,44 @@ void SecurityAlerts::clearOldAlerts() {
 }
 
 bool SecurityAlerts::sendEmail(const SecurityAlert& alert) {
-  // Email sending implementation would go here
-  // This is a placeholder for the email functionality
-  LOG_DEBUG(LOG_SECURITY, "Email alert sent", "to=" + adminEmail);
-  return true;
+  // Send security alert via HTTP POST to backend email service
+  HTTPClient http;
+  
+  // Construct email notification request
+  StaticJsonDocument<512> emailRequest;
+  emailRequest["to"] = adminEmail;
+  emailRequest["subject"] = "ESP32 Security Alert: " + String(alert.type);
+  emailRequest["priority"] = "high";
+  emailRequest["alert_type"] = alert.type;
+  emailRequest["device_id"] = WiFi.macAddress();
+  emailRequest["timestamp"] = alert.timestamp;
+  emailRequest["severity"] = alert.severity;
+  emailRequest["description"] = alert.description;
+  emailRequest["source"] = "esp32_device";
+  
+  String payload;
+  serializeJson(emailRequest, payload);
+  
+  // Send to backend email service endpoint
+  String emailEndpoint = "https://" + String(SERVER_HOST) + "/api/notifications/security-alert";
+  
+  http.begin(emailEndpoint);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-Device-ID", WiFi.macAddress());
+  http.addHeader("X-Alert-Type", "security");
+  
+  int httpResponseCode = http.POST(payload);
+  
+  bool success = (httpResponseCode >= 200 && httpResponseCode < 300);
+  
+  if (success) {
+    LOG_INFO(LOG_SECURITY, "Security email alert sent successfully", "to=" + adminEmail + ", code=" + String(httpResponseCode));
+  } else {
+    LOG_ERROR(LOG_SECURITY, "Failed to send security email alert", "to=" + adminEmail + ", code=" + String(httpResponseCode));
+  }
+  
+  http.end();
+  return success;
 }
 
 void SecurityAlerts::monitorSystemHealth() {

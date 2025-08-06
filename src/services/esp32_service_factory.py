@@ -24,24 +24,33 @@ class ESP32ServiceFactory:
 
     async def create_production_server(
         self,
+        ai_provider,  # Required - no default
+        tts_service,  # Required - no default
         stt_model_size: str = "base",
-        ai_provider=None,
-        tts_service=None,
         redis_url: Optional[str] = None,
     ) -> ESP32ChatServer:
         """
         Create production ESP32 Chat Server with all services.
 
         Args:
+            ai_provider: AI provider instance (REQUIRED)
+            tts_service: TTS service instance (REQUIRED)
             stt_model_size: Whisper model size ("tiny", "base", "small", "medium", "large")
-            ai_provider: AI provider instance
-            tts_service: TTS service instance
             redis_url: Redis connection URL
 
         Returns:
             Configured ESP32ChatServer instance
+
+        Raises:
+            ValueError: If required dependencies are None
         """
         self.logger.info("Creating production ESP32 Chat Server")
+
+        # Validate required dependencies
+        if ai_provider is None:
+            raise ValueError("ai_provider is required and cannot be None")
+        if tts_service is None:
+            raise ValueError("tts_service is required and cannot be None")
 
         try:
             # Create STT Provider (Whisper)

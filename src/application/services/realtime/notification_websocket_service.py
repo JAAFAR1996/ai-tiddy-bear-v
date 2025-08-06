@@ -16,7 +16,7 @@ from src.infrastructure.websocket.production_websocket_adapter import (
     MessageType,
 )
 
-# from src.application.services.notification_service import NotificationService  # TODO: Add when available
+from src.application.services.notification_service import NotificationService
 from src.infrastructure.config.premium_websocket_config import (
     WEBSOCKET_CONFIG,
     ALERT_CONFIG,
@@ -61,9 +61,7 @@ class RealTimeNotificationService:
     def __init__(
         self,
         websocket_adapter: ProductionWebSocketAdapter,
-        notification_service: Optional[
-            Any
-        ] = None,  # TODO: Type properly when NotificationService is available
+        notification_service: Optional[NotificationService] = None,
         config: Optional[Dict[str, Any]] = None,
     ):
         self.websocket_adapter = websocket_adapter

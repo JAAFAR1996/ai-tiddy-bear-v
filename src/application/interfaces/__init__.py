@@ -68,7 +68,7 @@ from .safety_monitor import (
 )
 
 # Audio Processing Services - For voice interactions with children
-# TODO: speech_processor module needs to be implemented
+from .speech_processor import SpeechProcessor
 
 # TextToSpeechService DELETED - use ITTSService from src.interfaces.providers.tts_provider
 
@@ -150,8 +150,8 @@ __all__ = [
     # Core Safety Types
     "RiskLevel",
     "SafetyAnalysisResult",
-    # Audio Processing - Basic speech processing interfaces (removed missing ones)
-    # "SpeechProcessor", - Missing
+    # Audio Processing - Basic speech processing interfaces
+    "SpeechProcessor",
     # "IAdvancedSpeechProcessor", - Missing
     # "ISpeechConfigurationService", - Missing
     # Speech Processing Enums (removed missing ones)

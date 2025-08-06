@@ -1,16 +1,40 @@
+import traceback
+from typing import Dict, List, Optional, Set
+from fastapi import FastAPI, APIRouter, Depends
+from fastapi.security import HTTPBearer
+from src.infrastructure.security.auth import get_current_user
+from src.infrastructure.logging.production_logger import get_logger
+from .route_monitor import RouteMonitor
+
+
+def get_router_meta(router):
+    """
+    Helper to extract prefix and tags from any APIRouter, raising a clear error if missing.
+    """
+    prefix = getattr(router, "prefix", None)
+    tags = getattr(router, "tags", None)
+    if not prefix or not tags:
+        logger = get_logger()
+        logger.error(
+            f"❌ Router {router} missing prefix/tags. prefix={prefix}, tags={tags}",
+            extra={
+                "router": str(router),
+                "prefix": prefix,
+                "tags": tags,
+                "stack": traceback.format_stack(),
+            },
+        )
+        raise SystemExit(
+            f"Router {router} missing required prefix/tags. This is a fatal error. See logs for details."
+        )
+    return prefix, tags
+
+
 """
 🧸 AI TEDDY BEAR - ROUTE MANAGER
 Enhanced route management system with conflict prevention and unified security
 """
 
-import logging
-from typing import Dict, List, Optional, Set
-from fastapi import FastAPI, APIRouter, Depends
-from fastapi.security import HTTPBearer
-
-from src.infrastructure.security.auth import get_current_user
-from src.infrastructure.logging.production_logger import get_logger
-from .route_monitor import RouteMonitor
 
 logger = get_logger(__name__, "route_manager")
 
@@ -55,14 +79,104 @@ class RouteManager:
             dependencies: FastAPI dependencies
             require_auth: Whether to require authentication for all routes
             skip_conflict_check: Skip conflict checking (use with caution)
+
+        Raises:
+            RouteConflictError: If route conflicts are detected
+            ValueError: If router parameters are invalid
         """
 
-        logger.info(f"🔄 Registering router '{router_name}' with prefix '{prefix}'")
+        # STRICT VALIDATION: router_name, prefix, tags
+        import traceback
+        import os
+
+        error_context = {
+            "router_name": router_name,
+            "prefix": prefix,
+            "tags": tags,
+        }
+        # Enforce explicit prefix/tags
+        if prefix is None or tags is None:
+            traceback.print_stack()
+            raise ValueError(
+                f"prefix and tags must be passed explicitly to register_router. Context: {error_context}"
+            )
+        # Strict prefix validation: no auto-correction in production
+        strict_prefix = os.environ.get("STRICT_PREFIX_VALIDATION")
+        if strict_prefix is None:
+            # Default: True in production, False in dev/test
+            env = os.environ.get("ENV", "production").lower()
+            strict_prefix = (
+                "false" if env in ("dev", "development", "test", "testing") else "true"
+            )
+        strict_prefix = strict_prefix.lower() == "true"
+
+        if not router:
+            raise ValueError(
+                f"[RouteManager] Router cannot be None for '{router_name}'. Context: {error_context}\n{traceback.format_stack()}"
+            )
+        if not router_name or not isinstance(router_name, str):
+            raise ValueError(
+                f"[RouteManager] Router name must be a non-empty string. Context: {error_context}\n{traceback.format_stack()}"
+            )
+        if router_name.strip() != router_name:
+            raise ValueError(
+                f"[RouteManager] Router name '{router_name}' contains leading/trailing whitespace. Context: {error_context}\n{traceback.format_stack()}"
+            )
+        # Prefix must be string or None
+        if prefix is not None:
+            if not isinstance(prefix, str):
+                raise ValueError(
+                    f"[RouteManager] Prefix must be a string, got {type(prefix).__name__}. Context: {error_context}\n{traceback.format_stack()}"
+                )
+            if prefix:
+                if not prefix.startswith("/"):
+                    if strict_prefix:
+                        raise ValueError(
+                            f"[RouteManager] Prefix must start with '/'. Context: {error_context}\n{traceback.format_stack()}"
+                        )
+                    else:
+                        prefix = f"/{prefix}"
+                        logger.warning(
+                            f"⚠️ [DEV ONLY] Auto-corrected prefix for '{router_name}': added leading slash. Context: {error_context}"
+                        )
+                if prefix.endswith("/") and prefix != "/":
+                    if strict_prefix:
+                        raise ValueError(
+                            f"[RouteManager] Prefix must not end with '/'. Context: {error_context}\n{traceback.format_stack()}"
+                        )
+                    else:
+                        prefix = prefix.rstrip("/")
+                        logger.warning(
+                            f"⚠️ [DEV ONLY] Auto-corrected prefix for '{router_name}': removed trailing slash. Context: {error_context}"
+                        )
+        # Tags must be a list of strings or None
+        if tags is not None:
+            if not isinstance(tags, list) or not all(isinstance(t, str) for t in tags):
+                raise ValueError(
+                    f"[RouteManager] Tags must be a list of strings or None. Context: {error_context}\n{traceback.format_stack()}"
+                )
+            if any(t is None or t.strip() == "" for t in tags):
+                raise ValueError(
+                    f"[RouteManager] Tags list contains None or empty string. Context: {error_context}\n{traceback.format_stack()}"
+                )
+
+        # Normalize prefix for consistent handling
+        normalized_prefix = prefix or ""
+
+        # Enhanced logging with proper null handling
+        prefix_display = prefix if prefix is not None else "None"
+        logger.info(
+            f"🔄 Registering router '{router_name}' with prefix '{prefix_display}'"
+        )
+
+        # Validate router has routes
+        if not hasattr(router, "routes") or not router.routes:
+            logger.warning(f"⚠️ Router '{router_name}' has no routes defined")
 
         # Pre-registration conflict check
         if not skip_conflict_check:
             self._check_prefix_conflicts(prefix, router_name)
-            self._check_route_conflicts(router, router_name, prefix or "")
+            self._check_route_conflicts(router, router_name, normalized_prefix)
 
         # Add unified authentication if required
         if require_auth and dependencies is None:
@@ -73,7 +187,7 @@ class RouteManager:
             if auth_dep not in dependencies:
                 dependencies.append(auth_dep)
 
-        # Register the router
+        # Register the router with comprehensive error handling
         try:
             self.app.include_router(
                 router, prefix=prefix, tags=tags, dependencies=dependencies
@@ -83,19 +197,46 @@ class RouteManager:
             if prefix:
                 self.registered_prefixes.add(prefix)
 
-            self._track_router_routes(router, router_name, prefix or "")
+            self._track_router_routes(router, router_name, normalized_prefix)
 
+            # Success logging with detailed information
             logger.info(f"✅ Router '{router_name}' registered successfully")
             if prefix:
                 logger.info(f"   📍 Prefix: {prefix}")
             if tags:
-                logger.info(f"   🏷️ Tags: {tags}")
+                logger.info(f"   🏷️ Tags: {', '.join(tags)}")
             if require_auth:
-                logger.info(f"   🔐 Authentication: Required")
+                logger.info("   🔐 Authentication: Required")
+
+            # Log route count for monitoring
+            route_count = len(router.routes) if hasattr(router, "routes") else 0
+            logger.info(f"   📊 Routes: {route_count}")
 
         except Exception as e:
+            # Enhanced error logging with context
+            error_context = {
+                "router_name": router_name,
+                "prefix": prefix,
+                "tags": tags,
+                "require_auth": require_auth,
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+            }
+
             logger.error(f"❌ Failed to register router '{router_name}': {str(e)}")
-            raise
+            logger.error(f"   Context: {error_context}")
+
+            # Clean up any partial registration
+            if prefix and prefix in self.registered_prefixes:
+                self.registered_prefixes.remove(prefix)
+            # Clean up any partial registered routes for this router
+            for route_path, r_name in list(self.registered_routes.items()):
+                if r_name == router_name:
+                    del self.registered_routes[route_path]
+
+            raise RouteConflictError(
+                f"Failed to register router '{router_name}': {str(e)}"
+            ) from e
 
     def _check_prefix_conflicts(self, prefix: Optional[str], router_name: str) -> None:
         """Check for prefix conflicts with detailed analysis."""
@@ -207,178 +348,206 @@ def register_all_routers(app: FastAPI) -> RouteManager:
     """
     route_manager = RouteManager(app)
 
+    logger.info("🚀 Starting unified router registration with conflict detection...")
+
+    # 1. Authentication Router (highest priority - no auth required)
     try:
-        logger.info(
-            "🚀 Starting unified router registration with conflict detection..."
+        from src.adapters.auth_routes import router as auth_router
+
+        prefix, tags = get_router_meta(auth_router)
+        route_manager.register_router(
+            router=auth_router,
+            router_name="authentication",
+            prefix=prefix,
+            tags=tags,
+            require_auth=False,
+            skip_conflict_check=False,
+        )
+        logger.info("✅ Authentication router registered")
+    except ImportError as e:
+        logger.critical(f"❌ Failed to load auth router: {e}")
+        raise SystemExit("Authentication router is required. Shutting down.")
+
+    # 2. Dashboard Router (requires auth)
+    try:
+        from src.adapters.dashboard_routes import router as dashboard_router
+
+        prefix, tags = get_router_meta(dashboard_router)
+        route_manager.register_router(
+            router=dashboard_router,
+            router_name="dashboard",
+            prefix=prefix,
+            tags=tags,
+            require_auth=True,
+        )
+        logger.info("✅ Dashboard router registered")
+    except ImportError as e:
+        logger.critical(f"❌ Failed to load dashboard router: {e}")
+        raise SystemExit("Dashboard router is required. Shutting down.")
+
+    # 3. Core API Router (chat, health, etc.) - FIXED PREFIX to avoid conflict
+    try:
+        from src.adapters.api_routes import router as main_api_router
+
+        prefix, tags = get_router_meta(main_api_router)
+        route_manager.register_router(
+            router=main_api_router,
+            router_name="core_api",
+            prefix=prefix,
+            tags=tags,
+            require_auth=True,
+        )
+        logger.info("✅ Core API router registered")
+    except ImportError as e:
+        logger.critical(f"❌ Failed to load core API router: {e}")
+        raise SystemExit("Core API router is required. Shutting down.")
+
+    # 4. ESP32 Router - FIXED PREFIX to avoid conflict
+    try:
+        from src.adapters.esp32_router import router as esp32_router
+
+        prefix, tags = get_router_meta(esp32_router)
+        route_manager.register_router(
+            router=esp32_router,
+            router_name="esp32",
+            prefix=prefix,
+            tags=tags,
+            require_auth=True,
+        )
+        logger.info("✅ ESP32 router registered")
+    except ImportError as e:
+        logger.critical(f"❌ Failed to load ESP32 router: {e}")
+        raise SystemExit("ESP32 router is required. Shutting down.")
+
+    # 4b. ESP32 WebSocket Router - Production WebSocket endpoints
+    try:
+        from src.adapters.esp32_websocket_router import (
+            esp32_router as esp32_websocket_router,
         )
 
-        # 1. Authentication Router (highest priority - no auth required)
-        try:
-            from src.adapters.auth_routes import router as auth_router
+        prefix, tags = get_router_meta(esp32_websocket_router)
+        route_manager.register_router(
+            router=esp32_websocket_router,
+            router_name="esp32_websocket",
+            prefix=prefix,
+            tags=tags,
+            require_auth=False,
+        )
+        logger.info("✅ ESP32 WebSocket router registered")
+    except ImportError as e:
+        logger.warning(f"⚠️ ESP32 WebSocket router not available: {e}")
 
-            route_manager.register_router(
-                router=auth_router,
-                router_name="authentication",
-                # Note: auth_router already has prefix="/api/auth"
-                require_auth=False,  # Auth routes don't need auth
-                skip_conflict_check=False,
-            )
-            logger.info("✅ Authentication router registered")
-        except ImportError as e:
-            logger.error(f"❌ Failed to load auth router: {e}")
+    # 5. Web Interface Router (templates) - SEPARATED from API
+    try:
+        from src.adapters.web import router as web_router
 
-        # 2. Dashboard Router (requires auth)
-        try:
-            from src.adapters.dashboard_routes import router as dashboard_router
+        prefix, tags = get_router_meta(web_router)
+        route_manager.register_router(
+            router=web_router,
+            router_name="web_interface",
+            prefix=prefix,
+            tags=tags,
+            require_auth=True,
+        )
+        logger.info("✅ Web interface router registered")
+    except ImportError as e:
+        logger.critical(f"❌ Failed to load web router: {e}")
+        raise SystemExit("Web interface router is required. Shutting down.")
 
-            route_manager.register_router(
-                router=dashboard_router,
-                router_name="dashboard",
-                # Note: dashboard_router already has prefix="/api/dashboard"
-                require_auth=True,
-            )
-            logger.info("✅ Dashboard router registered")
-        except ImportError as e:
-            logger.error(f"❌ Failed to load dashboard router: {e}")
+    # 6. Premium Subscriptions Router
+    try:
+        from src.presentation.api.endpoints.premium.subscriptions import (
+            router as premium_router,
+        )
 
-        # 3. Core API Router (chat, health, etc.) - FIXED PREFIX to avoid conflict
-        try:
-            from src.adapters.api_routes import router as main_api_router
+        prefix, tags = get_router_meta(premium_router)
+        route_manager.register_router(
+            router=premium_router,
+            router_name="premium_subscriptions",
+            prefix=prefix,
+            tags=tags,
+            require_auth=True,
+        )
+        logger.info("✅ Premium subscriptions router registered")
+    except ImportError as e:
+        logger.warning(f"⚠️ Premium subscriptions router not available: {e}")
 
-            route_manager.register_router(
-                router=main_api_router,
-                router_name="core_api",
-                prefix="/api/v1/core",  # Changed to avoid conflict
-                tags=["Core API"],
-                require_auth=True,
-            )
-            logger.info("✅ Core API router registered")
-        except ImportError as e:
-            logger.error(f"❌ Failed to load core API router: {e}")
+    # 7. Payment System Router
+    try:
+        from src.application.services.payment.api.production_endpoints import (
+            router as payment_router,
+        )
 
-        # 4. ESP32 Router - FIXED PREFIX to avoid conflict
-        try:
-            from src.adapters.esp32_router import router as esp32_router
+        prefix, tags = get_router_meta(payment_router)
+        route_manager.register_router(
+            router=payment_router,
+            router_name="payment_system",
+            prefix=prefix,
+            tags=tags,
+            require_auth=True,
+        )
+        logger.info("✅ Payment system router registered")
+    except ImportError as e:
+        logger.warning(f"⚠️ Payment system router not available: {e}")
 
-            route_manager.register_router(
-                router=esp32_router,
-                router_name="esp32",
-                prefix="/api/v1/esp32",  # Changed from "/api/v1"
-                tags=["ESP32"],
-                require_auth=True,
-            )
-            logger.info("✅ ESP32 router registered")
-        except ImportError as e:
-            logger.error(f"❌ Failed to load ESP32 router: {e}")
+    # 8. Iraqi Payment Integration Router
+    try:
+        from src.presentation.api.endpoints.iraqi_payments import (
+            router as iraqi_payment_router,
+        )
 
-        # 5. Web Interface Router (templates) - SEPARATED from API
-        try:
-            from src.adapters.web import router as web_router
+        prefix, tags = get_router_meta(iraqi_payment_router)
+        route_manager.register_router(
+            router=iraqi_payment_router,
+            router_name="iraqi_payment_integration",
+            prefix=prefix,
+            tags=tags,
+            require_auth=True,
+        )
+        logger.info("✅ Iraqi payment integration router registered")
+    except ImportError as e:
+        logger.warning(f"⚠️ Iraqi payment integration router not available: {e}")
 
-            route_manager.register_router(
-                router=web_router,
-                router_name="web_interface",
-                prefix="/web",  # Separate from API
-                tags=["Web Interface"],
-                require_auth=True,
-            )
-            logger.info("✅ Web interface router registered")
-        except ImportError as e:
-            logger.error(f"❌ Failed to load web router: {e}")
+    # 9. WebSocket Router
+    try:
+        from src.presentation.api.websocket.parent_notifications import (
+            router as websocket_router,
+        )
 
-        # 6. Premium Subscriptions Router
-        try:
-            from src.presentation.api.endpoints.premium.subscriptions import (
-                router as premium_router,
-            )
+        prefix, tags = get_router_meta(websocket_router)
+        route_manager.register_router(
+            router=websocket_router,
+            router_name="websocket_notifications",
+            prefix=prefix,
+            tags=tags,
+            require_auth=True,
+        )
+        logger.info("✅ WebSocket notifications router registered")
+    except ImportError as e:
+        logger.warning(f"⚠️ WebSocket router not available: {e}")
 
-            route_manager.register_router(
-                router=premium_router,
-                router_name="premium_subscriptions",
-                # Note: premium_router already has prefix="/api/v1/premium"
-                require_auth=True,
-            )
-            logger.info("✅ Premium subscriptions router registered")
-        except ImportError as e:
-            logger.warning(f"⚠️ Premium subscriptions router not available: {e}")
+    # Final validation
+    if route_manager.validate_all_routes():
+        logger.info("✅ All routers registered successfully with no conflicts detected")
 
-        # 7. Payment System Router
-        try:
-            from src.application.services.payment.api.production_endpoints import (
-                router as payment_router,
-            )
+        # Log summary
+        summary = route_manager.get_registration_summary()
+        logger.info("📊 Registration Summary:")
+        logger.info(f"   Total Routes: {summary['total_routes']}")
+        logger.info(f"   Total Prefixes: {summary['total_prefixes']}")
+        logger.info(f"   Route Health: {summary['route_health']}")
 
-            route_manager.register_router(
-                router=payment_router,
-                router_name="payment_system",
-                # Note: payment_router already has prefix="/api/v1/payments"
-                require_auth=True,
-            )
-            logger.info("✅ Payment system router registered")
-        except ImportError as e:
-            logger.warning(f"⚠️ Payment system router not available: {e}")
+        for router_name, routes in summary["routes_by_router"].items():
+            logger.info(f"   {router_name}: {len(routes)} routes")
+    else:
+        logger.error("❌ Route validation failed after registration")
+        # Generate detailed report for debugging
+        report = route_manager.generate_route_documentation()
+        logger.error("📄 Detailed route analysis:")
+        for line in report.split("\n")[:20]:  # Log first 20 lines
+            logger.error(f"   {line}")
 
-        # 8. Iraqi Payment Integration Router
-        try:
-            from src.presentation.api.endpoints.iraqi_payments import (
-                router as iraqi_payment_router,
-            )
-
-            route_manager.register_router(
-                router=iraqi_payment_router,
-                router_name="iraqi_payment_integration",
-                prefix="/api/v1/iraqi-payments",  # Explicit prefix to avoid conflicts
-                tags=["Iraqi Payment Integration"],
-                require_auth=True,
-            )
-            logger.info("✅ Iraqi payment integration router registered")
-        except ImportError as e:
-            logger.warning(f"⚠️ Iraqi payment integration router not available: {e}")
-
-        # 9. WebSocket Router
-        try:
-            from src.presentation.api.websocket.parent_notifications import (
-                router as websocket_router,
-            )
-
-            route_manager.register_router(
-                router=websocket_router,
-                router_name="websocket_notifications",
-                # Note: websocket_router already has prefix="/ws"
-                require_auth=True,
-            )
-            logger.info("✅ WebSocket notifications router registered")
-        except ImportError as e:
-            logger.warning(f"⚠️ WebSocket router not available: {e}")
-
-        # Final validation
-        if route_manager.validate_all_routes():
-            logger.info(
-                "✅ All routers registered successfully with no conflicts detected"
-            )
-
-            # Log summary
-            summary = route_manager.get_registration_summary()
-            logger.info(f"📊 Registration Summary:")
-            logger.info(f"   Total Routes: {summary['total_routes']}")
-            logger.info(f"   Total Prefixes: {summary['total_prefixes']}")
-            logger.info(f"   Route Health: {summary['route_health']}")
-
-            for router_name, routes in summary["routes_by_router"].items():
-                logger.info(f"   {router_name}: {len(routes)} routes")
-        else:
-            logger.error("❌ Route validation failed after registration")
-            # Generate detailed report for debugging
-            report = route_manager.generate_route_documentation()
-            logger.error("📄 Detailed route analysis:")
-            for line in report.split("\n")[:20]:  # Log first 20 lines
-                logger.error(f"   {line}")
-
-            raise RouteConflictError("Route validation failed after registration")
-
-    except Exception as e:
-        logger.error(f"❌ Router registration failed: {str(e)}")
-        raise
+        raise RouteConflictError("Route validation failed after registration")
 
     return route_manager
 

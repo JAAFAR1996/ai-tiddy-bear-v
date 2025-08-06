@@ -14,6 +14,41 @@ unsigned long lastUpdateCheck = 0;
 String otaPassword = ""; // Will be generated at runtime
 Preferences otaPrefs;
 
+// Base64 decode function for signature verification
+size_t base64_decode_signature(const String& input, uint8_t* output, size_t output_size) {
+  const char* chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  size_t input_len = input.length();
+  size_t output_pos = 0;
+  uint32_t buffer = 0;
+  int buffer_bits = 0;
+  
+  for (size_t i = 0; i < input_len && output_pos < output_size; i++) {
+    char c = input[i];
+    if (c == '=') break; // Padding character
+    
+    // Find character position in base64 alphabet
+    int value = -1;
+    for (int j = 0; j < 64; j++) {
+      if (chars[j] == c) {
+        value = j;
+        break;
+      }
+    }
+    
+    if (value == -1) continue; // Skip invalid characters
+    
+    buffer = (buffer << 6) | value;
+    buffer_bits += 6;
+    
+    if (buffer_bits >= 8) {
+      output[output_pos++] = (buffer >> (buffer_bits - 8)) & 0xFF;
+      buffer_bits -= 8;
+    }
+  }
+  
+  return output_pos;
+}
+
 /**
  * Initialize OTA (Over-The-Air) update system with security controls
  * Sets up secure password, configures callbacks, and starts web server
@@ -645,9 +680,16 @@ bool verifyFirmwareSignature(const uint8_t* firmwareData, size_t dataSize, const
     return false;
   }
   
-  // Simple base64 decode (you may want to use a proper library)
-  size_t actual_sig_len = 0; // This would be set by proper base64 decode
-  // TODO: Implement proper base64 decoding here
+  // Decode base64 signature
+  size_t actual_sig_len = base64_decode_signature(signature, sig_buf, sizeof(sig_buf));
+  
+  if (actual_sig_len == 0) {
+    Serial.println("❌ Failed to decode signature");
+    mbedtls_pk_free(&pk_ctx);
+    return false;
+  }
+  
+  Serial.println("✅ Decoded signature: " + String(actual_sig_len) + " bytes");
   
   // Verify signature
   ret = mbedtls_pk_verify(&pk_ctx, MBEDTLS_MD_SHA256, hash, 32, sig_buf, actual_sig_len);

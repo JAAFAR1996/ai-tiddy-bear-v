@@ -9,6 +9,7 @@ from enum import Enum
 from src.infrastructure.caching.production_tts_cache_service import (
     ProductionTTSCacheService,
 )
+from src.infrastructure.database.repository import UserRepository
 
 if TYPE_CHECKING:
     # Adapters & repositories
@@ -359,10 +360,13 @@ class ApplicationModule(Module):
 
     @provider
     @singleton
-    def _get_cache_adapter(self) -> object:  # RedisAdapter غير موجود فعلياً
-        # from src.infrastructure.caching.redis_adapter import RedisAdapter
-        # return RedisAdapter(connection_string)
-        raise NotImplementedError("RedisAdapter not implemented")
+    def _get_cache_adapter(self) -> object:
+        """Get production Redis cache adapter."""
+        from src.infrastructure.caching.production_redis_cache import ProductionRedisCache
+        import os
+        
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        return ProductionRedisCache(redis_url=redis_url)
 
     @provider
     @singleton
@@ -436,8 +440,26 @@ class ApplicationModule(Module):
                 ) -> bool:
                     """Authorize user action on resource."""
                     # Enhanced authorization using token validation
-                    # In production this should fetch user role from database
-                    return True
+                    # Fetch user role from production database
+                    try:
+                        import uuid
+                        user_repo = UserRepository()
+                        user = await user_repo.get_by_id(uuid.UUID(user_id))
+                        if user and hasattr(user, 'role'):
+                            # Check permissions based on role
+                            if str(user.role) == 'admin':
+                                return True
+                            elif str(user.role) == 'parent':
+                                # Parents can access their own resources
+                                return resource.startswith(f"user_{user_id}")
+                            elif str(user.role) == 'child':
+                                # Children have limited access
+                                return action in ['read', 'view'] and resource.startswith(f"child_{user_id}")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to fetch user role: {e}")
+                    
+                    # Default to denying access if we can't verify
+                    return False
 
                 async def generate_token(
                     self, user_id: str, permissions: List[str], **kwargs

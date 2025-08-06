@@ -514,15 +514,57 @@ class ProductionRealTimeNotificationService:
         self, connection_id: str, message: RealTimeMessage
     ) -> None:
         """Send message to specific WebSocket connection."""
-        # This would send via actual WebSocket in production
-        self.logger.info(
-            f"Sending message to connection {connection_id}",
-            extra={
+        try:
+            # Get the actual WebSocket connection from our adapter
+            from src.infrastructure.websocket.production_websocket_adapter import ProductionWebSocketAdapter
+            
+            # Get connection from adapter (we need to integrate with the adapter)
+            connection = self._connections.get(connection_id)
+            if not connection:
+                self.logger.warning(f"Connection {connection_id} not found for message sending")
+                return
+            
+            # Create WebSocket message format
+            websocket_message_data = {
+                "type": "realtime_notification",
                 "message_id": message.message_id,
-                "connection_id": connection_id,
-                "message_type": message.message_type,
-            },
-        )
+                "notification_type": message.message_type,
+                "priority": message.priority.value,
+                "data": message.data,
+                "timestamp": message.timestamp.isoformat(),
+            }
+            
+            # Get WebSocket from connection metadata
+            websocket = connection.metadata.get("websocket")
+            if not websocket:
+                self.logger.error(f"No WebSocket found for connection {connection_id}")
+                return
+            
+            # Send message via WebSocket
+            import json
+            message_json = json.dumps(websocket_message_data)
+            await websocket.send_text(message_json)
+            
+            self.logger.info(
+                f"Message sent successfully to connection {connection_id}",
+                extra={
+                    "message_id": message.message_id,
+                    "connection_id": connection_id,
+                    "message_type": message.message_type,
+                },
+            )
+            
+        except Exception as e:
+            self.logger.error(
+                f"Failed to send message to connection {connection_id}: {e}",
+                extra={
+                    "message_id": message.message_id,
+                    "connection_id": connection_id,
+                    "error": str(e),
+                },
+                exc_info=True,
+            )
+            raise
 
     async def _queue_message_for_later(self, message: RealTimeMessage) -> None:
         """Queue message for delivery when user connects."""

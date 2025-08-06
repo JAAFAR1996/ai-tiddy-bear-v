@@ -17,8 +17,11 @@ from sqlalchemy.orm import selectinload
 # Import required models for compatibility
 from src.core.models import RiskLevel, SafetyAnalysisResult
 from src.core.entities import SafetyResult
-from src.application.interfaces.safety_monitor import SafetyMonitor
+
+# Dynamic import to avoid circular dependency
+# from src.application.interfaces.safety_monitor import SafetyMonitor
 from src.interfaces.services import IChildSafetyService
+
 # Lazy import to avoid circular dependency
 # from src.infrastructure.database.database_manager import database_manager
 from src.infrastructure.database.models import (
@@ -27,7 +30,7 @@ from src.infrastructure.database.models import (
     Conversation,
     Interaction,
     AuditLog,
-    SafetyLevel
+    SafetyLevel,
 )
 from src.infrastructure.logging import get_logger, security_logger
 
@@ -37,11 +40,16 @@ logger = logging.getLogger(__name__)
 def get_database_manager():
     """Get database manager with lazy import to avoid circular dependency."""
     from src.infrastructure.database.database_manager import database_manager
+
     return database_manager
 
 
-class ChildSafetyService(IChildSafetyService, SafetyMonitor):
-    """Unified child safety service implementation."""
+class ChildSafetyService(IChildSafetyService):
+    """Unified child safety service implementation.
+
+    Note: This class also implements SafetyMonitor interface through duck typing
+    to avoid circular import issues.
+    """
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         """Initialize child safety service.
@@ -51,43 +59,49 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
         """
         self.config = config or {}
         self.safety_events = []  # Keep for backward compatibility
-        
+
         # Enhanced safety configuration
-        self.enable_real_time_monitoring = getattr(config, 'enable_real_time_monitoring', True)
-        self.auto_report_threshold = getattr(config, 'auto_report_threshold', 0.7)
-        self.parent_notification_threshold = getattr(config, 'parent_notification_threshold', 0.8)
-        self.emergency_alert_threshold = getattr(config, 'emergency_alert_threshold', 0.9)
-        
+        self.enable_real_time_monitoring = getattr(
+            config, "enable_real_time_monitoring", True
+        )
+        self.auto_report_threshold = getattr(config, "auto_report_threshold", 0.7)
+        self.parent_notification_threshold = getattr(
+            config, "parent_notification_threshold", 0.8
+        )
+        self.emergency_alert_threshold = getattr(
+            config, "emergency_alert_threshold", 0.9
+        )
+
         # Cache for recent safety checks (performance optimization)
         self._safety_cache = {}
         self._cache_ttl = timedelta(minutes=5)
 
         # Enhanced inappropriate content patterns with severity levels
         self.safety_patterns = {
-            'critical': [
+            "critical": [
                 r"\b(kill|murder|suicide|death|die|dead|hurt|harm|violence|violent)\b",
                 r"\b(drug|drugs|alcohol|smoking|cigarette|cocaine|marijuana)\b",
                 r"\b(weapon|gun|knife|bomb|explosive|attack)\b",
                 r"\b(sexual|sex|porn|inappropriate|abuse|molest)\b",
                 r"\b(address|phone|email|password|credit card|social security)\b",
             ],
-            'high': [
+            "high": [
                 r"\b(hate|racism|discrimination|bully|bullying|stupid|idiot)\b",
                 r"\b(scary|monster|nightmare|ghost|demon|devil)\b",
                 r"\b(secret|don't tell|our secret|between us)\b",
                 r"\b(meet me|come over|visit me|alone)\b",
             ],
-            'medium': [
+            "medium": [
                 r"\b(sad|angry|mad|upset|crying|scared)\b",
                 r"\b(fight|argue|yell|shout|scream)\b",
                 r"\b(sick|pain|hurt|ache|medicine)\b",
             ],
-            'low': [
+            "low": [
                 r"\b(weird|strange|funny|silly|crazy)\b",
                 r"\b(tired|sleepy|hungry|thirsty)\b",
-            ]
+            ],
         }
-        
+
         # PII detection patterns
         self.pii_patterns = [
             r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b",  # Phone numbers
@@ -109,50 +123,52 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
         # Real-time safety rule engine (initialize after patterns are defined)
         self.active_safety_rules = self._initialize_safety_rules()
 
-        logger.info(f"Enhanced Child Safety Service initialized with {len(self.active_safety_rules)} active rules")
+        logger.info(
+            f"Enhanced Child Safety Service initialized with {len(self.active_safety_rules)} active rules"
+        )
 
     def _initialize_safety_rules(self) -> List[Dict[str, Any]]:
         """Initialize comprehensive safety rules engine."""
         rules = [
             {
-                'id': 'pii_detection',
-                'name': 'Personal Information Detection',
-                'type': 'pii',
-                'severity': 'critical',
-                'patterns': self.pii_patterns,
-                'action': 'block_and_alert',
-                'enabled': True
+                "id": "pii_detection",
+                "name": "Personal Information Detection",
+                "type": "pii",
+                "severity": "critical",
+                "patterns": self.pii_patterns,
+                "action": "block_and_alert",
+                "enabled": True,
             },
             {
-                'id': 'violence_content',
-                'name': 'Violence Content Filter',
-                'type': 'content',
-                'severity': 'critical',
-                'patterns': self.safety_patterns['critical'][:1],
-                'action': 'block_and_alert',
-                'enabled': True
+                "id": "violence_content",
+                "name": "Violence Content Filter",
+                "type": "content",
+                "severity": "critical",
+                "patterns": self.safety_patterns["critical"][:1],
+                "action": "block_and_alert",
+                "enabled": True,
             },
             {
-                'id': 'inappropriate_language',
-                'name': 'Inappropriate Language Filter',
-                'type': 'language',
-                'severity': 'high',
-                'patterns': self.safety_patterns['high'],
-                'action': 'filter_and_log',
-                'enabled': True
+                "id": "inappropriate_language",
+                "name": "Inappropriate Language Filter",
+                "type": "language",
+                "severity": "high",
+                "patterns": self.safety_patterns["high"],
+                "action": "filter_and_log",
+                "enabled": True,
             },
             {
-                'id': 'emotional_distress',
-                'name': 'Emotional Distress Detection',
-                'type': 'emotional',
-                'severity': 'medium',
-                'patterns': self.safety_patterns['medium'],
-                'action': 'log_and_monitor',
-                'enabled': True
-            }
+                "id": "emotional_distress",
+                "name": "Emotional Distress Detection",
+                "type": "emotional",
+                "severity": "medium",
+                "patterns": self.safety_patterns["medium"],
+                "action": "log_and_monitor",
+                "enabled": True,
+            },
         ]
         return rules
-        
+
     async def validate_content(self, content: str, child_age: int) -> Dict[str, Any]:
         """Validate content appropriateness for child.
 
@@ -169,7 +185,7 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
             cached_result, cached_time = self._safety_cache[content_hash]
             if datetime.now() - cached_time < self._cache_ttl:
                 return cached_result
-        
+
         result = {
             "is_safe": True,
             "confidence": 1.0,
@@ -179,65 +195,75 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
             "risk_score": 0.0,
             "triggered_rules": [],
             "pii_detected": False,
-            "requires_human_review": False
+            "requires_human_review": False,
         }
 
         content_lower = content.lower()
-        
+
         # Enhanced safety rule processing
         for rule in self.active_safety_rules:
-            if not rule['enabled']:
+            if not rule["enabled"]:
                 continue
-                
+
             rule_triggered = False
-            for pattern in rule['patterns']:
+            for pattern in rule["patterns"]:
                 if re.search(pattern, content_lower):
                     rule_triggered = True
-                    
+
                     # Calculate risk score based on severity
-                    severity_scores = {'low': 0.2, 'medium': 0.4, 'high': 0.7, 'critical': 1.0}
-                    risk_increase = severity_scores.get(rule['severity'], 0.5)
+                    severity_scores = {
+                        "low": 0.2,
+                        "medium": 0.4,
+                        "high": 0.7,
+                        "critical": 1.0,
+                    }
+                    risk_increase = severity_scores.get(rule["severity"], 0.5)
                     result["risk_score"] += risk_increase
-                    
+
                     issue = {
-                        "rule_id": rule['id'],
-                        "rule_name": rule['name'],
-                        "type": rule['type'],
+                        "rule_id": rule["id"],
+                        "rule_name": rule["name"],
+                        "type": rule["type"],
                         "pattern": pattern,
-                        "severity": rule['severity'],
-                        "action": rule['action'],
-                        "match_text": self._extract_match_context(content, pattern)
+                        "severity": rule["severity"],
+                        "action": rule["action"],
+                        "match_text": self._extract_match_context(content, pattern),
                     }
                     result["issues"].append(issue)
-                    result["triggered_rules"].append(rule['id'])
-                    
+                    result["triggered_rules"].append(rule["id"])
+
                     # Special handling for PII
-                    if rule['type'] == 'pii':
+                    if rule["type"] == "pii":
                         result["pii_detected"] = True
                         result["requires_human_review"] = True
-                    
+
                     # Mark as unsafe if critical or high severity
-                    if rule['severity'] in ['critical', 'high']:
+                    if rule["severity"] in ["critical", "high"]:
                         result["is_safe"] = False
-                    
+
                     break
-        
+
         # Normalize risk score
         result["risk_score"] = min(1.0, result["risk_score"])
         result["confidence"] = max(0.1, 1.0 - result["risk_score"])
 
         # Enhanced age appropriateness check
-        age_inappropriate_content = self._check_age_appropriateness(content_lower, child_age)
+        age_inappropriate_content = self._check_age_appropriateness(
+            content_lower, child_age
+        )
         if age_inappropriate_content:
             result["age_appropriate"] = False
             result["issues"].extend(age_inappropriate_content)
-            if any(issue['severity'] in ['high', 'critical'] for issue in age_inappropriate_content):
+            if any(
+                issue["severity"] in ["high", "critical"]
+                for issue in age_inappropriate_content
+            ):
                 result["is_safe"] = False
                 result["risk_score"] += 0.3
 
         # Cache result for performance
         self._safety_cache[content_hash] = (result, datetime.now())
-        
+
         # Enhanced logging with security implications
         await self.log_safety_event(
             {
@@ -250,10 +276,10 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
                 "pii_detected": result["pii_detected"],
                 "requires_review": result["requires_human_review"],
                 "timestamp": result["timestamp"],
-                "triggered_rules": result["triggered_rules"]
+                "triggered_rules": result["triggered_rules"],
             }
         )
-        
+
         # Auto-trigger alerts for high-risk content
         if result["risk_score"] >= self.emergency_alert_threshold:
             await self._trigger_emergency_alert(content, child_age, result)
@@ -286,8 +312,10 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
         filtered = re.sub(r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b", "[phone removed]", filtered)
 
         return filtered
-    
-    def _extract_match_context(self, content: str, pattern: str, context_chars: int = 20) -> str:
+
+    def _extract_match_context(
+        self, content: str, pattern: str, context_chars: int = 20
+    ) -> str:
         """Extract context around pattern match for logging."""
         try:
             match = re.search(pattern, content, re.IGNORECASE)
@@ -295,105 +323,130 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
                 start = max(0, match.start() - context_chars)
                 end = min(len(content), match.end() + context_chars)
                 context = content[start:end]
-                return f"...{context}..." if start > 0 or end < len(content) else context
+                return (
+                    f"...{context}..." if start > 0 or end < len(content) else context
+                )
         except Exception:
             pass
         return "match_context_unavailable"
-    
-    def _check_age_appropriateness(self, content_lower: str, child_age: int) -> List[Dict[str, Any]]:
+
+    def _check_age_appropriateness(
+        self, content_lower: str, child_age: int
+    ) -> List[Dict[str, Any]]:
         """Enhanced age appropriateness checking with detailed rules."""
         issues = []
-        
+
         age_rules = {
             (0, 5): {  # Toddlers/Preschool
-                'forbidden': ['scary', 'monster', 'nightmare', 'ghost', 'demon', 'blood', 'fight'],
-                'severity': 'high',
-                'reason': 'Content may be too frightening for very young children'
+                "forbidden": [
+                    "scary",
+                    "monster",
+                    "nightmare",
+                    "ghost",
+                    "demon",
+                    "blood",
+                    "fight",
+                ],
+                "severity": "high",
+                "reason": "Content may be too frightening for very young children",
             },
             (6, 8): {  # Early Elementary
-                'forbidden': ['violence', 'weapon', 'kill', 'death', 'drugs', 'alcohol'],
-                'severity': 'high', 
-                'reason': 'Content contains mature themes inappropriate for elementary age'
+                "forbidden": [
+                    "violence",
+                    "weapon",
+                    "kill",
+                    "death",
+                    "drugs",
+                    "alcohol",
+                ],
+                "severity": "high",
+                "reason": "Content contains mature themes inappropriate for elementary age",
             },
             (9, 12): {  # Late Elementary
-                'forbidden': ['sexual', 'drug', 'suicide', 'self-harm'],
-                'severity': 'critical',
-                'reason': 'Content contains adult themes inappropriate for children'
-            }
+                "forbidden": ["sexual", "drug", "suicide", "self-harm"],
+                "severity": "critical",
+                "reason": "Content contains adult themes inappropriate for children",
+            },
         }
-        
+
         for age_range, rules in age_rules.items():
             if age_range[0] <= child_age <= age_range[1]:
-                for forbidden_word in rules['forbidden']:
+                for forbidden_word in rules["forbidden"]:
                     if forbidden_word in content_lower:
-                        issues.append({
-                            'type': 'age_inappropriate',
-                            'severity': rules['severity'],
-                            'reason': rules['reason'],
-                            'age_range': f"{age_range[0]}-{age_range[1]}",
-                            'forbidden_content': forbidden_word,
-                            'child_age': child_age
-                        })
-        
+                        issues.append(
+                            {
+                                "type": "age_inappropriate",
+                                "severity": rules["severity"],
+                                "reason": rules["reason"],
+                                "age_range": f"{age_range[0]}-{age_range[1]}",
+                                "forbidden_content": forbidden_word,
+                                "child_age": child_age,
+                            }
+                        )
+
         return issues
-    
-    async def _trigger_emergency_alert(self, content: str, child_age: int, safety_result: Dict[str, Any]) -> None:
+
+    async def _trigger_emergency_alert(
+        self, content: str, child_age: int, safety_result: Dict[str, Any]
+    ) -> None:
         """Trigger emergency alert for critical safety violations."""
         try:
             async with database_manager.get_session() as db_session:
                 # Create critical safety report
                 report = SafetyReport(
-                    report_type='emergency_alert',
-                    severity='critical',
+                    report_type="emergency_alert",
+                    severity="critical",
                     description=f"Emergency safety alert triggered: Risk score {safety_result['risk_score']:.2f}",
                     detected_by_ai=True,
-                    ai_confidence=safety_result['confidence'],
-                    detection_rules=safety_result['triggered_rules'],
+                    ai_confidence=safety_result["confidence"],
+                    detection_rules=safety_result["triggered_rules"],
                     content_blocked=True,
                     parent_notified=True,
-                    notification_sent_at=datetime.utcnow()
+                    notification_sent_at=datetime.utcnow(),
                 )
-                
+
                 db_session.add(report)
                 await db_session.commit()
-                
+
                 # Log security event
                 security_logger.critical(
                     "Emergency safety alert triggered",
                     extra={
-                        'child_age': child_age,
-                        'risk_score': safety_result['risk_score'],
-                        'triggered_rules': safety_result['triggered_rules'],
-                        'pii_detected': safety_result['pii_detected'],
-                        'content_hash': hashlib.sha256(content.encode()).hexdigest()
-                    }
+                        "child_age": child_age,
+                        "risk_score": safety_result["risk_score"],
+                        "triggered_rules": safety_result["triggered_rules"],
+                        "pii_detected": safety_result["pii_detected"],
+                        "content_hash": hashlib.sha256(content.encode()).hexdigest(),
+                    },
                 )
-                
+
         except Exception as e:
             logger.error(f"Failed to trigger emergency alert: {e}")
-    
-    async def _schedule_parent_notification(self, content: str, child_age: int, safety_result: Dict[str, Any]) -> None:
+
+    async def _schedule_parent_notification(
+        self, content: str, child_age: int, safety_result: Dict[str, Any]
+    ) -> None:
         """Schedule parent notification for concerning content."""
         try:
             async with database_manager.get_session() as db_session:
                 # Create safety report for parent review
                 report = SafetyReport(
-                    report_type='parent_notification',
-                    severity='high',
+                    report_type="parent_notification",
+                    severity="high",
                     description=f"Content flagged for parent review: Risk score {safety_result['risk_score']:.2f}",
                     detected_by_ai=True,
-                    ai_confidence=safety_result['confidence'],
-                    detection_rules=safety_result['triggered_rules'],
-                    parent_notified=False  # Will be updated when notification sent
+                    ai_confidence=safety_result["confidence"],
+                    detection_rules=safety_result["triggered_rules"],
+                    parent_notified=False,  # Will be updated when notification sent
                 )
-                
+
                 db_session.add(report)
                 await db_session.commit()
-                
+
                 logger.warning(
                     f"Parent notification scheduled for safety concern: {safety_result['risk_score']:.2f}"
                 )
-                
+
         except Exception as e:
             logger.error(f"Failed to schedule parent notification: {e}")
 
@@ -493,7 +546,12 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
                     violations.append(f"{severity}_pattern: {pattern}")
                     is_safe = False
                     # More severe penalties for higher risk content
-                    penalty = {'critical': 0.8, 'high': 0.6, 'medium': 0.4, 'low': 0.2}.get(severity, 0.5)
+                    penalty = {
+                        "critical": 0.8,
+                        "high": 0.6,
+                        "medium": 0.4,
+                        "low": 0.2,
+                    }.get(severity, 0.5)
                     safety_score -= penalty
 
         # Check age appropriateness
@@ -523,7 +581,7 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
         ai_confidence: float = 0.8,
         detection_rules: List[str] = None,
         content_blocked: bool = False,
-        **kwargs
+        **kwargs,
     ) -> Optional[UUID]:
         """Create comprehensive safety report in database."""
         try:
@@ -541,13 +599,13 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
                     content_blocked=content_blocked,
                     reviewed=False,
                     resolved=False,
-                    **kwargs
+                    **kwargs,
                 )
-                
+
                 db_session.add(report)
                 await db_session.commit()
                 await db_session.refresh(report)
-                
+
                 # Create audit log entry
                 audit_log = AuditLog(
                     action="safety_report_created",
@@ -555,26 +613,30 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
                     resource_id=report.id,
                     description=f"Safety report created: {report_type} ({severity})",
                     involves_child_data=child_id is not None,
-                    child_id_hash=hashlib.sha256(str(child_id).encode()).hexdigest() if child_id else None,
-                    severity="warning" if severity in ["high", "critical"] else "info"
+                    child_id_hash=(
+                        hashlib.sha256(str(child_id).encode()).hexdigest()
+                        if child_id
+                        else None
+                    ),
+                    severity="warning" if severity in ["high", "critical"] else "info",
                 )
-                
+
                 db_session.add(audit_log)
                 await db_session.commit()
-                
+
                 logger.info(f"Safety report created: {report.id}")
                 return report.id
-                
+
         except Exception as e:
             logger.error(f"Failed to create safety report: {e}")
             return None
-    
+
     async def get_safety_reports_for_child(
         self,
         child_id: UUID,
         limit: int = 50,
         resolved_only: bool = False,
-        severity_filter: Optional[str] = None
+        severity_filter: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Get safety reports for specific child."""
         try:
@@ -582,32 +644,29 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
                 query = select(SafetyReport).where(
                     and_(
                         SafetyReport.child_id == child_id,
-                        SafetyReport.is_deleted == False
+                        SafetyReport.is_deleted == False,
                     )
                 )
-                
+
                 if resolved_only:
                     query = query.where(SafetyReport.resolved == True)
-                    
+
                 if severity_filter:
                     query = query.where(SafetyReport.severity == severity_filter)
-                
+
                 query = query.order_by(desc(SafetyReport.created_at)).limit(limit)
-                
+
                 result = await db_session.execute(query)
                 reports = result.scalars().all()
-                
+
                 return [report.to_dict() for report in reports]
-                
+
         except Exception as e:
             logger.error(f"Failed to get safety reports for child {child_id}: {e}")
             return []
-    
+
     async def resolve_safety_report(
-        self,
-        report_id: UUID,
-        resolved_by: UUID,
-        resolution_notes: str = ""
+        self, report_id: UUID, resolved_by: UUID, resolution_notes: str = ""
     ) -> bool:
         """Mark safety report as resolved."""
         try:
@@ -615,24 +674,24 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
                 report = await db_session.get(SafetyReport, report_id)
                 if not report:
                     return False
-                
+
                 report.resolved = True
                 report.resolved_at = datetime.utcnow()
                 report.resolution_notes = resolution_notes
                 report.reviewed = True
                 report.reviewed_by = resolved_by
                 report.reviewed_at = datetime.utcnow()
-                
+
                 await db_session.commit()
-                
+
                 # Log resolution
                 logger.info(f"Safety report {report_id} resolved by {resolved_by}")
                 return True
-                
+
         except Exception as e:
             logger.error(f"Failed to resolve safety report {report_id}: {e}")
             return False
-    
+
     async def get_child_safety_metrics(self, child_id: UUID) -> Dict[str, Any]:
         """Get comprehensive safety metrics for child."""
         try:
@@ -641,17 +700,19 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
                 severity_counts = await db_session.execute(
                     select(
                         SafetyReport.severity,
-                        func.count(SafetyReport.id).label('count')
-                    ).where(
+                        func.count(SafetyReport.id).label("count"),
+                    )
+                    .where(
                         and_(
                             SafetyReport.child_id == child_id,
-                            SafetyReport.is_deleted == False
+                            SafetyReport.is_deleted == False,
                         )
-                    ).group_by(SafetyReport.severity)
+                    )
+                    .group_by(SafetyReport.severity)
                 )
-                
+
                 severity_data = {row.severity: row.count for row in severity_counts}
-                
+
                 # Count recent reports (last 30 days)
                 thirty_days_ago = datetime.utcnow() - timedelta(days=30)
                 recent_reports = await db_session.execute(
@@ -659,45 +720,46 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
                         and_(
                             SafetyReport.child_id == child_id,
                             SafetyReport.created_at >= thirty_days_ago,
-                            SafetyReport.is_deleted == False
+                            SafetyReport.is_deleted == False,
                         )
                     )
                 )
-                
+
                 # Calculate safety score
                 total_reports = sum(severity_data.values())
-                critical_reports = severity_data.get('critical', 0)
-                high_reports = severity_data.get('high', 0)
-                
+                critical_reports = severity_data.get("critical", 0)
+                high_reports = severity_data.get("high", 0)
+
                 # Safety score: 100 - penalties
                 safety_score = 100.0
                 safety_score -= critical_reports * 25  # 25 points per critical
-                safety_score -= high_reports * 10      # 10 points per high
-                safety_score -= severity_data.get('medium', 0) * 5  # 5 points per medium
+                safety_score -= high_reports * 10  # 10 points per high
+                safety_score -= (
+                    severity_data.get("medium", 0) * 5
+                )  # 5 points per medium
                 safety_score = max(0.0, safety_score)
-                
+
                 return {
-                    'child_id': str(child_id),
-                    'safety_score': safety_score,
-                    'total_reports': total_reports,
-                    'recent_reports_30d': recent_reports.scalar(),
-                    'severity_breakdown': severity_data,
-                    'risk_level': (
-                        'critical' if safety_score < 50 else
-                        'high' if safety_score < 70 else
-                        'medium' if safety_score < 85 else
-                        'low'
+                    "child_id": str(child_id),
+                    "safety_score": safety_score,
+                    "total_reports": total_reports,
+                    "recent_reports_30d": recent_reports.scalar(),
+                    "severity_breakdown": severity_data,
+                    "risk_level": (
+                        "critical"
+                        if safety_score < 50
+                        else (
+                            "high"
+                            if safety_score < 70
+                            else "medium" if safety_score < 85 else "low"
+                        )
                     ),
-                    'last_updated': datetime.utcnow().isoformat()
+                    "last_updated": datetime.utcnow().isoformat(),
                 }
-                
+
         except Exception as e:
             logger.error(f"Failed to get safety metrics for child {child_id}: {e}")
-            return {
-                'child_id': str(child_id),
-                'safety_score': 0.0,
-                'error': str(e)
-            }
+            return {"child_id": str(child_id), "safety_score": 0.0, "error": str(e)}
 
     async def log_safety_event(self, event: Dict[str, Any]) -> bool:
         """Log safety-related event.
@@ -908,19 +970,19 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
                 }
             )
         return actions
-        
+
     async def monitor_conversation_real_time(
         self,
         conversation_id: UUID,
         child_id: UUID,
         message_content: str,
-        child_age: int = 8
+        child_age: int = 8,
     ) -> Dict[str, Any]:
         """Real-time safety monitoring for conversations with immediate response."""
         try:
             # Validate content
             safety_result = await self.validate_content(message_content, child_age)
-            
+
             # Create interaction record for tracking
             if not safety_result["is_safe"] or safety_result["risk_score"] > 0.3:
                 report_id = await self.create_safety_report(
@@ -931,70 +993,84 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
                     description=f"Real-time content flagged: {', '.join([issue['type'] for issue in safety_result['issues']])}",
                     ai_confidence=safety_result["confidence"],
                     detection_rules=safety_result["triggered_rules"],
-                    content_blocked=not safety_result["is_safe"]
+                    content_blocked=not safety_result["is_safe"],
                 )
-                
+
                 safety_result["report_id"] = str(report_id) if report_id else None
-            
+
             # Add monitoring recommendations
             safety_result["monitoring_actions"] = []
-            
+
             if safety_result["pii_detected"]:
-                safety_result["monitoring_actions"].append({
-                    "action": "BLOCK_CONVERSATION",
-                    "reason": "Personal information detected",
-                    "priority": "critical"
-                })
+                safety_result["monitoring_actions"].append(
+                    {
+                        "action": "BLOCK_CONVERSATION",
+                        "reason": "Personal information detected",
+                        "priority": "critical",
+                    }
+                )
             elif safety_result["risk_score"] >= self.emergency_alert_threshold:
-                safety_result["monitoring_actions"].append({
-                    "action": "EMERGENCY_ALERT",
-                    "reason": "Critical safety violation",
-                    "priority": "critical"
-                })
+                safety_result["monitoring_actions"].append(
+                    {
+                        "action": "EMERGENCY_ALERT",
+                        "reason": "Critical safety violation",
+                        "priority": "critical",
+                    }
+                )
             elif safety_result["risk_score"] >= self.parent_notification_threshold:
-                safety_result["monitoring_actions"].append({
-                    "action": "NOTIFY_PARENT",
-                    "reason": "Safety concern detected",
-                    "priority": "high"
-                })
-            
+                safety_result["monitoring_actions"].append(
+                    {
+                        "action": "NOTIFY_PARENT",
+                        "reason": "Safety concern detected",
+                        "priority": "high",
+                    }
+                )
+
             # Send real-time notifications for concerning content
             await self._send_real_time_safety_notifications(
                 child_id=child_id,
                 conversation_id=conversation_id,
-                safety_result=safety_result
+                safety_result=safety_result,
             )
-            
+
             return safety_result
-            
+
         except Exception as e:
-            logger.error(f"Real-time monitoring failed for conversation {conversation_id}: {e}")
+            logger.error(
+                f"Real-time monitoring failed for conversation {conversation_id}: {e}"
+            )
             return {
                 "is_safe": False,
                 "error": str(e),
-                "monitoring_actions": [{
-                    "action": "SYSTEM_ERROR",
-                    "reason": "Safety monitoring system error",
-                    "priority": "high"
-                }]
+                "monitoring_actions": [
+                    {
+                        "action": "SYSTEM_ERROR",
+                        "reason": "Safety monitoring system error",
+                        "priority": "high",
+                    }
+                ],
             }
-    
+
     async def get_safety_dashboard_data(self, parent_id: UUID) -> Dict[str, Any]:
         """Get comprehensive safety dashboard data for parent."""
         try:
             async with database_manager.get_session() as db_session:
                 # Get all children for this parent
-                children_query = select(Child).where(
-                    and_(
-                        Child.parent_id == parent_id,
-                        Child.is_deleted == False,
-                        Child.parental_consent == True
+                children_query = (
+                    select(Child)
+                    .where(
+                        and_(
+                            Child.parent_id == parent_id,
+                            Child.is_deleted == False,
+                            Child.parental_consent == True,
+                        )
                     )
-                ).options(selectinload(Child.safety_reports))
-                
+                    .options(selectinload(Child.safety_reports))
+                )
+
                 result = await db_session.execute(children_query)
                 children = result.scalars().all()
-                
+
                 dashboard_data = {
                     "parent_id": str(parent_id),
                     "children_count": len(children),
@@ -1003,13 +1079,13 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
                     "unresolved_alerts": 0,
                     "children_safety": [],
                     "recent_alerts": [],
-                    "generated_at": datetime.utcnow().isoformat()
+                    "generated_at": datetime.utcnow().isoformat(),
                 }
-                
+
                 total_safety_score = 0
                 total_alerts = 0
                 unresolved_alerts = 0
-                
+
                 for child in children:
                     child_metrics = await self.get_child_safety_metrics(child.id)
                     child_safety = {
@@ -1019,39 +1095,50 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
                         "risk_level": child_metrics["risk_level"],
                         "total_reports": child_metrics["total_reports"],
                         "recent_reports": child_metrics["recent_reports_30d"],
-                        "last_interaction": None  # Would get from conversations
+                        "last_interaction": None,  # Would get from conversations
                     }
-                    
+
                     dashboard_data["children_safety"].append(child_safety)
                     total_safety_score += child_metrics["safety_score"]
                     total_alerts += child_metrics["total_reports"]
-                    
+
                     # Count unresolved alerts
                     unresolved_count = sum(
-                        1 for report in child.safety_reports 
-                        if not report.resolved and report.severity in ['high', 'critical']
+                        1
+                        for report in child.safety_reports
+                        if not report.resolved
+                        and report.severity in ["high", "critical"]
                     )
                     unresolved_alerts += unresolved_count
-                
+
                 # Calculate overall metrics
                 if children:
-                    dashboard_data["overall_safety_score"] = total_safety_score / len(children)
-                
+                    dashboard_data["overall_safety_score"] = total_safety_score / len(
+                        children
+                    )
+
                 dashboard_data["total_alerts"] = total_alerts
                 dashboard_data["unresolved_alerts"] = unresolved_alerts
-                
+
                 # Get recent alerts across all children
-                recent_alerts_query = select(SafetyReport).join(Child).where(
-                    and_(
-                        Child.parent_id == parent_id,
-                        SafetyReport.created_at >= datetime.utcnow() - timedelta(days=7),
-                        SafetyReport.is_deleted == False
+                recent_alerts_query = (
+                    select(SafetyReport)
+                    .join(Child)
+                    .where(
+                        and_(
+                            Child.parent_id == parent_id,
+                            SafetyReport.created_at
+                            >= datetime.utcnow() - timedelta(days=7),
+                            SafetyReport.is_deleted == False,
+                        )
                     )
-                ).order_by(desc(SafetyReport.created_at)).limit(10)
-                
+                    .order_by(desc(SafetyReport.created_at))
+                    .limit(10)
+                )
+
                 alerts_result = await db_session.execute(recent_alerts_query)
                 recent_alerts = alerts_result.scalars().all()
-                
+
                 dashboard_data["recent_alerts"] = [
                     {
                         "id": str(alert.id),
@@ -1060,50 +1147,61 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
                         "severity": alert.severity,
                         "description": alert.description,
                         "created_at": alert.created_at.isoformat(),
-                        "resolved": alert.resolved
+                        "resolved": alert.resolved,
                     }
                     for alert in recent_alerts
                 ]
-                
+
                 return dashboard_data
-                
+
         except Exception as e:
-            logger.error(f"Failed to get safety dashboard data for parent {parent_id}: {e}")
+            logger.error(
+                f"Failed to get safety dashboard data for parent {parent_id}: {e}"
+            )
             return {
                 "parent_id": str(parent_id),
                 "error": str(e),
-                "generated_at": datetime.utcnow().isoformat()
+                "generated_at": datetime.utcnow().isoformat(),
             }
-    
+
     async def _send_real_time_safety_notifications(
-        self,
-        child_id: UUID,
-        conversation_id: UUID,
-        safety_result: Dict[str, Any]
+        self, child_id: UUID, conversation_id: UUID, safety_result: Dict[str, Any]
     ) -> None:
         """Send real-time safety notifications based on monitoring results."""
         try:
             # Only send notifications for concerning content
-            if safety_result.get("is_safe", True) and safety_result.get("risk_score", 0) < 0.3:
+            if (
+                safety_result.get("is_safe", True)
+                and safety_result.get("risk_score", 0) < 0.3
+            ):
                 return
-            
+
             # Get parent ID from database
             async with database_manager.get_session() as db_session:
-                child_query = select(Child).where(Child.id == child_id).options(selectinload(Child.parent))
+                child_query = (
+                    select(Child)
+                    .where(Child.id == child_id)
+                    .options(selectinload(Child.parent))
+                )
                 result = await db_session.execute(child_query)
                 child = result.scalar_one_or_none()
-                
+
                 if not child or not child.parent:
-                    logger.warning(f"No parent found for child {child_id} - skipping notification")
+                    logger.warning(
+                        f"No parent found for child {child_id} - skipping notification"
+                    )
                     return
-                
+
                 parent_id = str(child.parent_id)
                 child_id_str = str(child_id)
-                
+
                 # Import notification orchestrator
-                from src.application.services.realtime.unified_notification_orchestrator import get_notification_orchestrator
+                from src.application.services.realtime.unified_notification_orchestrator import (
+                    get_notification_orchestrator,
+                )
+
                 orchestrator = get_notification_orchestrator()
-                
+
                 # Determine notification type based on safety result
                 if safety_result.get("pii_detected", False):
                     # Emergency alert for PII detection
@@ -1115,18 +1213,20 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
                         "immediate_actions": [
                             "Conversation blocked automatically",
                             "Review blocked content immediately",
-                            "Discuss online privacy with your child"
+                            "Discuss online privacy with your child",
                         ],
-                        "alert_id": f"pii_{int(datetime.utcnow().timestamp())}"
+                        "alert_id": f"pii_{int(datetime.utcnow().timestamp())}",
                     }
-                    
+
                     await orchestrator.send_emergency_alert(
                         child_id=child_id_str,
                         parent_id=parent_id,
-                        emergency_data=emergency_data
+                        emergency_data=emergency_data,
                     )
-                    
-                elif safety_result.get("risk_score", 0) >= self.emergency_alert_threshold:
+
+                elif (
+                    safety_result.get("risk_score", 0) >= self.emergency_alert_threshold
+                ):
                     # Emergency alert for high-risk content
                     emergency_data = {
                         "conversation_id": str(conversation_id),
@@ -1137,25 +1237,29 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
                         "immediate_actions": [
                             "Review conversation immediately",
                             "Check in with your child",
-                            "Consider additional safety measures"
+                            "Consider additional safety measures",
                         ],
-                        "alert_id": f"emergency_{int(datetime.utcnow().timestamp())}"
+                        "alert_id": f"emergency_{int(datetime.utcnow().timestamp())}",
                     }
-                    
+
                     await orchestrator.send_emergency_alert(
                         child_id=child_id_str,
                         parent_id=parent_id,
-                        emergency_data=emergency_data
+                        emergency_data=emergency_data,
                     )
-                    
-                elif safety_result.get("risk_score", 0) >= self.parent_notification_threshold:
+
+                elif (
+                    safety_result.get("risk_score", 0)
+                    >= self.parent_notification_threshold
+                ):
                     # Regular safety alert
                     await orchestrator.send_safety_alert(
                         child_id=child_id_str,
                         parent_id=parent_id,
                         safety_result={
                             "conversation_id": str(conversation_id),
-                            "safety_score": (1 - safety_result.get("risk_score", 0)) * 100,
+                            "safety_score": (1 - safety_result.get("risk_score", 0))
+                            * 100,
                             "event_type": "safety_concern",
                             "detected_issues": safety_result.get("detected_issues", []),
                             "triggered_rules": safety_result.get("triggered_rules", []),
@@ -1163,11 +1267,11 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
                             "recommendations": [
                                 "Review the conversation content",
                                 "Discuss appropriate online behavior",
-                                "Monitor future interactions closely"
-                            ]
-                        }
+                                "Monitor future interactions closely",
+                            ],
+                        },
                     )
-                
+
                 # Log notification attempt
                 logger.info(
                     f"Real-time safety notification sent for child {child_id}",
@@ -1177,12 +1281,19 @@ class ChildSafetyService(IChildSafetyService, SafetyMonitor):
                         "conversation_id": str(conversation_id),
                         "risk_score": safety_result.get("risk_score", 0),
                         "pii_detected": safety_result.get("pii_detected", False),
-                        "notification_type": "emergency" if safety_result.get("risk_score", 0) >= self.emergency_alert_threshold else "safety_alert"
-                    }
+                        "notification_type": (
+                            "emergency"
+                            if safety_result.get("risk_score", 0)
+                            >= self.emergency_alert_threshold
+                            else "safety_alert"
+                        ),
+                    },
                 )
-                
+
         except Exception as e:
-            logger.error(f"Failed to send real-time safety notification: {e}", exc_info=True)
+            logger.error(
+                f"Failed to send real-time safety notification: {e}", exc_info=True
+            )
 
 
 # Maintain backward compatibility

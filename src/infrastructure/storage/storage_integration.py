@@ -43,6 +43,12 @@ from .production_file_storage import (
 from .storage_health_monitor import StorageHealthMonitor
 from ..resilience.fallback_logger import FallbackLogger
 from ..messaging.event_bus_integration import EventPublisher
+from ..security.admin_security import (
+    require_admin_permission,
+    AdminPermission,
+    SecurityLevel,
+    AdminSession
+)
 
 
 class FileUploadRequest(BaseModel):
@@ -496,35 +502,39 @@ def add_storage_routes(app: FastAPI):
                 status_code=500, detail=f"URL generation error: {str(e)}"
             )
 
-    # Health and monitoring endpoints
+    # 🔒 SECURED ADMIN ENDPOINTS - JWT + CERTIFICATE AUTH REQUIRED
     @app.get("/admin/storage/health")
     async def storage_health_check(
+        session: AdminSession = Depends(require_admin_permission(AdminPermission.STORAGE_ADMIN, SecurityLevel.MEDIUM)),
         storage_manager: ProductionFileStorage = Depends(get_storage_manager),
     ):
-        """Get storage system health status."""
+        """🔒 SECURED: Get storage system health status - STORAGE_ADMIN required."""
         return await storage_manager.health_check()
 
     @app.get("/admin/storage/metrics")
     async def storage_metrics(
+        session: AdminSession = Depends(require_admin_permission(AdminPermission.STORAGE_ADMIN, SecurityLevel.MEDIUM)),
         storage_manager: ProductionFileStorage = Depends(get_storage_manager),
     ):
-        """Get storage system metrics."""
+        """🔒 SECURED: Get storage system metrics - STORAGE_ADMIN required."""
         return storage_manager.get_metrics()
 
     @app.get("/admin/storage/health-report")
     async def storage_health_report(
+        session: AdminSession = Depends(require_admin_permission(AdminPermission.STORAGE_ADMIN, SecurityLevel.HIGH)),
         health_monitor: StorageHealthMonitor = Depends(get_health_monitor),
     ):
-        """Get comprehensive health report."""
+        """🔒 SECURED: Get comprehensive health report - STORAGE_ADMIN + HIGH security required."""
         return health_monitor.get_health_report()
 
     @app.post("/admin/storage/benchmark/{provider}")
     async def run_benchmark(
         provider: str,
         background_tasks: BackgroundTasks,
+        session: AdminSession = Depends(require_admin_permission(AdminPermission.STORAGE_ADMIN, SecurityLevel.HIGH)),
         health_monitor: StorageHealthMonitor = Depends(get_health_monitor),
     ):
-        """Run performance benchmark on a provider."""
+        """🔒 SECURED: Run performance benchmark - STORAGE_ADMIN + HIGH security required."""
         try:
             storage_provider = StorageProvider(provider)
 
@@ -535,6 +545,7 @@ def add_storage_routes(app: FastAPI):
                 "message": f"Benchmark started for {provider}",
                 "provider": provider,
                 "started_at": datetime.now().isoformat(),
+                "initiated_by": session.user_id
             }
 
         except ValueError:
@@ -543,9 +554,10 @@ def add_storage_routes(app: FastAPI):
     @app.post("/admin/storage/force-health-check")
     async def force_health_check(
         background_tasks: BackgroundTasks,
+        session: AdminSession = Depends(require_admin_permission(AdminPermission.STORAGE_ADMIN, SecurityLevel.HIGH)),
         health_monitor: StorageHealthMonitor = Depends(get_health_monitor),
     ):
-        """Force immediate health check on all providers."""
+        """🔒 SECURED: Force health check - STORAGE_ADMIN + HIGH security required."""
         try:
             # Run health checks in background
             for provider in health_monitor.storage_manager.providers.keys():
@@ -559,6 +571,7 @@ def add_storage_routes(app: FastAPI):
                     p.value for p in health_monitor.storage_manager.providers.keys()
                 ],
                 "initiated_at": datetime.now().isoformat(),
+                "initiated_by": session.user_id
             }
 
         except Exception as e:

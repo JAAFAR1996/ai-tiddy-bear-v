@@ -732,7 +732,7 @@ class RateLimiter:
                 timestamp_str, content = item.split(":", 1)
                 timestamp = datetime.fromisoformat(timestamp_str)
                 recent_requests.append((timestamp, content))
-            except:
+            except Exception as e:\n                logger.error(f\"Exception parsing recent content item '{item}': {e}\", exc_info=True)\n                # Continue processing other items - malformed data should not break detection
                 continue
 
         if len(recent_requests) < 3:

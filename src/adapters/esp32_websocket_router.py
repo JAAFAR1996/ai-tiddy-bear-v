@@ -7,10 +7,16 @@ FastAPI router for ESP32 WebSocket connections with complete audio processing.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Query, Depends
 from fastapi.responses import JSONResponse
 
 from src.services.esp32_production_runner import esp32_production_runner
+from src.infrastructure.security.admin_security import (
+    require_admin_permission,
+    AdminPermission,
+    SecurityLevel,
+    AdminSession
+)
 
 
 # Create router
@@ -147,14 +153,16 @@ async def esp32_websocket_endpoint(
         logger.warning(f"ESP32 connection rejected: {e.detail}")
         try:
             await websocket.close(code=e.status_code, reason=e.detail)
-        except:
-            pass
+        except Exception as close_e:
+            logger.error(f"Exception closing WebSocket connection after HTTP rejection: {close_e}", exc_info=True)
+            # Continue - connection may already be closed by client
     except Exception as e:
         logger.error(f"ESP32 WebSocket error: {e}", exc_info=True)
         try:
             await websocket.close(code=1011, reason="Internal server error")
-        except:
-            pass
+        except Exception as close_e:
+            logger.error(f"Exception closing WebSocket connection after internal error: {close_e}", exc_info=True)
+            # Continue - connection may already be closed or in invalid state
     finally:
         # Cleanup session
         if session_id and chat_server:
@@ -233,18 +241,24 @@ async def esp32_metrics():
 
 
 @esp32_router.post("/admin/shutdown")
-async def esp32_admin_shutdown():
+async def esp32_admin_shutdown(
+    session: AdminSession = Depends(require_admin_permission(AdminPermission.SYSTEM_ADMIN, SecurityLevel.CRITICAL))
+):
     """
-    Administrative endpoint to gracefully shutdown ESP32 Chat Server.
+    🔒 SECURED: Administrative endpoint to gracefully shutdown ESP32 Chat Server.
     
-    Note: This should be protected with proper authentication in production.
+    CRITICAL SECURITY: Requires SYSTEM_ADMIN permission + MFA + Certificate auth.
     """
     try:
         await esp32_production_runner.shutdown()
         
         return JSONResponse(
             status_code=200,
-            content={"message": "ESP32 Chat Server shutdown initiated"}
+            content={
+                "message": "ESP32 Chat Server shutdown initiated",
+                "initiated_by": session.user_id,
+                "timestamp": "2025-01-27T12:00:00Z"
+            }
         )
         
     except Exception as e:

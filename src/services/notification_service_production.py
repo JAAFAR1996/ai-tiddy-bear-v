@@ -21,12 +21,47 @@ class ProductionNotificationService:
     """خدمة إشعارات إنتاجية متكاملة."""
 
     def __init__(self):
-        self.notification_repo = None
-        self.delivery_record_repo = None
+        # Initialize with placeholders - will be set during initialize()
+        self._notification_repo = None
+        self._delivery_record_repo = None
+        self._initialized = False
+
+    @property
+    def notification_repo(self):
+        """Get notification repository with validation."""
+        if not self._initialized:
+            raise RuntimeError("ProductionNotificationService not initialized. Call initialize() first.")
+        return self._notification_repo
+
+    @property
+    def delivery_record_repo(self):
+        """Get delivery record repository with validation."""
+        if not self._initialized:
+            raise RuntimeError("ProductionNotificationService not initialized. Call initialize() first.")
+        return self._delivery_record_repo
 
     async def initialize(self):
-        self.notification_repo = await get_notification_repository()
-        self.delivery_record_repo = await get_delivery_record_repository()
+        """Initialize service with required repositories."""
+        if self._initialized:
+            return  # Already initialized
+            
+        self._notification_repo = await get_notification_repository()
+        self._delivery_record_repo = await get_delivery_record_repository()
+        
+        # Validate that repositories were successfully created
+        if self._notification_repo is None:
+            raise RuntimeError("Failed to initialize notification repository")
+        if self._delivery_record_repo is None:
+            raise RuntimeError("Failed to initialize delivery record repository")
+            
+        self._initialized = True
+
+    @classmethod
+    async def create(cls):
+        """Factory method to create and initialize service."""
+        service = cls()
+        await service.initialize()
+        return service
 
     async def send_notification(
         self,

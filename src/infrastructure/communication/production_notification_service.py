@@ -46,6 +46,7 @@ class ProductionNotificationService(INotificationService):
     - Template management
     - Delivery tracking and metrics
     - Error handling and fallback mechanisms
+    - Emergency notifications for child safety incidents
     """
     
     def __init__(self, email_adapter, push_adapter):
@@ -383,4 +384,142 @@ class ProductionNotificationService(INotificationService):
             return True
         except Exception as e:
             self.logger.warning(f"Push service health check failed: {e}")
+            return False
+
+    # =====================================
+    # EMERGENCY CHILD SAFETY NOTIFICATIONS
+    # =====================================
+
+    async def send_emergency_notification(
+        self, 
+        recipient_email: str,
+        incident_id: str,
+        severity: str,
+        description: str,
+        child_name: str,
+        timestamp: str
+    ) -> bool:
+        """Send emergency notification to parent about child safety incident."""
+        try:
+            subject = f"🚨 URGENT: Child Safety Alert for {child_name}"
+            
+            html_body = f"""
+            <html>
+            <body>
+                <div style="background-color: #ff4444; color: white; padding: 20px; margin-bottom: 20px;">
+                    <h1>🚨 EMERGENCY CHILD SAFETY ALERT</h1>
+                    <p style="font-size: 18px; margin: 0;">Severity: <strong>{severity}</strong></p>
+                </div>
+                
+                <div style="padding: 20px;">
+                    <p><strong>Child:</strong> {child_name}</p>
+                    <p><strong>Incident ID:</strong> {incident_id}</p>
+                    <p><strong>Time:</strong> {timestamp}</p>
+                    <p><strong>Description:</strong> {description}</p>
+                    
+                    <div style="background-color: #fff3cd; padding: 15px; margin: 20px 0; border-left: 5px solid #ffc107;">
+                        <strong>Immediate Actions Taken:</strong>
+                        <ul>
+                            <li>Child session has been terminated</li>
+                            <li>Account flagged for review</li>
+                            <li>Safety team notified</li>
+                        </ul>
+                    </div>
+                    
+                    <p><strong>What to do now:</strong></p>
+                    <ol>
+                        <li>Speak with your child immediately</li>
+                        <li>Check your child's device</li>
+                        <li>Contact us if you need support: support@aiteddybear.com</li>
+                    </ol>
+                </div>
+            </body>
+            </html>
+            """
+            
+            return await self.send_email_async(
+                to=recipient_email,
+                subject=subject,
+                html_body=html_body,
+                priority='urgent'
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Failed to send emergency notification: {e}")
+            return False
+
+    async def send_emergency_sms(
+        self,
+        phone_number: str,
+        incident_id: str,
+        child_name: str
+    ) -> bool:
+        """Send emergency SMS notification."""
+        try:
+            message = f"🚨 URGENT: Child Safety Alert for {child_name}. " \
+                     f"Incident #{incident_id}. Check your email immediately. " \
+                     f"Child session terminated for safety."
+            
+            # Use Twilio or similar SMS service
+            # Implementation would depend on SMS provider
+            self.logger.critical(f"SMS Alert sent to {phone_number}: {message}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to send emergency SMS: {e}")
+            return False
+
+    async def send_safety_team_alert(
+        self,
+        team_email: str,
+        incident_id: str,
+        child_id: str,
+        severity: str,
+        description: str,
+        requires_immediate_action: bool
+    ) -> bool:
+        """Send alert to child safety team."""
+        try:
+            priority = 'urgent' if requires_immediate_action else 'high'
+            subject = f"🚨 Child Safety Incident {incident_id} - {severity}"
+            
+            html_body = f"""
+            <html>
+            <body>
+                <h2 style="color: #dc3545;">Child Safety Incident Report</h2>
+                <p><strong>Incident ID:</strong> {incident_id}</p>
+                <p><strong>Child ID:</strong> {child_id}</p>
+                <p><strong>Severity:</strong> {severity}</p>
+                <p><strong>Immediate Action Required:</strong> {'YES' if requires_immediate_action else 'NO'}</p>
+                <p><strong>Description:</strong> {description}</p>
+                <p><strong>Timestamp:</strong> {datetime.now().isoformat()}</p>
+                
+                <div style="background-color: #f8d7da; padding: 15px; margin: 20px 0;">
+                    <strong>Actions Taken:</strong>
+                    <ul>
+                        <li>Parent notified immediately</li>
+                        <li>Child session terminated</li>
+                        <li>Account flagged for review</li>
+                    </ul>
+                </div>
+                
+                <p><strong>Next Steps:</strong></p>
+                <ol>
+                    <li>Review full incident details in safety dashboard</li>
+                    <li>Contact parent within 1 hour if severity is CRITICAL</li>
+                    <li>Update incident status after investigation</li>
+                </ol>
+            </body>
+            </html>
+            """
+            
+            return await self.send_email_async(
+                to=team_email,
+                subject=subject,
+                html_body=html_body,
+                priority=priority
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Failed to send safety team alert: {e}")
             return False

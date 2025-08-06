@@ -1,21 +1,28 @@
 """
-Consolidated Service Registry - Explicit Factory Pattern
-=======================================================
+Consolidated Service Registry - Clean Async Pattern
+=================================================
 هذا الملف مسؤول عن تعريف جميع الخدمات (Services) والـ repositories بشكل واضح وصريح.
-كل خدمة يتم تعريفها مع توثيق dependencies الخاصة بها، ولا توجد أي dependencies غامضة أو غير موثقة.
-يجب حذف أي تعليق أو استيراد غير مستخدم أو غير واضح.
+جميع الخدمات الـ async يتم تهيئتها فقط عند الطلب، وليس في __init__.
+كل خدمة تحتاج dependency تأخذها عبر injection صريح.
 """
 
 import asyncio
 import logging
+import time
 from typing import Any, Dict, Optional, TypeVar, List
-
+from src.infrastructure.config.production_config import ProductionConfig
+from src.infrastructure.config.validator import (
+    validate_production_config,
+    ConfigurationValidationError,
+)
 
 # Explicit imports: كل خدمة وكل repository يجب أن يكون معرف بوضوح
 from src.application.services.ai_service import ConsolidatedAIService
 from src.application.services.user_service import UserService
 from src.application.services.child_safety_service import ConsolidatedChildSafetyService
 from src.services.conversation_service import ConsolidatedConversationService
+from src.infrastructure.logging.structured_logger import StructuredLogger
+from src.application.services.child_safety_service import ChildSafetyService
 
 from src.infrastructure.config.validator import COPPAValidator
 from src.adapters.database_production import (
@@ -26,120 +33,234 @@ from src.adapters.database_production import (
     ProductionConsentRepository,
 )
 
-import logging
-
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
 
 class ServiceRegistry:
+    def find_dead_registrations(self) -> dict:
+        """
+        Detect any registered factory or singleton that has never been instantiated (dead registration).
+        Returns a dict with lists of dead singletons and factories.
+        Logs the result in the audit log.
+        """
+        dead_singletons = []
+        for name, entry in self._singletons.items():
+            if entry.get("instance") is None:
+                dead_singletons.append(name)
+        # Factories: can't track instantiation directly, so check for usage counter
+        # Optionally, you could add a counter in get_service if you want more granularity
+        dead_factories = [name for name in self._factories.keys()]
+        result = {"dead_singletons": dead_singletons, "dead_factories": dead_factories}
+        self._audit("dead_registrations_check", result)
+        return result
+
     """
-    Centralized service registry for dependency injection.
-    كل خدمة يتم تعريفها بنمط Explicit Factory Pattern مع توثيق dependencies.
+    Centralized service registry for dependency injection, with strict config validation, readiness checks, and audit logging.
+    جميع الخدمات الـ async يتم تهيئتها فقط عند الطلب via get_service().
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, config: Optional[dict] = None) -> None:
         """
-        تهيئة registry مع جميع الخدمات والـ repositories بشكل واضح.
+        Initialize registry, validate config, and register factories.
         Args:
-            config: إعدادات التطبيق (اختياري)
+            config: Application config (dict or ProductionConfig)
         """
-        self.config = config or {}
+        import os
+
+        self._audit_log: list = []
+        self._audit_logger = StructuredLogger("service_registry_audit")
+
+        # Fail-fast: require config in production
+        if config is None or not config:
+            if os.getenv("ENVIRONMENT", "development") == "production":
+                raise RuntimeError(
+                    "[ServiceRegistry] Production config must be provided explicitly. No global/implicit config allowed."
+                )
+        # Accept either dict or ProductionConfig
+        if isinstance(config, dict):
+            self.config = ProductionConfig(**config)
+        elif isinstance(config, ProductionConfig):
+            self.config = config
+        else:
+            self.config = config or {}
+
+        # Strict config validation (fail-fast)
+        try:
+            self._audit("config_validation_start", details={})
+            if isinstance(self.config, ProductionConfig):
+                import asyncio
+
+                # Run async validation synchronously at startup
+                loop = (
+                    asyncio.get_event_loop()
+                    if asyncio.get_event_loop().is_running()
+                    else asyncio.new_event_loop()
+                )
+                result = loop.run_until_complete(
+                    validate_production_config(self.config)
+                )
+                if not result["valid"]:
+                    self._audit("config_validation_failed", details=result)
+                    raise ConfigurationValidationError(result["errors"])
+                self._audit("config_validation_passed", details=result)
+        except Exception as e:
+            self._audit("config_validation_exception", details={"error": str(e)})
+            raise
+
         self._services: Dict[str, Any] = {}
         self._factories: Dict[str, callable] = {}
-        self._singletons: Dict[str, Any] = {}
+        self._singletons: Dict[str, Dict[str, Any]] = {}
+        self._instances: Dict[str, Any] = {}
         self._lock = asyncio.Lock()
 
-        # تسجيل جميع الخدمات بشكل صريح
-        self._register_consolidated_services()
+        self._register_all_factories()
+        logger.info("Service Registry initialized with factories only")
+        self._audit(
+            "registry_initialized",
+            details={
+                "config_keys": (
+                    list(self.config.__dict__.keys())
+                    if hasattr(self.config, "__dict__")
+                    else list(self.config.keys())
+                )
+            },
+        )
 
-        logger.info("Service Registry initialized")
+    def _audit(self, event: str, details: dict):
+        entry = {"event": event, "timestamp": time.time(), "details": details}
+        self._audit_log.append(entry)
+        self._audit_logger.info(f"AUDIT: {event}", **details)
 
-    # SERVICE REGISTRATION METHODS
-
-    def _register_consolidated_services(self) -> None:
+    async def check_readiness(self) -> dict:
         """
-        تسجيل جميع الخدمات مع dependencies بشكل واضح وصريح.
-        كل خدمة يتم تعريفها بنمط Explicit Factory Pattern.
+        Check readiness of all critical dependencies: DB, Redis, OpenAI, etc. with retry and timeout.
+        Returns a dict with status and details. Raises if not ready.
+        """
+        from tenacity import (
+            AsyncRetrying,
+            stop_after_attempt,
+            wait_exponential,
+            retry_if_exception_type,
+            RetryError,
+        )
+
+        status = {"db": False, "redis": False, "openai": False, "errors": []}
+        logger = self._audit_logger
+
+        async def db_check():
+            session = await self._get_db_session()
+            if not session:
+                raise RuntimeError("DB session unavailable")
+            return True
+
+        async def redis_check():
+            import aioredis
+
+            redis_url = getattr(self.config, "REDIS_URL", None)
+            if not redis_url:
+                raise RuntimeError("REDIS_URL not set")
+            redis = await aioredis.from_url(
+                redis_url, encoding="utf-8", decode_responses=True
+            )
+            pong = await redis.ping()
+            await redis.close()
+            if not pong:
+                raise RuntimeError("Redis ping failed")
+            return True
+
+        async def openai_check():
+            import openai
+
+            openai.api_key = getattr(self.config, "OPENAI_API_KEY", None)
+            if not openai.api_key:
+                raise RuntimeError("OPENAI_API_KEY not set")
+            await asyncio.get_event_loop().run_in_executor(
+                None, lambda: openai.Model.list()
+            )
+            return True
+
+        async def run_with_retry(fn, name):
+            try:
+                async for attempt in AsyncRetrying(
+                    stop=stop_after_attempt(3),
+                    wait=wait_exponential(multiplier=1, min=2, max=8),
+                    retry=retry_if_exception_type(Exception),
+                    reraise=True,
+                ):
+                    with attempt:
+                        logger.info(
+                            f"Readiness check: {name} attempt {attempt.retry_state.attempt_number}"
+                        )
+                        return await asyncio.wait_for(fn(), timeout=5)
+            except RetryError as re:
+                logger.error(f"{name} readiness failed after retries: {re}")
+                status["errors"].append(f"{name}: {re}")
+                return False
+            except Exception as e:
+                logger.error(f"{name} readiness error: {e}")
+                status["errors"].append(f"{name}: {e}")
+                return False
+
+        status["db"] = await run_with_retry(db_check, "DB")
+        status["redis"] = await run_with_retry(redis_check, "Redis")
+        status["openai"] = await run_with_retry(openai_check, "OpenAI")
+
+        self._audit("readiness_check", details=status)
+        if not all([status["db"], status["redis"], status["openai"]]):
+            raise RuntimeError(f"Readiness check failed: {status}")
+        return status
+
+    def get_dependency_tree(self) -> dict:
+        """
+        Return a tree of all registered services and their dependencies.
+        """
+        tree = {}
+        for name, entry in {**self._singletons, **self._factories}.items():
+            tree[name] = list(entry.get("dependencies", []))
+        self._audit("dependency_tree_requested", details=tree)
+        return tree
+
+    def _register_all_factories(self) -> None:
+        """
+        تسجيل جميع الخدمات كـ factories بدون تهيئة فورية.
+        كل خدمة async سيتم تهيئتها فقط عند استدعاء get_service().
         """
 
-        # تعريف الـ repositories بشكل واضح
-        user_repository = ProductionUserRepository()
-        child_repository = ProductionChildRepository()
-        conversation_repository = ProductionConversationRepository()
-        message_repository = ProductionMessageRepository()
-        consent_repository = ProductionConsentRepository()
-        # Notification repositories
-        from src.infrastructure.database.production_notification_repository import ProductionNotificationRepository, ProductionDeliveryRecordRepository
-        notification_repository = ProductionNotificationRepository()
-        delivery_record_repository = ProductionDeliveryRecordRepository()
-        coppa_validator = COPPAValidator()
-
-        # تعريف الخدمات مع dependencies بشكل صريح
-        self._singletons["ai_service"] = ConsolidatedAIService()
-        self._singletons["user_service"] = UserService(
-            user_repository, child_repository
+        # Register repositories as factories
+        self.register_factory("user_repository", self._create_user_repository)
+        self.register_factory("child_repository", self._create_child_repository)
+        self.register_factory(
+            "conversation_repository", self._create_conversation_repository
         )
-        self._singletons["child_safety_service"] = ConsolidatedChildSafetyService(
-            coppa_validator, consent_repository
+        self.register_factory("message_repository", self._create_message_repository)
+        self.register_factory("consent_repository", self._create_consent_repository)
+        self.register_factory(
+            "notification_repository", self._create_notification_repository
         )
-        import asyncio
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        notification_service = loop.run_until_complete(self.get_service("notification_service"))
-        self._singletons["conversation_service"] = ConsolidatedConversationService(
-            conversation_repository,
-            message_repository,
-            notification_service=notification_service
+        self.register_factory(
+            "delivery_record_repository", self._create_delivery_record_repository
         )
 
+        # Register utility services as factories
+        self.register_factory("coppa_validator", self._create_coppa_validator)
+        self.register_factory("safety_monitor", self._create_safety_monitor)
+        self.register_factory("ai_provider", self._create_ai_provider)
 
-        # Register notification repositories as factories
-        self.register_factory("notification_repository", self._create_notification_repository)
-        self.register_factory("delivery_record_repository", self._create_delivery_record_repository)
+        # Register core services as factories
+        self.register_factory("ai_service", self._create_ai_service)
+        self.register_factory("user_service", self._create_user_service)
+        self.register_factory("child_safety_service", self._create_child_safety_service)
 
-        # Register production notification service as singleton
-        self.register_singleton("notification_service", self._create_notification_service, dependencies=["notification_repository", "delivery_record_repository"])
-    async def _create_notification_service(self, **dependencies):
-        """Create ProductionNotificationService instance (production)."""
-        from src.services.notification_service_production import ProductionNotificationService
-        service = ProductionNotificationService()
-        await service.initialize()
-        return service
-async def get_notification_service():
-    """Convenience function to get ProductionNotificationService."""
-    registry = await get_service_registry()
-    return await registry.get_service("notification_service")
+        # Async services - تهيئة فقط عند الطلب
+        self.register_factory("notification_service", self._create_notification_service)
+        self.register_factory("conversation_service", self._create_conversation_service)
 
-        # Register notification service (to be implemented in notification_service_production.py)
-        # self.register_singleton("notification_service", self._create_notification_service, dependencies=["notification_repository", "delivery_record_repository"])
-
-    async def _create_notification_repository(self) -> Any:
-        """Create Notification repository instance (production)."""
-        session = await self._get_db_session()
-        from src.infrastructure.database.production_notification_repository import ProductionNotificationRepository
-        return ProductionNotificationRepository(session)
-
-    async def _create_delivery_record_repository(self) -> Any:
-        """Create DeliveryRecord repository instance (production)."""
-        session = await self._get_db_session()
-        from src.infrastructure.database.production_notification_repository import ProductionDeliveryRecordRepository
-        return ProductionDeliveryRecordRepository(session)
-
-# Convenience functions for notification repositories (outside the class)
-async def get_notification_repository():
-    """Convenience function to get Notification repository."""
-    registry = await get_service_registry()
-    return await registry.get_service("notification_repository")
-
-async def get_delivery_record_repository():
-    """Convenience function to get DeliveryRecord repository."""
-    registry = await get_service_registry()
-    return await registry.get_service("delivery_record_repository")
+        # Audio services
+        self.register_factory("tts_service", self._create_tts_service)
+        self.register_factory("stt_provider", self._create_stt_provider)
+        self.register_factory("audio_service", self._create_audio_service)
 
         # توثيق dependencies لكل خدمة:
         # ai_service: لا يعتمد على repositories مباشرة (حسب الكود الحالي)
@@ -159,15 +280,6 @@ async def get_delivery_record_repository():
             dependencies=["tts_service", "stt_provider"],
         )
 
-        # Register repository dependencies (would be actual implementations)
-        self.register_factory("user_repository", self._create_user_repository)
-        self.register_factory("child_repository", self._create_child_repository)
-        self.register_factory(
-            "conversation_repository", self._create_conversation_repository
-        )
-        self.register_factory("message_repository", self._create_message_repository)
-        self.register_factory("consent_repository", self._create_consent_repository)
-
         # Register utility services
         self.register_singleton("coppa_validator", self._create_coppa_validator)
         self.register_singleton("safety_monitor", self._create_safety_monitor)
@@ -176,6 +288,34 @@ async def get_delivery_record_repository():
         # Register audio provider dependencies
         self.register_singleton("tts_service", self._create_tts_service)
         self.register_singleton("stt_provider", self._create_stt_provider)
+
+    async def _create_notification_service(self, **dependencies):
+        """Create ProductionNotificationService instance (production)."""
+        from src.services.notification_service_production import (
+            ProductionNotificationService,
+        )
+
+        service = ProductionNotificationService()
+        await service.initialize()
+        return service
+
+    async def _create_notification_repository(self) -> Any:
+        """Create Notification repository instance (production)."""
+        session = await self._get_db_session()
+        from src.infrastructure.database.production_notification_repository import (
+            ProductionNotificationRepository,
+        )
+
+        return ProductionNotificationRepository(session)
+
+    async def _create_delivery_record_repository(self) -> Any:
+        """Create DeliveryRecord repository instance (production)."""
+        session = await self._get_db_session()
+        from src.infrastructure.database.production_notification_repository import (
+            ProductionDeliveryRecordRepository,
+        )
+
+        return ProductionDeliveryRecordRepository(session)
 
     def register_singleton(
         self,
@@ -226,7 +366,9 @@ async def get_delivery_record_repository():
     # SERVICE RESOLUTION METHODS
     # =============================================================================
 
-    async def get_service(self, service_name: str) -> Any:
+    async def get_service(
+        self, service_name: str, dependencies: Optional[Dict[str, Any]] = None
+    ) -> Any:
         """Get service instance by name.
 
         Args:
@@ -240,38 +382,40 @@ async def get_delivery_record_repository():
             Exception: If service creation fails
         """
         async with self._lock:
+            # Always ensure config is injected in dependencies
+            def ensure_config_in_deps(deps: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+                deps = deps.copy() if deps else {}
+                if "config" not in deps and self.config:
+                    deps["config"] = self.config
+                return deps
+
             # Check singletons first
             if service_name in self._singletons:
                 singleton_config = self._singletons[service_name]
-
                 # Return existing instance if available
                 if singleton_config["instance"] is not None:
                     return singleton_config["instance"]
-
                 # Create new singleton instance
-                dependencies = await self._resolve_dependencies(
+                resolved_deps = await self._resolve_dependencies(
                     singleton_config["dependencies"]
                 )
+                resolved_deps = ensure_config_in_deps(resolved_deps)
                 instance = await self._create_service_instance(
-                    singleton_config["factory"], dependencies
+                    singleton_config["factory"], resolved_deps
                 )
-
-                # Cache singleton instance
                 singleton_config["instance"] = instance
                 return instance
-
             # Check factories
             if service_name in self._factories:
                 factory_config = self._factories[service_name]
-                dependencies = await self._resolve_dependencies(
+                resolved_deps = await self._resolve_dependencies(
                     factory_config["dependencies"]
                 )
+                resolved_deps = ensure_config_in_deps(resolved_deps)
                 return await self._create_service_instance(
-                    factory_config["factory"], dependencies
+                    factory_config["factory"], resolved_deps
                 )
-
             # Service not found
-            # Sanitize service name for error message
             safe_service_name = service_name.replace("\n", "").replace("\r", "")[:100]
             raise KeyError(f"Service not registered: {safe_service_name}")
 
@@ -299,29 +443,32 @@ async def get_delivery_record_repository():
 
     async def _create_ai_service(self, **dependencies) -> ConsolidatedAIService:
         """Create AI service instance (production, consolidated)."""
-        from src.infrastructure.config.production_config import get_config
-
-        config = get_config()
+        config = dependencies.get("config")
+        if config is None:
+            raise ValueError("config must be provided explicitly to _create_ai_service")
         ai_provider = dependencies.get("ai_provider")
         safety_monitor = dependencies.get("safety_monitor")
         logger = StructuredLogger("ai_service")
-
-        # Get Redis configuration
         redis_url = getattr(config, "REDIS_URL", "redis://localhost:6379")
-
         return ConsolidatedAIService(
             ai_provider=ai_provider,
             safety_monitor=safety_monitor,
             logger=logger,
             redis_url=redis_url,
+            config=config,
         )
 
     async def _create_user_service(self, **dependencies) -> UserService:
         """Create User service instance (production, consolidated)."""
+        config = dependencies.get("config")
+        if config is None:
+            raise ValueError(
+                "config must be provided explicitly to _create_user_service"
+            )
         user_repository = dependencies.get("user_repository")
         child_repository = dependencies.get("child_repository")
         logger = StructuredLogger("user_service")
-        session_timeout = self.config.get("session_timeout_minutes", 30)
+        session_timeout = getattr(config, "SESSION_TIMEOUT_MINUTES", 30)
         return UserService(
             user_repository=user_repository,
             child_repository=child_repository,
@@ -388,9 +535,26 @@ async def get_delivery_record_repository():
         """Create Conversation service instance (production, consolidated)."""
         conversation_repository = dependencies.get("conversation_repository")
         message_repository = dependencies.get("message_repository")
+
+        # Get required dependencies
+        if conversation_repository is None:
+            conversation_repository = await self.get_service("conversation_repository")
+        if message_repository is None:
+            message_repository = await self.get_service("message_repository")
+
+        # Get notification service and logger
+        notification_service = await self.get_service("notification_service")
+
+        # Create logger
+        import logging
+
+        logger = logging.getLogger("conversation_service")
+
         return ConsolidatedConversationService(
             conversation_repository=conversation_repository,
             message_repository=message_repository,
+            notification_service=notification_service,
+            logger=logger,
         )
 
     # =============================================================================
@@ -400,22 +564,26 @@ async def get_delivery_record_repository():
     async def _create_user_repository(self) -> Any:
         """Create User repository instance (production)."""
         session = await self._get_db_session()
-        return ProductionUserRepository(session)
+        config = self.config
+        return ProductionUserRepository(session, config=config)
 
     async def _create_child_repository(self) -> Any:
         """Create Child repository instance (production)."""
         session = await self._get_db_session()
-        return ProductionChildRepository(session)
+        config = self.config
+        return ProductionChildRepository(session, config=config)
 
     async def _create_conversation_repository(self) -> Any:
         """Create Conversation repository instance (production)."""
         session = await self._get_db_session()
-        return ProductionConversationRepository(session)
+        config = self.config
+        return ProductionConversationRepository(session, config=config)
 
     async def _create_message_repository(self) -> Any:
         """Create Message repository instance (production)."""
         session = await self._get_db_session()
-        return ProductionMessageRepository(session)
+        config = self.config
+        return ProductionMessageRepository(session, config=config)
 
     async def _create_consent_repository(self) -> Any:
         """Create Consent repository instance (production)."""
@@ -444,8 +612,13 @@ async def get_delivery_record_repository():
         logger.info("Creating Production SafetyMonitor instance")
         return ChildSafetyService()
 
-    async def _create_tts_service(self) -> Any:
+    async def _create_tts_service(self, **dependencies) -> Any:
         """Create production TTS service instance with multi-provider support."""
+        config = dependencies.get("config")
+        if config is None:
+            raise ValueError(
+                "config must be provided explicitly to _create_tts_service"
+            )
         from src.infrastructure.audio.openai_tts_provider import OpenAITTSProvider
         from src.infrastructure.audio.elevenlabs_tts_provider import (
             ElevenLabsTTSProvider,
@@ -453,18 +626,13 @@ async def get_delivery_record_repository():
         from src.infrastructure.caching.production_tts_cache_service import (
             ProductionTTSCacheService,
         )
-        from src.infrastructure.config.production_config import get_config
-
-        config = get_config()
 
         # Create shared cache service
         cache_service = ProductionTTSCacheService(
             enabled=True, default_ttl_seconds=3600, max_cache_size_mb=1024
         )
-
         # Determine which TTS provider to use based on configuration
         tts_provider = getattr(config, "TTS_PROVIDER", "openai").lower()
-
         if tts_provider == "elevenlabs":
             # Create ElevenLabs TTS provider
             api_key = getattr(config, "ELEVENLABS_API_KEY", None)
@@ -492,37 +660,57 @@ async def get_delivery_record_repository():
                 f"Unsupported TTS provider: {tts_provider}. Supported providers: openai, elevenlabs"
             )
 
-    async def _create_stt_provider(self) -> Any:
-        """Create production STT provider instance."""
-        # For now, return a placeholder STT provider
-        # This would be replaced with actual STT implementation
-        logger.info("Creating placeholder STT provider (to be implemented)")
+    async def _create_stt_provider(self, **dependencies) -> Any:
+        """Create production STT provider instance with local Whisper."""
+        from src.infrastructure.audio.whisper_stt_provider import (
+            WhisperSTTProviderFactory,
+        )
+        from src.infrastructure.logging.structured_logger import StructuredLogger
 
-        class PlaceholderSTTProvider:
-            """Placeholder STT provider for future implementation."""
+        config = dependencies.get("config")
+        if config is None:
+            raise ValueError(
+                "config must be provided explicitly to _create_stt_service"
+            )
+        # Get STT configuration from config
+        stt_config = {
+            "whisper_model": getattr(config, "WHISPER_MODEL_SIZE", "base"),
+            "device": getattr(config, "WHISPER_DEVICE", None),  # Auto-detect
+            "default_language": getattr(config, "DEFAULT_STT_LANGUAGE", "auto"),
+            "temperature": getattr(config, "WHISPER_TEMPERATURE", 0.0),
+            "max_duration": getattr(config, "MAX_AUDIO_DURATION_SECONDS", 300),
+            "cache_enabled": getattr(config, "STT_CACHE_ENABLED", True),
+            "safety_filtering": getattr(config, "STT_SAFETY_FILTERING", True),
+        }
+        stt_logger = StructuredLogger("whisper_stt")
+        stt_logger.info("Creating Whisper STT provider for production", **stt_config)
+        # Create production-optimized Whisper STT provider
+        stt_provider = WhisperSTTProviderFactory.create_production_provider(
+            config=stt_config, logger=stt_logger
+        )
+        # Initialize the provider
+        initialization_success = await stt_provider.initialize()
+        if not initialization_success:
+            stt_logger.error("Failed to initialize Whisper STT provider")
+            raise RuntimeError("Whisper STT provider initialization failed")
+        # Optimize for real-time performance
+        await stt_provider.optimize_for_realtime()
+        stt_logger.info("Whisper STT provider created and initialized successfully")
+        return stt_provider
 
-            async def transcribe_audio(self, audio_data: bytes) -> str:
-                """Placeholder transcription method."""
-                return "STT not implemented yet"
-
-            async def health_check(self) -> bool:
-                """Health check placeholder."""
-                return True
-
-        return PlaceholderSTTProvider()
-
-    async def _create_ai_provider(self) -> Any:
+    async def _create_ai_provider(self, **dependencies) -> Any:
         """Create production AI provider instance."""
         from src.adapters.providers.openai_provider import ProductionOpenAIProvider
-        from src.infrastructure.config.production_config import get_config
 
-        config = get_config()
+        config = dependencies.get("config")
+        if config is None:
+            raise ValueError(
+                "config must be provided explicitly to _create_openai_provider"
+            )
         api_key = getattr(config, "OPENAI_API_KEY", None)
         model = getattr(config, "OPENAI_MODEL", "gpt-3.5-turbo")
-
         if not api_key:
             raise RuntimeError("OPENAI_API_KEY is required for AI provider")
-
         return ProductionOpenAIProvider(api_key=api_key, model=model, config=config)
 
     # UTILITY METHODS
@@ -530,28 +718,22 @@ async def get_delivery_record_repository():
     async def _resolve_dependencies(
         self, dependency_names: List[str]
     ) -> Dict[str, Any]:
-        """Resolve all dependencies for a service.
-
-        Args:
-            dependency_names: List of dependency service names
-
-        Returns:
-            Dictionary mapping dependency names to instances
-        """
+        """Resolve all dependencies for a service, always injecting config if missing."""
         dependencies = {}
-
         for dep_name in dependency_names:
             try:
                 dependencies[dep_name] = await self.get_service(dep_name)
             except KeyError:
                 logger.error(f"Dependency not found: {dep_name}", exc_info=True)
                 dependencies[dep_name] = None
-            except Exception as e:  # noqa: E722
+            except Exception as e:
                 logger.error(
                     f"Failed to resolve dependency {dep_name}: {e}", exc_info=True
                 )
                 dependencies[dep_name] = None
-
+        # Always inject config if not present
+        if "config" not in dependencies and self.config:
+            dependencies["config"] = self.config
         return dependencies
 
     async def _create_service_instance(
@@ -559,7 +741,7 @@ async def get_delivery_record_repository():
         factory: callable,
         dependencies: Dict[str, Any],
     ) -> Any:
-        """Create service instance using factory and dependencies.
+        """Create service instance using factory and dependencies. Ensure correct type or fail clearly.
 
         Args:
             factory: Factory function
@@ -570,17 +752,34 @@ async def get_delivery_record_repository():
         """
         try:
             if asyncio.iscoroutinefunction(factory):
-                return await factory(**dependencies)
+                instance = await factory(**dependencies)
             else:
-                return factory(**dependencies)
+                instance = factory(**dependencies)
         except TypeError as e:
             logger.error(
                 f"Service creation failed due to type error: {e}", exc_info=True
             )
+            self._audit(
+                "service_factory_type_error", {"factory": str(factory), "error": str(e)}
+            )
             raise
         except Exception as e:  # noqa: E722
             logger.error(f"Service creation failed: {e}", exc_info=True)
+            self._audit(
+                "service_factory_exception", {"factory": str(factory), "error": str(e)}
+            )
             raise
+
+        # Type check: ensure instance is not None and is an object
+        if instance is None or not hasattr(instance, "__class__"):
+            msg = f"Factory {factory} did not return a valid instance. Got: {instance}"
+            logger.error(msg)
+            self._audit(
+                "service_factory_invalid_instance",
+                {"factory": str(factory), "result": str(instance)},
+            )
+            raise RuntimeError(msg)
+        return instance
 
     async def shutdown(self) -> None:
         """Shutdown all services and clean up resources."""
@@ -681,3 +880,16 @@ async def get_audio_service():
     """Convenience function to get Audio service."""
     registry = await get_service_registry()
     return await registry.get_audio_service()
+
+
+# Convenience functions for notification repositories
+async def get_notification_repository():
+    """Convenience function to get Notification repository."""
+    registry = await get_service_registry()
+    return await registry.get_service("notification_repository")
+
+
+async def get_delivery_record_repository():
+    """Convenience function to get DeliveryRecord repository."""
+    registry = await get_service_registry()
+    return await registry.get_service("delivery_record_repository")

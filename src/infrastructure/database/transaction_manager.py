@@ -195,8 +195,8 @@ class ChildDataTransaction:
 class TransactionManager:
     """Advanced transaction manager with distributed support."""
 
-    def __init__(self):
-        self.config_manager = get_config_manager()
+    def __init__(self, config_manager):
+        self.config_manager = config_manager
         self.logger = get_logger("transaction_manager")
 
         # Active transactions

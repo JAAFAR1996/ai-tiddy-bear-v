@@ -133,36 +133,59 @@ class SecurityFilter:
         r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',  # Email
         r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b',  # Phone
     ]
-    
+    _audit_log: list = []
+
     @classmethod
-    def sanitize_data(cls, data: Any) -> Any:
-        """Recursively sanitize data to remove sensitive information."""
+    def sanitize_data(cls, data: Any, _parent_stack=None) -> Any:
+        """Recursively sanitize data to remove sensitive information. Audit any redaction."""
+        import traceback
+        if _parent_stack is None:
+            _parent_stack = traceback.format_stack()
         if isinstance(data, dict):
             return {
-                key: cls._sanitize_value(key, value)
+                key: cls._sanitize_value(key, value, _parent_stack)
                 for key, value in data.items()
             }
         elif isinstance(data, (list, tuple)):
-            return [cls.sanitize_data(item) for item in data]
+            return [cls.sanitize_data(item, _parent_stack) for item in data]
         elif isinstance(data, str):
-            return cls._sanitize_string(data)
+            return cls._sanitize_string(data, _parent_stack)
         else:
             return data
-    
+
     @classmethod
-    def _sanitize_value(cls, key: str, value: Any) -> Any:
-        """Sanitize a single value based on its key."""
+    def _sanitize_value(cls, key: str, value: Any, _parent_stack) -> Any:
+        """Sanitize a single value based on its key. Audit if redacted."""
         if isinstance(key, str) and key.lower() in cls.SENSITIVE_KEYS:
+            cls._audit_log.append({
+                "event": "sensitive_value_redacted",
+                "key": key,
+                "stack": _parent_stack,
+                "timestamp": time.time()
+            })
             return "[REDACTED]"
-        return cls.sanitize_data(value)
-    
+        return cls.sanitize_data(value, _parent_stack)
+
     @classmethod
-    def _sanitize_string(cls, text: str) -> str:
-        """Sanitize strings by removing PII patterns."""
+    def _sanitize_string(cls, text: str, _parent_stack) -> str:
+        """Sanitize strings by removing PII patterns. Audit if redacted."""
         import re
+        redacted = text
         for pattern in cls.PII_PATTERNS:
-            text = re.sub(pattern, '[REDACTED]', text)
-        return text
+            if re.search(pattern, redacted):
+                cls._audit_log.append({
+                    "event": "pii_pattern_redacted",
+                    "pattern": pattern,
+                    "stack": _parent_stack,
+                    "timestamp": time.time()
+                })
+                redacted = re.sub(pattern, '[REDACTED]', redacted)
+        return redacted
+
+    @classmethod
+    def get_audit_log(cls) -> list:
+        """Return the audit log of all sensitive value redactions."""
+        return list(cls._audit_log)
 
 
 class CloudWatchHandler(logging.Handler):
@@ -342,6 +365,38 @@ class ElasticsearchHandler(logging.Handler):
                             "environment": {"type": "keyword"},
                             "region": {"type": "keyword"}
                         }
+    """Main structured logger with multiple output handlers. Exposes security audit log."""
+                    "duration_ms": {"type": "float"},
+                    "error_details": {"type": "object"},
+                    "performance_metrics": {"type": "object"},
+                    "child_safety_flags": {"type": "object"},
+                    "compliance_tags": {"type": "keyword"}
+                }
+    @staticmethod
+    def get_security_audit_log() -> list:
+        """Expose the security audit log for sensitive value redactions."""
+        return SecurityFilter.get_audit_log()
+            },
+        index_mapping = {
+            "mappings": {
+                "properties": {
+                    "timestamp": {"type": "date"},
+                    "level": {"type": "keyword"},
+                    "category": {"type": "keyword"},
+                    "message": {"type": "text"},
+                    "logger_name": {"type": "keyword"},
+                    "context": {
+                        "properties": {
+                            "correlation_id": {"type": "keyword"},
+                            "trace_id": {"type": "keyword"},
+                            "user_id": {"type": "keyword"},
+                            "child_id": {"type": "keyword"},
+                            "session_id": {"type": "keyword"},
+                            "operation": {"type": "keyword"},
+                            "component": {"type": "keyword"},
+                            "environment": {"type": "keyword"},
+                            "region": {"type": "keyword"}
+                        }
                     },
                     "duration_ms": {"type": "float"},
                     "error_details": {"type": "object"},
@@ -357,36 +412,9 @@ class ElasticsearchHandler(logging.Handler):
                 "index.lifecycle.rollover_alias": self.index_name
             }
         }
-        
         try:
             if not self.client.indices.exists(index=self.index_name):
                 self.client.indices.create(index=self.index_name, body=index_mapping)
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"Failed to create Elasticsearch index: {e}")
-    
-    def emit(self, record):
-        """Emit a log record to Elasticsearch."""
-        if not self.client:
-            return
-        
-        try:
-            # Convert log record to structured format
-            log_data = json.loads(self.format(record))
-            
-            # Add Elasticsearch metadata
-            doc = {
-                "_index": self.index_name,
-                "_source": log_data
-            }
-            
-            self.buffer.append(doc)
-            
-            # Flush if needed
-            if (len(self.buffer) >= self.buffer_size or 
-                time.time() - self.last_flush >= self.flush_interval):
-                self._flush_buffer()
-                
         except Exception as e:
             import logging
             logging.getLogger(__name__).error(f"Elasticsearch logging error: {e}")
@@ -729,4 +757,7 @@ compliance_logger = get_logger("compliance", LogLevel.INFO)
 performance_logger = get_logger("performance", LogLevel.INFO)
 business_logger = get_logger("business", LogLevel.INFO)
 system_logger = get_logger("system", LogLevel.INFO)
+
 audit_logger = get_logger("audit", LogLevel.INFO)
+
+# --- End of structured_logger.py ---

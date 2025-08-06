@@ -43,7 +43,7 @@ from src.infrastructure.security.auth import get_current_user
 from src.infrastructure.security.input_validator import advanced_input_validator
 from src.infrastructure.security.rate_limiter_advanced import advanced_rate_limiter
 
-router = APIRouter()
+router = APIRouter(prefix="/api/v1/core", tags=["Core API"])
 logger = logging.getLogger(__name__)
 
 
@@ -58,26 +58,27 @@ async def validate_child_safety(
         "risk_score": 0.0,
         "coppa_compliant": True,
     }
-    
+
     # Input validation
     if not content or not isinstance(content, str):
         validation_result["is_safe"] = False
         validation_result["violations"].append("Invalid content format")
         return validation_result
-    
+
     if not isinstance(child_age, int) or child_age < 0:
         validation_result["is_safe"] = False
         validation_result["violations"].append("Invalid child age")
         return validation_result
-    
+
     if not child_id or not isinstance(child_id, str):
         validation_result["is_safe"] = False
         validation_result["violations"].append("Invalid child ID")
         return validation_result
-    
+
     # Sanitize child_id
     import re
-    child_id = re.sub(r'[^a-zA-Z0-9_-]', '', child_id[:50])
+
+    child_id = re.sub(r"[^a-zA-Z0-9_-]", "", child_id[:50])
 
     # COPPA age verification
     if child_age >= 13:
@@ -146,24 +147,26 @@ async def apply_security_guardrails(request: Request, endpoint: str) -> Dict[str
     try:
         # Extract and validate request information
         client_ip = request.client.host if request.client else "unknown"
-        
+
         # Validate IP address format
         if client_ip != "unknown":
             import ipaddress
+
             try:
                 ipaddress.ip_address(client_ip)
             except ValueError:
                 client_ip = "invalid"
                 security_result["violations"].append("Invalid IP address format")
-        
+
         user_agent = request.headers.get("user-agent", "")
-        
+
         # Sanitize user agent
         if user_agent:
             user_agent = user_agent[:500]  # Limit length
             # Remove potentially dangerous characters
             import re
-            user_agent = re.sub(r'[<>"\';\\]', '', user_agent)
+
+            user_agent = re.sub(r'[<>"\';\\]', "", user_agent)
 
         # Rate limiting check
         from src.infrastructure.security.rate_limiter_advanced import RateLimitScope
@@ -203,8 +206,18 @@ async def apply_security_guardrails(request: Request, endpoint: str) -> Dict[str
             security_result["metadata"]["suspicious_ua"] = True
 
         # Bot detection with more specific patterns
-        bot_patterns = ["bot", "crawler", "spider", "scraper", "automated", "curl", "wget"]
-        if user_agent and any(pattern in user_agent.lower() for pattern in bot_patterns):
+        bot_patterns = [
+            "bot",
+            "crawler",
+            "spider",
+            "scraper",
+            "automated",
+            "curl",
+            "wget",
+        ]
+        if user_agent and any(
+            pattern in user_agent.lower() for pattern in bot_patterns
+        ):
             # Allow legitimate bots but log them
             legitimate_bots = ["googlebot", "bingbot", "slackbot"]
             if not any(legit in user_agent.lower() for legit in legitimate_bots):
@@ -230,7 +243,9 @@ class ChatRequest(BaseModel):
     """Chat request with child safety validation."""
 
     message: str = Field(..., max_length=300, min_length=1, description="User message")
-    child_id: str = Field(..., min_length=1, max_length=50, description="Child identifier")
+    child_id: str = Field(
+        ..., min_length=1, max_length=50, description="Child identifier"
+    )
     child_name: str = Field(default="friend", max_length=30, min_length=1)
     child_age: int = Field(..., ge=3, le=13, description="Child age (3-13)")
 
@@ -249,7 +264,9 @@ class LoginRequest(BaseModel):
     """User login credentials."""
 
     email: str = Field(..., max_length=254, description="User email")
-    password: str = Field(..., min_length=8, max_length=128, description="User password")
+    password: str = Field(
+        ..., min_length=8, max_length=128, description="User password"
+    )
 
 
 class LoginResponse(BaseModel):
@@ -422,33 +439,37 @@ async def chat_with_ai(
                 # Get or create conversation for interaction tracking
                 try:
                     # Try to get existing conversation for this child
-                    conversations = await conversation_service.get_conversations_for_child(
-                        child_id=UUID(request.child_id),
-                        limit=1,
-                        include_completed=False
+                    conversations = (
+                        await conversation_service.get_conversations_for_child(
+                            child_id=UUID(request.child_id),
+                            limit=1,
+                            include_completed=False,
+                        )
                     )
-                    
+
                     if conversations:
                         # Use existing active conversation
                         conversation_id = str(conversations[0].id)
                     else:
                         # Create new conversation
-                        conversation_id = await conversation_service.create_conversation(
-                            child_id=request.child_id,
-                            metadata={
-                                "interaction_type": "chat",
-                                "started_via": "chat_endpoint"
-                            }
+                        conversation_id = (
+                            await conversation_service.create_conversation(
+                                child_id=request.child_id,
+                                metadata={
+                                    "interaction_type": "chat",
+                                    "started_via": "chat_endpoint",
+                                },
+                            )
                         )
-                    
+
                     # Store interaction record for dashboard display
                     await conversation_service.store_chat_interaction(
                         conversation_id=conversation_id,
                         user_message=request.message,
                         ai_response=ai_response.content,
-                        safety_score=ai_response.safety_score
+                        safety_score=ai_response.safety_score,
                     )
-                    
+
                 except Exception as interaction_error:
                     # Log error but don't fail the chat response
                     logger.warning(
@@ -1020,5 +1041,3 @@ async def get_security_status():
 # Security testing is restricted to development or staging environments
 
 
-# TODO: ESP32 WebSocket endpoint will be implemented here
-# This section has been cleared for production-ready implementation

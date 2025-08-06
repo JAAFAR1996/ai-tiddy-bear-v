@@ -20,13 +20,8 @@ from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass
 from enum import Enum
 
-# Internal imports
-from src.services.service_registry import (
-    get_user_service,
-    get_child_safety_service,
-    get_ai_service,
-    get_notification_service,
-)
+# Internal imports - use dynamic imports to avoid circular import
+# from src.services.service_registry import (...)  # Moved to methods
 from src.adapters.dashboard.child_monitor import ChildMonitor
 from src.adapters.dashboard.safety_controls import SafetyControls
 from src.adapters.dashboard.usage_reports import UsageReports
@@ -304,24 +299,36 @@ class DashboardServiceProvider:
         """Get user service instance."""
         if self._user_service:
             return self._user_service
+        # Dynamic import to avoid circular import
+        from src.services.service_registry import get_user_service
+
         return await get_user_service()
 
     async def get_safety_service(self):
         """Get child safety service instance."""
         if self._safety_service:
             return self._safety_service
+        # Dynamic import to avoid circular import
+        from src.services.service_registry import get_child_safety_service
+
         return await get_child_safety_service()
 
     async def get_ai_service(self):
         """Get AI service instance."""
         if self._ai_service:
             return self._ai_service
+        # Dynamic import to avoid circular import
+        from src.services.service_registry import get_ai_service
+
         return await get_ai_service()
 
     async def get_notification_service(self):
         """Get notification service instance."""
         if self._notification_service:
             return self._notification_service
+        # Dynamic import to avoid circular import
+        from src.services.service_registry import get_notification_service
+
         return await get_notification_service()
 
 
@@ -590,10 +597,10 @@ class ProductionParentDashboard:
         try:
             user_service = await self.service_provider.get_user_service()
             ai_service = await self.service_provider.get_ai_service()
-            
+
             # Get real activity data from services
             activity_data = await user_service.get_child_activity_summary(child_id)
-            
+
             return activity_data or {
                 "last_activity": None,
                 "safety_status": "unknown",
@@ -603,7 +610,10 @@ class ProductionParentDashboard:
                 "parental_controls_enabled": True,
             }
         except Exception as e:
-            logger.error(f"Error fetching child activity: {e}", extra={"correlation_id": correlation_id})
+            logger.error(
+                f"Error fetching child activity: {e}",
+                extra={"correlation_id": correlation_id},
+            )
             return {
                 "last_activity": None,
                 "safety_status": "error",
@@ -663,10 +673,10 @@ class ProductionParentDashboard:
         # Production environment only
         try:
             user_service = await self.service_provider.get_user_service()
-            
+
             # Get real usage data from database
             usage_data = await user_service.get_parent_usage_summary(parent_id)
-            
+
             return usage_data or {
                 "total_sessions_today": 0,
                 "total_time_today_minutes": 0,
@@ -1019,10 +1029,10 @@ class ProductionParentDashboard:
         try:
             user_service = await self.service_provider.get_user_service()
             ai_service = await self.service_provider.get_ai_service()
-            
+
             # Get real detailed usage from database
             detailed_usage = await user_service.get_child_detailed_usage(child_id)
-            
+
             return detailed_usage or {
                 "hourly_usage": {},
                 "weekly_sessions": {},

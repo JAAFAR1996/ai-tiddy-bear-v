@@ -177,7 +177,12 @@ async def _validate_connectivity(
     try:
         import asyncpg
 
-        conn = await asyncpg.connect(config.DATABASE_URL)
+        # asyncpg only accepts postgresql:// or postgres://
+        db_url = config.DATABASE_URL
+        if db_url.startswith("postgresql+asyncpg://"):
+            db_url = "postgresql://" + db_url[len("postgresql+asyncpg://") :]
+
+        conn = await asyncpg.connect(db_url)
 
         # Test basic query
         version = await conn.fetchval("SELECT version()")
@@ -328,12 +333,18 @@ def _validate_production_readiness(
             )
 
         # Check for development/test patterns
+        import re
+
         database_url = config.DATABASE_URL.lower()
+        allowed_schemes = ("postgresql://", "postgres://", "postgresql+asyncpg://")
+        if not database_url.startswith(allowed_schemes):
+            results["errors"].append(
+                "Database URL must use a supported PostgreSQL schema (postgresql://, postgres://, or postgresql+asyncpg://)"
+            )
         if "localhost" in database_url or "127.0.0.1" in database_url:
             results["errors"].append(
                 "❌ CRITICAL: Database URL contains localhost/127.0.0.1 in production"
             )
-
         if "test" in database_url and config.ENVIRONMENT == "production":
             results["errors"].append(
                 "❌ CRITICAL: Database URL contains 'test' in production environment"
@@ -347,44 +358,45 @@ def _validate_production_readiness(
             )
 
         # Stripe configuration checks
-        if hasattr(config, 'STRIPE_SECRET_KEY'):
-            if config.STRIPE_SECRET_KEY.startswith('sk_test_'):
+        if hasattr(config, "STRIPE_SECRET_KEY"):
+            if config.STRIPE_SECRET_KEY.startswith("sk_test_"):
                 results["errors"].append(
                     "❌ CRITICAL: Using Stripe test key in production environment"
                 )
-            elif not config.STRIPE_SECRET_KEY.startswith('sk_live_'):
+            elif not config.STRIPE_SECRET_KEY.startswith("sk_live_"):
                 results["warnings"].append(
                     "⚠️  Stripe secret key format unexpected (should start with sk_live_)"
                 )
 
-        if hasattr(config, 'STRIPE_PUBLISHABLE_KEY'):
-            if config.STRIPE_PUBLISHABLE_KEY.startswith('pk_test_'):
+        if hasattr(config, "STRIPE_PUBLISHABLE_KEY"):
+            if config.STRIPE_PUBLISHABLE_KEY.startswith("pk_test_"):
                 results["errors"].append(
                     "❌ CRITICAL: Using Stripe test publishable key in production environment"
                 )
-            elif not config.STRIPE_PUBLISHABLE_KEY.startswith('pk_live_'):
+            elif not config.STRIPE_PUBLISHABLE_KEY.startswith("pk_live_"):
                 results["warnings"].append(
                     "⚠️  Stripe publishable key format unexpected (should start with pk_live_)"
                 )
 
         # Optional but recommended settings
-        if hasattr(config, 'SENTRY_DSN') and not config.SENTRY_DSN:
+        if hasattr(config, "SENTRY_DSN") and not config.SENTRY_DSN:
             results["warnings"].append(
                 "⚠️  No Sentry DSN configured for production error tracking"
             )
 
         # Domain validation for production
-        production_patterns = ['aiteddybear.com', 'teddy-bear.com']
-        if not any(pattern in str(config.CORS_ALLOWED_ORIGINS) for pattern in production_patterns):
+        production_patterns = ["aiteddybear.com", "teddy-bear.com"]
+        if not any(
+            pattern in str(config.CORS_ALLOWED_ORIGINS)
+            for pattern in production_patterns
+        ):
             results["warnings"].append(
                 "⚠️  No production domain patterns found in CORS origins"
             )
 
         # Check for proper SSL enforcement
-        if hasattr(config, 'FORCE_HTTPS') and not config.FORCE_HTTPS:
-            results["warnings"].append(
-                "⚠️  HTTPS enforcement is disabled in production"
-            )
+        if hasattr(config, "FORCE_HTTPS") and not config.FORCE_HTTPS:
+            results["warnings"].append("⚠️  HTTPS enforcement is disabled in production")
 
 
 async def validate_and_report(config: ProductionConfig) -> bool:
@@ -400,37 +412,33 @@ async def validate_and_report(config: ProductionConfig) -> bool:
     try:
         results = await validate_production_config(config)
 
-        # Use logger instead of print statements
         logger.info("Configuration validation report generated")
-        logger.info(
-            "Security checks completed", security_checks=results["security_checks"]
-        )
-        logger.info(
-            "Connectivity checks completed",
-            connectivity_checks=results["connectivity_checks"],
-        )
-        logger.info(
-            "Performance checks completed",
-            performance_checks=results["performance_checks"],
-        )
+        logger.info(f"Security checks completed: {results['security_checks']}")
+        logger.info(f"Connectivity checks completed: {results['connectivity_checks']}")
+        logger.info(f"Performance checks completed: {results['performance_checks']}")
 
         if results["warnings"]:
-            logger.warning(
-                "Configuration warnings detected", warnings=results["warnings"]
-            )
+            logger.warning(f"Configuration warnings detected: {results['warnings']}")
 
         if results["valid"]:
             logger.info("✅ Configuration validation PASSED")
         else:
             logger.error("❌ Configuration validation FAILED")
 
-        return results["valid"]
+        return results
 
     except ConfigurationValidationError as e:
         logger.error(
-            "Configuration validation failed", error=str(e), error_type=type(e).__name__
+            f"Configuration validation failed: {str(e)} (type={type(e).__name__})"
         )
-        return False
+        return {
+            "valid": False,
+            "errors": [str(e)],
+            "warnings": [],
+            "security_checks": {},
+            "connectivity_checks": {},
+            "performance_checks": {},
+        }
 
 
 class COPPAValidator:

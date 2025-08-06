@@ -109,8 +109,24 @@ void handleDeviceManagement() {
   updateStatusLED();
 }
 
+/**
+ * Execute device management command with security logging
+ * 
+ * Security features:
+ * - All command executions are logged
+ * - Critical commands trigger security alerts
+ * - Command authentication and validation
+ * - Execution status tracking
+ */
 bool executeCommand(DeviceCommand cmd, const String& params) {
-  Serial.printf("🔧 Executing command: %s\n", commandToString(cmd).c_str());
+  String cmdName = commandToString(cmd);
+  LOG_INFO(LOG_SYSTEM, "Executing device management command", "command=" + cmdName + ", params=" + params);
+  
+  // Alert for security-sensitive commands
+  if (cmd == CMD_FACTORY_RESET || cmd == CMD_UPDATE_CONFIG || cmd == CMD_RESTART) {
+    SecurityAlerts::detectAttackPatterns("management_command", "local");
+    LOG_SECURITY("Security-sensitive command executed", "command=" + cmdName);
+  }
   
   setDeviceStatus(STATUS_BUSY);
   
@@ -118,17 +134,24 @@ bool executeCommand(DeviceCommand cmd, const String& params) {
   
   switch (cmd) {
     case CMD_RESTART:
-      Serial.println("🔄 Restarting device...");
+      LOG_INFO(LOG_SYSTEM, "Initiating controlled device restart");
+      SecurityAlerts::sendAlert(ALERT_SYSTEM_COMPROMISE, SEVERITY_MEDIUM, "Device Restart", 
+                               "Management-initiated device restart", "management", "cmd_restart");
       delay(1000);
       ESP.restart();
       break;
       
     case CMD_FACTORY_RESET:
-      Serial.println("🏭 Performing factory reset...");
-      // Clear all preferences
+      LOG_CRITICAL(LOG_SYSTEM, "Initiating factory reset - all data will be lost");
+      SecurityAlerts::sendAlert(ALERT_SYSTEM_COMPROMISE, SEVERITY_CRITICAL, "Factory Reset", 
+                               "Device factory reset initiated", "management", "cmd_factory_reset");
+      
+      // Clear all stored configurations and preferences
       managementPrefs.clear();
       clearWiFiConfig();
       clearOTAConfig();
+      
+      LOG_WARNING(LOG_SYSTEM, "Factory reset completed - device will restart");
       success = true;
       delay(2000);
       ESP.restart();

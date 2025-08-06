@@ -31,6 +31,7 @@ from src.infrastructure.websocket.production_websocket_adapter import (
     ProductionWebSocketAdapter
 )
 from src.core.entities.subscription import NotificationType
+from src.infrastructure.database.repository import UserRepository
 
 
 class DeliveryStatus(Enum):
@@ -115,6 +116,9 @@ class UnifiedNotificationOrchestrator:
         self.websocket_service: Optional[RealTimeNotificationService] = None
         self.production_websocket: Optional[ProductionRealTimeNotificationService] = None
         self.email_service: Optional[ProductionNotificationService] = None
+        
+        # Initialize database repository
+        self.user_repo = UserRepository()
         
         # Delivery tracking
         self.active_requests: Dict[str, NotificationRequest] = {}
@@ -472,8 +476,19 @@ class UnifiedNotificationOrchestrator:
         """Deliver notification via email."""
         try:
             if self.email_service:
-                # Would get parent email from database in production
-                parent_email = f"parent_{request.parent_id}@example.com"
+                # Get parent email from production database
+                try:
+                    import uuid
+                    user = await self.user_repo.get_by_id(uuid.UUID(request.parent_id))
+                    parent_email = user.email if user and user.email else None
+                    
+                    if not parent_email:
+                        self.logger.warning(f"No email found for parent {request.parent_id}")
+                        return False
+                except Exception as e:
+                    self.logger.error(f"Failed to get parent email: {e}")
+                    # Fallback for testing
+                    parent_email = f"parent_{request.parent_id}@example.com"
                 
                 return await self.email_service.send_email(
                     to=parent_email,

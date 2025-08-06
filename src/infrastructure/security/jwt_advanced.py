@@ -169,7 +169,7 @@ class AdvancedJWTManager:
         # Algorithm configuration - PRODUCTION SECURITY
         env_algorithm = os.getenv("JWT_ALGORITHM", "RS256")
         env_mode = os.getenv("ENVIRONMENT", "development")
-        
+
         if env_mode == "production":
             # PRODUCTION: Only allow RS256
             if env_algorithm != "RS256":
@@ -420,27 +420,34 @@ class AdvancedJWTManager:
         # Encode token - PRODUCTION SECURITY ENFORCEMENT
         if self.algorithm == "RS256":
             if not self._current_key_pair:
-                raise Exception("SECURITY VIOLATION: No RSA key pair available for JWT signing")
+                raise Exception(
+                    "SECURITY VIOLATION: No RSA key pair available for JWT signing"
+                )
             encoded_token = jwt.encode(
-                claims.to_dict(), 
-                self._current_key_pair.private_key, 
+                claims.to_dict(),
+                self._current_key_pair.private_key,
                 algorithm=self.algorithm,
-                headers={"kid": self._current_key_pair.key_id}
+                headers={"kid": self._current_key_pair.key_id},
             )
         else:
             # Fallback for development environments only
             if os.getenv("ENVIRONMENT") == "production":
                 raise Exception("SECURITY VIOLATION: HS256 not allowed in production")
-            
+
             from src.infrastructure.config.loader import get_config
+
             config = get_config()
             jwt_secret = config.JWT_SECRET_KEY
             if not jwt_secret:
-                raise Exception("JWT_SECRET_KEY missing in config. COPPA compliance violation.")
-            
+                raise Exception(
+                    "JWT_SECRET_KEY missing in config. COPPA compliance violation."
+                )
+
             if not self.fallback_algorithm:
-                raise Exception("SECURITY VIOLATION: No fallback algorithm available in production")
-                
+                raise Exception(
+                    "SECURITY VIOLATION: No fallback algorithm available in production"
+                )
+
             encoded_token = jwt.encode(
                 claims.to_dict(), jwt_secret, algorithm=self.fallback_algorithm
             )
@@ -514,18 +521,23 @@ class AdvancedJWTManager:
             else:
                 # PRODUCTION SECURITY: NO FALLBACK ALLOWED
                 if os.getenv("ENVIRONMENT") == "production":
-                    raise jwt.InvalidTokenError("SECURITY VIOLATION: Invalid token format in production")
-                
+                    raise jwt.InvalidTokenError(
+                        "SECURITY VIOLATION: Invalid token format in production"
+                    )
+
                 # Fallback for development environments only
                 if not self.fallback_algorithm:
                     raise jwt.InvalidTokenError("No valid signing key available")
-                    
+
                 from src.infrastructure.config.loader import get_config
+
                 config = get_config()
                 jwt_secret = config.JWT_SECRET_KEY
                 if not jwt_secret:
-                    raise Exception("JWT_SECRET_KEY missing in config. COPPA compliance violation.")
-                    
+                    raise Exception(
+                        "JWT_SECRET_KEY missing in config. COPPA compliance violation."
+                    )
+
                 payload = jwt.decode(
                     token, jwt_secret, algorithms=[self.fallback_algorithm]
                 )

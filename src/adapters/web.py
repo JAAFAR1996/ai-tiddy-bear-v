@@ -1,3 +1,48 @@
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from src.infrastructure.routing.route_manager import RouteManager, register_all_routers
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+
+# Simple admin_guard fallback (JWT with 'role'=='admin')
+def admin_guard(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())):
+    import jwt
+
+    try:
+        payload = jwt.decode(credentials.credentials, "secret", algorithms=["HS256"])
+        if payload.get("role") != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
+            )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin token"
+        )
+
+
+router = APIRouter(
+    prefix="/web",
+    tags=["Web Interface"],
+)
+
+# ...existing routes...
+
+
+# Admin healthcheck endpoint
+@router.get("/admin/routes/health", tags=["Admin"], dependencies=[Depends(admin_guard)])
+async def admin_routes_health():
+    summary = route_manager.get_registration_summary()
+    return {
+        "status": summary["route_health"],
+        "total_routes": summary["total_routes"],
+        "total_prefixes": summary["total_prefixes"],
+        "conflicts_detected": summary["conflicts_detected"],
+        "prefixes": summary["prefixes"],
+        "routes_by_router": summary["routes_by_router"],
+        "last_scan": summary["registration_timestamp"],
+        "errors": summary["errors"],
+    }
+
+
 """
 🧸 AI TEDDY BEAR V5 - WEB INTERFACE
 Secure dashboard web interface with authentication and error handling.
@@ -10,9 +55,35 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from src.application.dependencies import AuthServiceDep
 from src.adapters.database_production import get_database_adapter
+from pathlib import Path
+import os
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="/web", tags=["Web Interface"])
+
+# Dynamic template path
+TEMPLATE_DIR = Path(__file__).parent / "templates"
+
+try:
+    templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
+    templates.env.autoescape = True  # Enable auto-escaping
+    # Check for required templates at startup
+    required_templates = [
+        "dashboard.html",
+        "child_profile.html",
+        "reports.html",
+        "settings.html",
+    ]
+    missing = []
+    for tpl in required_templates:
+        if not (TEMPLATE_DIR / tpl).is_file():
+            missing.append(tpl)
+    if missing:
+        logger.warning(f"Missing required template files: {missing} in {TEMPLATE_DIR}")
+except Exception as e:
+    logger.error(f"Failed to load templates: {e}")
+    templates = None
+
 
 def _sanitize_template_data(data):
     """Sanitize data before passing to templates to prevent XSS."""
@@ -25,14 +96,6 @@ def _sanitize_template_data(data):
     else:
         return data
 
-try:
-    templates = Jinja2Templates(directory="src/adapters/dashboard/templates")
-    # Configure Jinja2 for security
-    templates.env.autoescape = True  # Enable auto-escaping
-except Exception as e:
-    logger.error(f"Failed to load templates: {e}")
-    templates = None
-
 
 async def get_current_user(auth_service=AuthServiceDep):
     """Get authenticated user from token."""
@@ -44,14 +107,14 @@ async def get_current_user(auth_service=AuthServiceDep):
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required"
+                detail="Authentication required",
             )
         return user
     except Exception as e:
         logger.error(f"Authentication failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired authentication"
+            detail="Invalid or expired authentication",
         )
 
 
@@ -105,10 +168,13 @@ async def child_profile(
 
     try:
         # Sanitize data before passing to template
-        safe_child = _sanitize_template_data(child.__dict__ if hasattr(child, '__dict__') else child)
+        safe_child = _sanitize_template_data(
+            child.__dict__ if hasattr(child, "__dict__") else child
+        )
         safe_user = _sanitize_template_data(user)
         return templates.TemplateResponse(
-            "child_profile.html", {"request": request, "child": safe_child, "user": safe_user}
+            "child_profile.html",
+            {"request": request, "child": safe_child, "user": safe_user},
         )
     except Exception as e:
         logger.error(f"Child profile template error: {e}")

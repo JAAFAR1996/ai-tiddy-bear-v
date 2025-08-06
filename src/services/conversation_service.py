@@ -92,9 +92,9 @@ class ConsolidatedConversationService(IConversationService):
     def __init__(
         self,
         conversation_repository: ConversationRepository,
-        message_repository=None,
-        notification_service=None,
-        logger=None,
+        message_repository,  # Required dependency - no None default
+        notification_service,  # Required dependency - no None default
+        logger,  # Required dependency - no None default
         max_conversation_length: int = 100,
         context_window_size: int = 10,
         enable_metrics: bool = True,
@@ -105,13 +105,14 @@ class ConsolidatedConversationService(IConversationService):
 
         Args:
             conversation_repository: Repository for conversation persistence
-            message_repository: Repository for message persistence
-            notification_service: External notification service
+            message_repository: Repository for message persistence (required)
+            notification_service: External notification service (required)
+            logger: Logger instance for service (required)
             max_conversation_length: Maximum messages per conversation
             context_window_size: Number of recent messages to include in context
             enable_metrics: Enable production monitoring and metrics
             metrics_level: Level of metrics collection
-            conversation_cache_service: Redis cache service for conversations
+            conversation_cache_service: Redis cache service for conversations (optional)
         """
         self.conversation_repo = conversation_repository
         self.message_repo = message_repository
@@ -550,30 +551,39 @@ class ConsolidatedConversationService(IConversationService):
             # Enhanced real-time safety monitoring for user messages
             if message_type == MessageType.USER_INPUT:
                 # Use enhanced safety service if available
-                if hasattr(self, 'safety_service') and hasattr(self.safety_service, 'monitor_conversation_real_time'):
+                if hasattr(self, "safety_service") and hasattr(
+                    self.safety_service, "monitor_conversation_real_time"
+                ):
                     try:
                         # Get child age from conversation context
-                        child_age = conversation.metadata.get('child_age', 8)
-                        child_id = conversation.metadata.get('child_id')
-                        
+                        child_age = conversation.metadata.get("child_age", 8)
+                        child_id = conversation.metadata.get("child_id")
+
                         if child_id:
                             from uuid import UUID
+
                             safety_result = await self.safety_service.monitor_conversation_real_time(
                                 conversation_id=UUID(str(conversation_id)),
                                 child_id=UUID(child_id),
                                 message_content=content,
-                                child_age=child_age
+                                child_age=child_age,
                             )
-                            
+
                             # Handle safety actions
-                            for action in safety_result.get('monitoring_actions', []):
-                                if action['action'] == 'BLOCK_CONVERSATION':
-                                    await self._handle_conversation_block(conversation_id, action['reason'])
+                            for action in safety_result.get("monitoring_actions", []):
+                                if action["action"] == "BLOCK_CONVERSATION":
+                                    await self._handle_conversation_block(
+                                        conversation_id, action["reason"]
+                                    )
                                     return message  # Block further processing
-                                elif action['action'] == 'EMERGENCY_ALERT':
-                                    await self._handle_emergency_alert(conversation_id, safety_result)
-                                elif action['action'] == 'NOTIFY_PARENT':
-                                    await self._schedule_parent_notification(conversation_id, safety_result)
+                                elif action["action"] == "EMERGENCY_ALERT":
+                                    await self._handle_emergency_alert(
+                                        conversation_id, safety_result
+                                    )
+                                elif action["action"] == "NOTIFY_PARENT":
+                                    await self._schedule_parent_notification(
+                                        conversation_id, safety_result
+                                    )
                         else:
                             # Fallback to basic safety check
                             safety_result = await self._check_message_safety(content)
@@ -584,7 +594,7 @@ class ConsolidatedConversationService(IConversationService):
                 else:
                     # Basic safety check
                     safety_result = await self._check_message_safety(content)
-                
+
                 # Handle safety incidents if needed
                 if not safety_result.get("is_safe", True):
                     await self._handle_safety_incident(
@@ -1023,13 +1033,40 @@ class ConsolidatedConversationService(IConversationService):
 
         if severity in [IncidentSeverity.HIGH, IncidentSeverity.CRITICAL]:
             conversation = await self.get_conversation_internal(conversation_id)
-            await self.send_notification(
-                recipient_id=conversation.child_id,  # Would send to parent in production
-                notification_type="safety_alert",
-                title="Safety Alert",
-                message=f"A {severity.value} safety incident has been reported.",
-                metadata={"incident_id": incident_id},
-            )
+            
+            # Get parent ID from child record - CRITICAL FIX
+            try:
+                from src.infrastructure.database.repository import ChildRepository
+                import uuid
+                
+                child_repo = ChildRepository()
+                child = await child_repo.get_by_id(uuid.UUID(conversation.child_id))
+                
+                if child and child.parent_id:
+                    parent_id = str(child.parent_id)
+                    
+                    # Send notification to PARENT, not child
+                    await self.send_notification(
+                        recipient_id=parent_id,  # ✅ FIXED: Send to parent, not child
+                        notification_type="safety_alert",
+                        title="🚨 Child Safety Alert",
+                        message=f"A {severity.value} safety incident involving your child has been detected and addressed.",
+                        metadata={
+                            "incident_id": incident_id,
+                            "child_id": conversation.child_id,
+                            "incident_type": incident_type,
+                            "severity": severity.value,
+                            "timestamp": datetime.utcnow().isoformat()
+                        },
+                    )
+                    self.logger.info(f"Safety alert sent to parent {parent_id} for child {conversation.child_id}")
+                else:
+                    self.logger.error(f"Could not find parent for child {conversation.child_id}")
+                    
+            except Exception as e:
+                self.logger.error(f"Failed to send safety alert to parent: {e}")
+                # Fallback - at least log the incident
+                self.logger.critical(f"SAFETY INCIDENT {incident_id}: {incident_type} - {severity.value}")
 
         self.safety_incidents += 1
 
@@ -1157,8 +1194,10 @@ class ConsolidatedConversationService(IConversationService):
                     f"Failed to create conversation for child {safe_child_id}: {safe_error}"
                 )
             raise ServiceUnavailableError(f"Failed to create conversation: {e}")
-    
-    async def _handle_conversation_block(self, conversation_id: UUID, reason: str) -> None:
+
+    async def _handle_conversation_block(
+        self, conversation_id: UUID, reason: str
+    ) -> None:
         """Handle conversation blocking due to safety violations."""
         try:
             conversation = await self.get_conversation_internal(conversation_id)
@@ -1167,20 +1206,22 @@ class ConsolidatedConversationService(IConversationService):
                 conversation.metadata["blocked"] = True
                 conversation.metadata["block_reason"] = reason
                 conversation.metadata["blocked_at"] = datetime.now().isoformat()
-                
+
                 await self.report_safety_incident(
                     conversation_id=conversation_id,
                     incident_type="conversation_blocked",
                     severity=IncidentSeverity.HIGH,
                     description=f"Conversation blocked: {reason}",
-                    metadata={"block_reason": reason}
+                    metadata={"block_reason": reason},
                 )
-                
+
                 self.logger.warning(f"Conversation {conversation_id} blocked: {reason}")
         except Exception as e:
             self.logger.error(f"Failed to block conversation {conversation_id}: {e}")
-    
-    async def _handle_emergency_alert(self, conversation_id: UUID, safety_result: Dict[str, Any]) -> None:
+
+    async def _handle_emergency_alert(
+        self, conversation_id: UUID, safety_result: Dict[str, Any]
+    ) -> None:
         """Handle emergency safety alerts with unified notification system."""
         try:
             await self.report_safety_incident(
@@ -1191,27 +1232,32 @@ class ConsolidatedConversationService(IConversationService):
                 metadata={
                     "safety_result": safety_result,
                     "triggered_rules": safety_result.get("triggered_rules", []),
-                    "pii_detected": safety_result.get("pii_detected", False)
-                }
+                    "pii_detected": safety_result.get("pii_detected", False),
+                },
             )
-            
+
             # Set conversation to under review
             conversation = await self.get_conversation_internal(conversation_id)
             if conversation:
                 conversation.status = ConversationStatus.UNDER_REVIEW.value
                 conversation.metadata["emergency_alert"] = True
                 conversation.metadata["alert_time"] = datetime.now().isoformat()
-                
+
                 # Get parent ID for emergency notification
                 parent_id = conversation.metadata.get("parent_id")
-                child_id = conversation.metadata.get("child_id", str(conversation.child_id))
-                
+                child_id = conversation.metadata.get(
+                    "child_id", str(conversation.child_id)
+                )
+
                 if parent_id:
                     # Send emergency alert via unified notification orchestrator
                     try:
-                        from src.application.services.realtime.unified_notification_orchestrator import get_notification_orchestrator
+                        from src.application.services.realtime.unified_notification_orchestrator import (
+                            get_notification_orchestrator,
+                        )
+
                         orchestrator = get_notification_orchestrator()
-                        
+
                         emergency_data = {
                             "conversation_id": str(conversation_id),
                             "message": f"Emergency safety alert: Risk score {safety_result.get('risk_score', 0):.2f}",
@@ -1219,26 +1265,39 @@ class ConsolidatedConversationService(IConversationService):
                             "triggered_rules": safety_result.get("triggered_rules", []),
                             "detected_issues": safety_result.get("detected_issues", []),
                             "pii_detected": safety_result.get("pii_detected", False),
-                            "immediate_actions": ["Review conversation immediately", "Contact child if needed"],
-                            "alert_id": f"emergency_{int(datetime.now().timestamp())}"
+                            "immediate_actions": [
+                                "Review conversation immediately",
+                                "Contact child if needed",
+                            ],
+                            "alert_id": f"emergency_{int(datetime.now().timestamp())}",
                         }
-                        
+
                         await orchestrator.send_emergency_alert(
                             child_id=child_id,
                             parent_id=parent_id,
-                            emergency_data=emergency_data
+                            emergency_data=emergency_data,
                         )
-                        
-                        self.logger.info(f"Emergency notification sent to parent {parent_id} for conversation {conversation_id}")
-                        
+
+                        self.logger.info(
+                            f"Emergency notification sent to parent {parent_id} for conversation {conversation_id}"
+                        )
+
                     except Exception as notif_error:
-                        self.logger.error(f"Failed to send emergency notification: {notif_error}")
-            
-            self.logger.critical(f"Emergency alert triggered for conversation {conversation_id}")
+                        self.logger.error(
+                            f"Failed to send emergency notification: {notif_error}"
+                        )
+
+            self.logger.critical(
+                f"Emergency alert triggered for conversation {conversation_id}"
+            )
         except Exception as e:
-            self.logger.error(f"Failed to handle emergency alert for {conversation_id}: {e}")
-    
-    async def _schedule_parent_notification(self, conversation_id: UUID, safety_result: Dict[str, Any]) -> None:
+            self.logger.error(
+                f"Failed to handle emergency alert for {conversation_id}: {e}"
+            )
+
+    async def _schedule_parent_notification(
+        self, conversation_id: UUID, safety_result: Dict[str, Any]
+    ) -> None:
         """Schedule parent notification for concerning content with unified notification system."""
         try:
             await self.report_safety_incident(
@@ -1248,62 +1307,77 @@ class ConsolidatedConversationService(IConversationService):
                 description=f"Parent notification scheduled: Risk score {safety_result.get('risk_score', 0):.2f}",
                 metadata={
                     "safety_result": safety_result,
-                    "notification_type": "safety_concern"
-                }
+                    "notification_type": "safety_concern",
+                },
             )
-            
+
             # Add to conversation metadata for parent review
             conversation = await self.get_conversation_internal(conversation_id)
             if conversation:
                 if "parent_notifications" not in conversation.metadata:
                     conversation.metadata["parent_notifications"] = []
-                
-                conversation.metadata["parent_notifications"].append({
-                    "type": "safety_concern",
-                    "scheduled_at": datetime.now().isoformat(),
-                    "risk_score": safety_result.get('risk_score', 0),
-                    "issues": safety_result.get('issues', [])
-                })
-                
+
+                conversation.metadata["parent_notifications"].append(
+                    {
+                        "type": "safety_concern",
+                        "scheduled_at": datetime.now().isoformat(),
+                        "risk_score": safety_result.get("risk_score", 0),
+                        "issues": safety_result.get("issues", []),
+                    }
+                )
+
                 # Get parent and child IDs for notification
                 parent_id = conversation.metadata.get("parent_id")
-                child_id = conversation.metadata.get("child_id", str(conversation.child_id))
-                
+                child_id = conversation.metadata.get(
+                    "child_id", str(conversation.child_id)
+                )
+
                 if parent_id:
                     # Send safety alert via unified notification orchestrator
                     try:
-                        from src.application.services.realtime.unified_notification_orchestrator import get_notification_orchestrator
+                        from src.application.services.realtime.unified_notification_orchestrator import (
+                            get_notification_orchestrator,
+                        )
+
                         orchestrator = get_notification_orchestrator()
-                        
+
                         # Prepare safety alert data
                         alert_data = {
                             "conversation_id": str(conversation_id),
-                            "safety_score": safety_result.get('safety_score', 100),
+                            "safety_score": safety_result.get("safety_score", 100),
                             "event_type": "safety_concern",
-                            "detected_issues": safety_result.get('detected_issues', []),
-                            "triggered_rules": safety_result.get('triggered_rules', []),
-                            "child_age": safety_result.get('child_age', 8),
+                            "detected_issues": safety_result.get("detected_issues", []),
+                            "triggered_rules": safety_result.get("triggered_rules", []),
+                            "child_age": safety_result.get("child_age", 8),
                             "recommendations": [
                                 "Review the conversation with your child",
                                 "Discuss appropriate online behavior",
-                                "Monitor future interactions"
-                            ]
+                                "Monitor future interactions",
+                            ],
                         }
-                        
+
                         await orchestrator.send_safety_alert(
                             child_id=child_id,
                             parent_id=parent_id,
-                            safety_result=alert_data
+                            safety_result=alert_data,
                         )
-                        
-                        self.logger.info(f"Safety notification sent to parent {parent_id} for conversation {conversation_id}")
-                        
+
+                        self.logger.info(
+                            f"Safety notification sent to parent {parent_id} for conversation {conversation_id}"
+                        )
+
                     except Exception as notif_error:
-                        self.logger.error(f"Failed to send safety notification: {notif_error}")
-            
-            self.logger.info(f"Parent notification scheduled for conversation {conversation_id}")
+                        self.logger.error(
+                            f"Failed to send safety notification: {notif_error}"
+                        )
+
+            self.logger.info(
+                f"Parent notification scheduled for conversation {conversation_id}"
+            )
         except Exception as e:
-            self.logger.error(f"Failed to schedule parent notification for {conversation_id}: {e}")
+            self.logger.error(
+                f"Failed to schedule parent notification for {conversation_id}: {e}"
+            )
 
     async def add_message(self, conversation_id: str, message: Dict[str, Any]) -> bool:
         """Add message to conversation (IConversationService interface compliance).
@@ -1555,13 +1629,13 @@ class ConsolidatedConversationService(IConversationService):
         safety_score: float = 100.0,
         flagged: bool = False,
         flag_reason: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """Create interaction record in the interactions table for dashboard display.
-        
+
         This method bridges the gap between Message entities and the interactions
         table used by dashboard_routes.py for parent dashboard display.
-        
+
         Args:
             conversation_id: UUID of the conversation
             user_message: User's message content
@@ -1570,14 +1644,14 @@ class ConsolidatedConversationService(IConversationService):
             flagged: Whether interaction is flagged
             flag_reason: Reason for flagging
             metadata: Additional metadata
-            
+
         Returns:
             True if interaction created successfully
         """
         try:
             # Get database session (we need to handle this differently)
             from src.infrastructure.database.database_manager import database_manager
-            
+
             async with database_manager.get_session() as db_session:
                 # Create interaction record
                 interaction = InteractionModel(
@@ -1590,33 +1664,37 @@ class ConsolidatedConversationService(IConversationService):
                     flag_reason=flag_reason if flagged else None,
                     content_metadata=metadata or {},
                     created_by=None,  # Could be set to child_id if needed
-                    retention_status='active'
+                    retention_status="active",
                 )
-                
+
                 # Save to database
                 db_session.add(interaction)
                 await db_session.commit()
-                
+
                 if self.logger:
-                    safe_conv_id = str(conversation_id).replace("\n", "").replace("\r", "")[:50]
+                    safe_conv_id = (
+                        str(conversation_id).replace("\n", "").replace("\r", "")[:50]
+                    )
                     self.logger.info(
                         f"Interaction record created for conversation {safe_conv_id}",
                         extra={
                             "conversation_id": safe_conv_id,
                             "safety_score": safety_score,
-                            "flagged": flagged
-                        }
+                            "flagged": flagged,
+                        },
                     )
-                
+
                 return True
-                
+
         except Exception as e:
             if self.logger:
-                safe_conv_id = str(conversation_id).replace("\n", "").replace("\r", "")[:50]
+                safe_conv_id = (
+                    str(conversation_id).replace("\n", "").replace("\r", "")[:50]
+                )
                 safe_error = str(e).replace("\n", "").replace("\r", "")[:200]
                 self.logger.error(
                     f"Failed to create interaction record for {safe_conv_id}: {safe_error}",
-                    exc_info=True
+                    exc_info=True,
                 )
             return False
 
@@ -1625,27 +1703,27 @@ class ConsolidatedConversationService(IConversationService):
         conversation_id: str,
         user_message: str,
         ai_response: str,
-        safety_score: float = 100.0
+        safety_score: float = 100.0,
     ) -> bool:
         """Convenience method to store chat interactions from the chat endpoint.
-        
+
         Args:
             conversation_id: Conversation ID as string
             user_message: User's message content
             ai_response: AI's response content
             safety_score: Safety score from AI processing
-            
+
         Returns:
             True if interaction stored successfully
         """
         try:
             # Convert string ID to UUID
             conv_uuid = UUID(conversation_id)
-            
+
             # Determine if content should be flagged
             flagged = safety_score < 80.0
             flag_reason = "Low safety score detected" if flagged else None
-            
+
             # Store interaction with metadata
             success = await self.create_interaction_record(
                 conversation_id=conv_uuid,
@@ -1657,15 +1735,17 @@ class ConsolidatedConversationService(IConversationService):
                 metadata={
                     "stored_via": "chat_endpoint",
                     "processing_timestamp": datetime.utcnow().isoformat(),
-                    "ai_model": "production_model"
-                }
+                    "ai_model": "production_model",
+                },
             )
-            
+
             return success
-            
+
         except Exception as e:
             if self.logger:
-                safe_conv_id = str(conversation_id).replace("\n", "").replace("\r", "")[:50]
+                safe_conv_id = (
+                    str(conversation_id).replace("\n", "").replace("\r", "")[:50]
+                )
                 safe_error = str(e).replace("\n", "").replace("\r", "")[:200]
                 self.logger.error(
                     f"Failed to store chat interaction for {safe_conv_id}: {safe_error}"

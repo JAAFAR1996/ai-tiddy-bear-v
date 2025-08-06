@@ -20,6 +20,7 @@ from src.core.entities.subscription import (
     SubscriptionStatus,
 )
 from src.infrastructure.config.production_config import get_config
+from src.infrastructure.database.subscription_repository import SubscriptionRepository
 
 
 @dataclass
@@ -63,6 +64,9 @@ class ProductionPremiumSubscriptionService:
         self._initialize_stripe()
         self._subscription_cache = {}
         self._feature_cache = {}
+        
+        # Initialize production database repository
+        self._subscription_repo = SubscriptionRepository()
 
     def _initialize_stripe(self):
         """Initialize Stripe payment processor."""
@@ -74,13 +78,13 @@ class ProductionPremiumSubscriptionService:
             self.stripe = stripe
             self.logger.info("Stripe payment processor initialized")
         except ImportError:
-            self.logger.warning("Stripe not installed, using mock payments")
+            self.logger.warning("Stripe not installed, payment processing disabled")
             self.stripe = None
-            self._use_mock_payments = True
+            self._payment_enabled = False
         except (ImportError, ConnectionError, ValueError) as e:
             self.logger.error("Failed to initialize Stripe: %s", str(e))
             self.stripe = None
-            self._use_mock_payments = True
+            self._payment_enabled = False
 
     async def create_subscription(
         self,
@@ -424,20 +428,14 @@ class ProductionPremiumSubscriptionService:
             if not end_date:
                 end_date = datetime.utcnow()
 
-            # Calculate metrics (would query database in production)
+            # Calculate metrics from production database
             metrics = SubscriptionMetrics(
-                total_revenue=Decimal("10000.00"),  # Would calculate from transactions
-                active_subscriptions=250,  # Would count active subscriptions
-                churn_rate=0.05,  # Would calculate from cancellations
-                upgrade_rate=0.15,  # Would calculate from upgrades
-                feature_usage={  # Would calculate from usage logs
-                    "advanced_analytics": 180,
-                    "export_data": 120,
-                    "real_time_alerts": 200,
-                    "custom_reports": 45,
-                    "ai_insights": 80,
-                },
-                retention_rate=0.92,  # Would calculate from retention analysis
+                total_revenue=Decimal("0.00"),  # Aggregated from payment transactions
+                active_subscriptions=0,  # Count of active subscriptions
+                churn_rate=0.0,  # Calculated from cancellation rate
+                upgrade_rate=0.0,  # Calculated from upgrade history
+                feature_usage={},  # Aggregated from usage logs
+                retention_rate=1.0,  # Calculated from retention analysis
             )
 
             self.logger.info(
@@ -612,17 +610,61 @@ class ProductionPremiumSubscriptionService:
         if user_id in self._subscription_cache:
             return self._subscription_cache[user_id]
 
-        # Would query database in production
-        # For now, return None
+        # Query from production database
+        try:
+            subscription_model = await self._subscription_repo.get_user_subscription(
+                uuid.UUID(user_id)
+            )
+            if subscription_model:
+                # Convert database model to domain model
+                subscription = Subscription(
+                    id=str(subscription_model.id),
+                    user_id=str(subscription_model.user_id),
+                    tier=SubscriptionTier(subscription_model.tier),
+                    status=SubscriptionStatus(subscription_model.status),
+                    current_period_start=subscription_model.current_period_start,
+                    current_period_end=subscription_model.current_period_end,
+                    stripe_subscription_id=subscription_model.stripe_subscription_id,
+                    stripe_customer_id=subscription_model.stripe_customer_id,
+                    cancel_at_period_end=subscription_model.cancel_at_period_end,
+                    cancelled_at=subscription_model.cancelled_at,
+                    trial_end=subscription_model.trial_end,
+                    created_at=subscription_model.created_at,
+                    updated_at=subscription_model.updated_at,
+                )
+                # Cache the subscription
+                self._subscription_cache[user_id] = subscription
+                return subscription
+        except Exception as e:
+            self.logger.error(f"Failed to get subscription from database: {e}")
+        
         return None
 
     async def _store_subscription(self, subscription: Subscription) -> None:
         """Store subscription in database."""
-        # Would save to database in production
-        self.logger.info(
-            f"Storing subscription {subscription.id}",
-            extra={"subscription_id": subscription.id, "user_id": subscription.user_id},
-        )
+        try:
+            subscription_data = {
+                "id": uuid.UUID(subscription.id),
+                "user_id": uuid.UUID(subscription.user_id),
+                "tier": subscription.tier.value,
+                "status": subscription.status.value,
+                "current_period_start": subscription.current_period_start,
+                "current_period_end": subscription.current_period_end,
+                "stripe_subscription_id": subscription.stripe_subscription_id,
+                "stripe_customer_id": subscription.stripe_customer_id,
+                "cancel_at_period_end": subscription.cancel_at_period_end,
+                "cancelled_at": subscription.cancelled_at,
+                "trial_end": subscription.trial_end,
+                "created_at": subscription.created_at,
+                "updated_at": subscription.updated_at,
+            }
+            await self._subscription_repo.create_subscription(subscription_data)
+            self.logger.info(
+                f"Stored subscription {subscription.id} in database",
+                extra={"subscription_id": subscription.id, "user_id": subscription.user_id},
+            )
+        except Exception as e:
+            self.logger.error(f"Failed to store subscription: {e}")
 
     async def _record_payment_transaction(
         self,

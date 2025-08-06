@@ -1,3 +1,57 @@
+# --- Unified, production-grade configuration initialization ---
+async def initialize_configuration():
+    """Initialize and validate configuration at startup with secure error handling."""
+    correlation_id = secrets.token_hex(8)
+
+    try:
+        config = load_config()
+        validation_results = await validate_and_report(config)
+        if validation_results["valid"]:
+            logger.info("✅ Configuration validation successful")
+            for category in [
+                "security_checks",
+                "connectivity_checks",
+                "performance_checks",
+            ]:
+                status = validation_results.get(category, {})
+                logger.info("%s: %s", category, status)
+        else:
+            logger.critical("❌ Configuration validation failed")
+            for category in [
+                "security_checks",
+                "connectivity_checks",
+                "performance_checks",
+            ]:
+                status = validation_results.get(category, {})
+                logger.critical("%s: %s", category, status)
+            if getattr(config, "ENVIRONMENT", None) == "production":
+                logger.critical(
+                    "🚨 ABORTING: Cannot start with invalid production configuration (ID: %s)",
+                    correlation_id,
+                )
+                sys.exit(1)
+            else:
+                logger.warning(
+                    "⚠️ Continuing with development mode despite validation warnings (ID: %s)",
+                    correlation_id,
+                )
+        return config
+    except ImportError as e:
+        logger.critical(
+            "🚨 CRITICAL: Configuration module import failed (ID: %s) - Module: %s",
+            correlation_id,
+            e.name if hasattr(e, "name") else "unknown",
+        )
+        sys.exit(1)
+    except Exception as e:
+        logger.critical(
+            "🚨 CRITICAL: Configuration initialization failed (ID: %s) - Error: %s",
+            correlation_id,
+            str(e),
+        )
+        sys.exit(1)
+
+
 """
 AI Teddy Bear - Production-Hardened FastAPI Application
 Enterprise-grade security with child protection and COPPA compliance
@@ -68,88 +122,6 @@ except ImportError as e:
 
 
 # UNIFIED CONFIGURATION SYSTEM
-
-
-async def initialize_configuration():
-    """Initialize and validate configuration at startup with secure error handling."""
-    correlation_id = secrets.token_hex(8)  # Generate correlation ID for tracking
-
-    try:
-        # Load configuration with validation
-        config = load_config()
-
-        # Run comprehensive validation
-        validation_results = await validate_and_report(config)
-
-        if validation_results["validation_passed"]:
-            logger.info("✅ Configuration validation successful")
-            for category, status in validation_results["categories"].items():
-                if status["valid"]:
-                    logger.info("✅ %s: Valid", category.replace("_", " ").title())
-                else:
-                    logger.warning(
-                        "⚠️ %s: Issues found", category.replace("_", " ").title()
-                    )
-                    for error in status["errors"]:
-                        # Sanitize error messages to prevent information leakage
-                        sanitized_error = str(error).replace(
-                            os.environ.get("SECRET_KEY", ""), "[REDACTED]"
-                        )
-                        logger.warning("   - %s", sanitized_error)
-        else:
-            logger.critical("❌ Configuration validation failed")
-            for category, status in validation_results["categories"].items():
-                if not status["valid"]:
-                    logger.critical("❌ %s: Failed", category.replace("_", " ").title())
-                    for error in status["errors"]:
-                        # Sanitize error messages to prevent information leakage
-                        sanitized_error = str(error).replace(
-                            os.environ.get("SECRET_KEY", ""), "[REDACTED]"
-                        )
-                        logger.critical("   - %s", sanitized_error)
-
-            if config.environment == "production":
-                logger.critical(
-                    "🚨 ABORTING: Cannot start with invalid production configuration (ID: %s)",
-                    correlation_id,
-                )
-                sys.exit(1)
-            else:
-                logger.warning(
-                    "⚠️ Continuing with development mode despite validation warnings (ID: %s)",
-                    correlation_id,
-                )
-
-        return config
-
-    except ImportError as e:
-        logger.critical(
-            "🚨 CRITICAL: Configuration module import failed (ID: %s) - Module: %s",
-            correlation_id,
-            e.name if hasattr(e, "name") else "unknown",
-        )
-        raise ConfigurationError("Configuration module not found", config_key=None)
-    except FileNotFoundError:
-        logger.critical(
-            "🚨 CRITICAL: Configuration file not found (ID: %s)", correlation_id
-        )
-        raise ConfigurationError("Configuration file missing", config_key=None)
-    except PermissionError:
-        logger.critical(
-            "🚨 CRITICAL: Permission denied accessing configuration (ID: %s)",
-            correlation_id,
-        )
-        raise ConfigurationError("Configuration access denied", config_key=None)
-    except Exception as e:
-        # Generic exception handler with sanitized logging
-        error_type = type(e).__name__
-        logger.critical(
-            "🚨 CRITICAL: Configuration initialization failed (ID: %s) - Type: %s",
-            correlation_id,
-            error_type,
-        )
-        # Don't log the actual exception message as it might contain sensitive data
-        raise ConfigurationError("Configuration initialization failed", config_key=None)
 
 
 # SECURITY MIDDLEWARE
@@ -270,68 +242,74 @@ async def rate_limit_dependency(request: Request, rate: str = "30/minute"):
         # Extract rate limit parameters
         requests_str, period = rate.split("/")
         max_requests = int(requests_str)
-        
+
         # Get client identifier
         client_ip = request.client.host if request.client else "unknown"
-        
+
         # Create rate limit key
         import time
+
         current_window = int(time.time() // 60)  # 1-minute windows
         rate_key = f"rate_limit:{client_ip}:{current_window}"
-        
+
         # Use Redis if available, otherwise in-memory fallback
         if redis_client:
             try:
                 # Get current count
                 current_count = await redis_client.get(rate_key)
                 current_count = int(current_count) if current_count else 0
-                
+
                 # Check if limit exceeded
                 if current_count >= max_requests:
-                    logger.warning(f"Rate limit exceeded for {client_ip}: {current_count}/{max_requests}")
+                    logger.warning(
+                        f"Rate limit exceeded for {client_ip}: {current_count}/{max_requests}"
+                    )
                     raise HTTPException(
                         status_code=429,
                         detail=f"Rate limit exceeded: {max_requests} requests per minute",
-                        headers={"Retry-After": "60"}
+                        headers={"Retry-After": "60"},
                     )
-                
+
                 # Increment counter
                 await redis_client.incr(rate_key)
                 await redis_client.expire(rate_key, 60)  # Expire after 1 minute
-                
+
                 return True
-                
+
             except redis.RedisError as e:
-                logger.warning(f"Redis rate limiting failed, using in-memory fallback: {e}")
+                logger.warning(
+                    f"Redis rate limiting failed, using in-memory fallback: {e}"
+                )
                 # Fall through to in-memory implementation
-        
+
         # In-memory rate limiting fallback
-        if not hasattr(rate_limit_dependency, '_memory_store'):
+        if not hasattr(rate_limit_dependency, "_memory_store"):
             rate_limit_dependency._memory_store = {}
-        
+
         store = rate_limit_dependency._memory_store
-        
+
         # Clean old entries (simple cleanup)
         current_time = time.time()
-        store = {k: v for k, v in store.items() 
-                if current_time - v['timestamp'] < 60}
+        store = {k: v for k, v in store.items() if current_time - v["timestamp"] < 60}
         rate_limit_dependency._memory_store = store
-        
+
         # Check current count
         if rate_key in store:
-            if store[rate_key]['count'] >= max_requests:
-                logger.warning(f"Rate limit exceeded (in-memory) for {client_ip}: {store[rate_key]['count']}/{max_requests}")
+            if store[rate_key]["count"] >= max_requests:
+                logger.warning(
+                    f"Rate limit exceeded (in-memory) for {client_ip}: {store[rate_key]['count']}/{max_requests}"
+                )
                 raise HTTPException(
                     status_code=429,
                     detail=f"Rate limit exceeded: {max_requests} requests per minute",
-                    headers={"Retry-After": "60"}
+                    headers={"Retry-After": "60"},
                 )
-            store[rate_key]['count'] += 1
+            store[rate_key]["count"] += 1
         else:
-            store[rate_key] = {'count': 1, 'timestamp': current_time}
-        
+            store[rate_key] = {"count": 1, "timestamp": current_time}
+
         return True
-        
+
     except HTTPException:
         # Re-raise HTTP exceptions (rate limit exceeded)
         raise
@@ -360,38 +338,34 @@ async def rate_limit_10_per_minute(request: Request):
 # Lazy initialization of global variables
 limiter = None
 redis_client = None
-config = None
+
+config = None  # متغير عالمي للتهيئة الآمنة
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application startup and shutdown."""
+    global config, limiter, redis_client
     # Skip initialization during testing
     if os.environ.get("PYTEST_CURRENT_TEST"):
         yield
         return
 
-    # Startup
     logger.info("🚀 Starting AI Teddy Bear API...")
 
-    # Setup application configuration and dependencies
-    setup_application()
+    # تهيئة الإعدادات بشكل آمن
+    config = await initialize_configuration()
 
-    # Setup routes now that config is ready
+    # مرر config صراحةً لكل دالة تحتاجه
+    setup_application(config_param=config)
     setup_routes()
 
-    # Initialize core services
     from uuid import uuid4
-
-    global limiter, redis_client
 
     correlation_id = str(uuid4())
     try:
-        # Initialize database
         await initialize_production_database()
         logger.info("✅ Database initialized")
 
-        # Initialize Redis and rate limiting
         if config and config.ENABLE_REDIS:
             try:
                 redis_client = redis.from_url(config.REDIS_URL)
@@ -408,14 +382,18 @@ async def lifespan(app: FastAPI):
                 )
                 limiter = Limiter(key_func=get_remote_address)
         else:
-            # Use in-memory rate limiting when Redis is disabled
             limiter = Limiter(key_func=get_remote_address)
             logger.info("✅ In-memory rate limiter initialized")
 
         # Initialize security services
         if config:
+            from src.infrastructure.config.config_integration import get_config_manager
+
+            config_manager = get_config_manager()
             rate_limiting_service = create_rate_limiting_service(
-                redis_url=config.REDIS_URL, use_redis=config.ENABLE_REDIS
+                config_manager=config_manager,
+                redis_url=config.REDIS_URL,
+                use_redis=config.ENABLE_REDIS,
             )
             security_service = await create_security_service(rate_limiting_service)
 
@@ -424,7 +402,37 @@ async def lifespan(app: FastAPI):
             app.state.rate_limiting_service = rate_limiting_service
             app.state.limiter = limiter
 
-        logger.info("✅ Security services initialized")
+            # 🔒 IMPLEMENT COMPREHENSIVE ADMIN SECURITY
+            try:
+                from src.infrastructure.security.secure_all_admin_endpoints import (
+                    implement_comprehensive_admin_security,
+                )
+
+                logger.info("🔒 Implementing comprehensive admin security...")
+                security_report = await implement_comprehensive_admin_security(
+                    app, rate_limiting_service
+                )
+
+                # Store security report in app state
+                app.state.admin_security_report = security_report
+
+                logger.info("✅ Comprehensive admin security implemented successfully")
+                logger.info(
+                    f"🔒 Secured {security_report['summary']['total_endpoints_secured']} admin endpoints"
+                )
+                logger.info(
+                    f"📊 Security compliance score: {security_report['summary']['compliance_score']}%"
+                )
+
+            except Exception as e:
+                logger.error(f"❌ Failed to implement admin security: {e}")
+                if config.ENVIRONMENT == "production":
+                    logger.critical(
+                        "🚨 CRITICAL: Cannot start production without admin security"
+                    )
+                    sys.exit(1)
+
+            logger.info("✅ Security services initialized")
         logger.info(
             "✅ API started in %s mode", config.ENVIRONMENT if config else "unknown"
         )
@@ -476,7 +484,12 @@ app = FastAPI(
             "url": "https://staging-api.aiteddybear.com",
             "description": "Staging server",
         },
-    ] + ([{"url": "http://localhost:8000", "description": "Development server"}] if os.environ.get("ENVIRONMENT") != "production" else []),
+    ]
+    + (
+        [{"url": "http://localhost:8000", "description": "Development server"}]
+        if os.environ.get("ENVIRONMENT") != "production"
+        else []
+    ),
 )
 
 # Apply custom OpenAPI schema with enhanced documentation
@@ -488,79 +501,14 @@ app.openapi = lambda: custom_openapi_schema(app)
 setup_error_handlers(app, debug=(os.environ.get("ENVIRONMENT") != "production"))
 
 # ================================
-# SECURITY MIDDLEWARE SETUP
-# ================================
 
-# 1. Request validation (first layer)
-app.add_middleware(RequestValidationMiddleware)
-
-# 2. Security headers
-app.add_middleware(SecurityHeadersMiddleware)
-
-
-# 3. Rate limiting with custom handler
-async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
-    """Custom rate limit handler using our exception system."""
-    # Extract rate limit info safely
-    try:
-        retry_after = getattr(exc, "retry_after", None)
-    except AttributeError:
-        retry_after = None
-
-    raise CustomRateLimitExceeded(
-        message="Rate limit exceeded. Please try again later.", retry_after=retry_after
-    )
-
-
-# Initialize middleware conditionally
-def setup_middleware():
-    """Setup middleware after configuration is loaded."""
-    if limiter:
-        app.state.limiter = limiter
-        app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
-        app.add_middleware(SlowAPIMiddleware)
-
-    # 4. Trusted host validation - use safe defaults during testing
-    allowed_hosts = (
-        ["*"]
-        if os.environ.get("PYTEST_CURRENT_TEST")
-        else (config.ALLOWED_HOSTS if config else ["*"])
-    )
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
-
-    # 5. CORS with strict origin validation - use safe defaults during testing
-    cors_origins = (
-        ["*"]
-        if os.environ.get("PYTEST_CURRENT_TEST")
-        else (config.CORS_ALLOWED_ORIGINS if config else ["*"])
-    )
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=cors_origins,
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=[
-            "Accept",
-            "Accept-Language",
-            "Content-Type",
-            "Authorization",
-            "X-Requested-With",
-            "X-Child-ID",
-            "X-Request-ID",
-        ],
-        expose_headers=[
-            "X-Request-ID",
-            "X-RateLimit-Limit",
-            "X-RateLimit-Remaining",
-            "X-RateLimit-Reset",
-        ],
-        max_age=600,  # 10 minutes
-    )
+# UNIFIED CONFIGURATION SYSTEM
 
 
 # Setup middleware if not in testing environment
+
 if not os.environ.get("PYTEST_CURRENT_TEST"):
-    setup_middleware()
+    pass
 
 # ================================
 # API ROUTES
@@ -572,15 +520,22 @@ def include_api_routes():
     """Include API routes using the new RouteManager with advanced conflict detection."""
     try:
         from src.infrastructure.routing.route_manager import register_all_routers
-        
+        from src.infrastructure.routing.auto_healthcheck import AutoHealthcheckThread
+
         # Use the new RouteManager system
         route_manager = register_all_routers(app)
-        
         # Store route manager in app state for monitoring endpoints
         app.state.route_manager = route_manager
-        
         logger.info("✅ All routers registered successfully using RouteManager")
-        
+
+        # Start auto healthcheck in production/staging
+        env = os.environ.get("ENV", "production").lower()
+        if env in ("production", "staging"):
+            healthcheck_thread = AutoHealthcheckThread(route_manager, interval=60)
+            healthcheck_thread.start()
+            app.state.auto_healthcheck_thread = healthcheck_thread
+            logger.info("🩺 Auto healthcheck thread started.")
+
     except Exception as e:
         logger.error(f"❌ Failed to register routers using RouteManager: {str(e)}")
         # Fallback to manual registration if RouteManager fails
@@ -591,10 +546,11 @@ def include_api_routes():
 def _fallback_router_registration():
     """Fallback router registration method (original implementation)."""
     logger.info("🔄 Using fallback router registration...")
-    
+
     # Authentication routes
     try:
         from src.adapters.auth_routes import router as auth_router
+
         app.include_router(auth_router, tags=["Authentication"])
         logger.info("✅ Authentication endpoints loaded (fallback)")
     except ImportError as e:
@@ -603,6 +559,7 @@ def _fallback_router_registration():
     # Dashboard routes
     try:
         from src.adapters.dashboard_routes import router as dashboard_router
+
         app.include_router(dashboard_router, tags=["Dashboard"])
         logger.info("✅ Dashboard endpoints loaded (fallback)")
     except ImportError as e:
@@ -611,6 +568,7 @@ def _fallback_router_registration():
     # Core API routes
     try:
         from src.adapters.api_routes import router as main_api_router
+
         app.include_router(main_api_router, prefix="/api/v1/core", tags=["Core API"])
         logger.info("✅ Core API endpoints loaded (fallback)")
     except ImportError as e:
@@ -619,6 +577,7 @@ def _fallback_router_registration():
     # ESP32 routes
     try:
         from src.adapters.esp32_router import router as esp32_router
+
         app.include_router(esp32_router, prefix="/api/v1/esp32", tags=["ESP32"])
         logger.info("✅ ESP32 endpoints loaded (fallback)")
     except ImportError as e:
@@ -627,6 +586,7 @@ def _fallback_router_registration():
     # Web interface routes
     try:
         from src.adapters.web import router as web_router
+
         app.include_router(web_router, prefix="/web", tags=["Web Interface"])
         logger.info("✅ Web interface endpoints loaded (fallback)")
     except ImportError as e:
@@ -828,46 +788,31 @@ async def root(request: Request, _: bool = Depends(rate_limit_30_per_minute)):
 
 @app.get("/health")
 async def health_check(request: Request, _: bool = Depends(rate_limit_60_per_minute)):
-    """Health check endpoint."""
+    """Health check endpoint with strict readiness check for all critical services."""
     from uuid import uuid4
+    from fastapi import HTTPException
+    import time
 
     correlation_id = str(uuid4())
     try:
-        # Test Redis if available
-        redis_status = "unknown"
-        if redis_client:
-            try:
-                await redis_client.ping()
-                redis_status = "healthy"
-            except Exception as e:
-                logger.warning(
-                    f"Redis health check failed - Error: {str(e)}, Type: {type(e).__name__}, CorrelationID: {correlation_id}"
-                )
-                redis_status = "unhealthy"
+        # استدعاء readiness check من ServiceRegistry
+        from src.services.service_registry import get_service_registry
 
-        # Get security service status
-        security_status = "healthy"  # Assume healthy if initialized
+        registry = await get_service_registry(config)
         try:
-            if hasattr(app.state, "security_service") and app.state.security_service:
-                # Simple check - if service exists, it's healthy
-                security_status = "healthy"
-            else:
-                security_status = "disabled"
+            readiness = await registry.check_readiness()
+            status = "healthy"
         except Exception as e:
-            logger.warning(f"Security service check failed: {e}")
-            security_status = "unknown"
+            readiness = getattr(e, "args", [str(e)])[0]
+            status = "unhealthy"
+            logger.error(f"Readiness check failed: {readiness}")
 
         environment = config.ENVIRONMENT if config else "test"
         return {
-            "status": "healthy",
+            "status": status,
             "timestamp": time.time(),
             "environment": environment,
-            "services": {
-                "database": "healthy",  # Assume healthy if startup succeeded
-                "redis": redis_status,
-                "security": security_status,
-                "rate_limiting": "healthy" if limiter else "disabled",
-            },
+            "readiness": readiness,
             "security": {
                 "cors_origins": len(config.CORS_ALLOWED_ORIGINS) if config else 0,
                 "trusted_hosts": len(config.ALLOWED_HOSTS) if config else 0,
@@ -880,8 +825,6 @@ async def health_check(request: Request, _: bool = Depends(rate_limit_60_per_min
         logger.error(
             f"Health check failed - Error: {str(e)}, Type: {type(e).__name__}, CorrelationID: {correlation_id}"
         )
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=503, detail="Service unhealthy")
 
 
@@ -931,49 +874,56 @@ async def security_status(
 
 
 @app.get("/routes-health")
-async def routes_health_check(request: Request, _: bool = Depends(rate_limit_10_per_minute)):
+async def routes_health_check(
+    request: Request, _: bool = Depends(rate_limit_10_per_minute)
+):
     """Public route health check endpoint."""
     try:
         # Get basic route information without requiring authentication
         if hasattr(app.state, "route_manager"):
             route_manager = app.state.route_manager
             summary = route_manager.get_registration_summary()
-            
+
             # Return only non-sensitive information
             health_info = {
-                "status": "healthy" if summary.get("conflicts_detected", 0) == 0 else "degraded",
+                "status": (
+                    "healthy"
+                    if summary.get("conflicts_detected", 0) == 0
+                    else "degraded"
+                ),
                 "total_routes": summary.get("total_routes", 0),
                 "route_health": summary.get("route_health", "UNKNOWN"),
                 "monitoring_enabled": True,
-                "last_check": summary.get("registration_timestamp")
+                "last_check": summary.get("registration_timestamp"),
             }
         else:
             # Fallback if route manager not available
             from src.infrastructure.routing.route_monitor import RouteMonitor
+
             monitor = RouteMonitor(app)
             route_summary = monitor.get_route_summary()
-            
+
             health_info = {
                 "status": route_summary.get("status", "UNKNOWN"),
                 "total_routes": route_summary.get("total_routes", 0),
                 "conflicts": route_summary.get("conflicts", 0),
                 "monitoring_enabled": True,
-                "last_check": route_summary.get("last_scan")
+                "last_check": route_summary.get("last_scan"),
             }
-        
+
         return {
             "service": "route-monitoring",
             "timestamp": time.time(),
-            "route_system": health_info
+            "route_system": health_info,
         }
-        
+
     except Exception as e:
         logger.error(f"Routes health check failed: {e}")
         return {
             "service": "route-monitoring",
             "status": "error",
             "error": str(e),
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
 
 
