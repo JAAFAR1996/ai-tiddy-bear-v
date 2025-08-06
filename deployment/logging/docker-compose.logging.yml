@@ -1,0 +1,266 @@
+version: '3.8'
+
+# 🧸 AI TEDDY BEAR V5 - PRODUCTION LOGGING INFRASTRUCTURE
+# ======================================================
+# Docker Compose configuration for logging infrastructure including:
+# - ELK Stack (Elasticsearch, Logstash, Kibana)
+# - Fluent Bit for log collection
+# - Prometheus for metrics
+# - Grafana for visualization
+
+services:
+  # Elasticsearch for log storage and search
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: ai-teddy-elasticsearch
+    environment:
+      - node.name=ai-teddy-es-node
+      - cluster.name=ai-teddy-logs
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      - ELASTIC_PASSWORD=${ELASTICSEARCH_PASSWORD:-ai_teddy_secure_2024}
+      - xpack.license.self_generated.type=basic
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+      - ./logging/elasticsearch/config:/usr/share/elasticsearch/config:ro
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - logging-network
+    restart: unless-stopped
+    labels:
+      - "logging.component=elasticsearch"
+      - "logging.retention=7years"  # COPPA compliance
+
+  # Logstash for log processing and transformation
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: ai-teddy-logstash
+    environment:
+      - "LS_JAVA_OPTS=-Xmx1g -Xms1g"
+      - ELASTICSEARCH_HOST=elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD:-ai_teddy_secure_2024}
+    volumes:
+      - ./logging/logstash/config:/usr/share/logstash/config:ro
+      - ./logging/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - logstash_data:/usr/share/logstash/data
+    ports:
+      - "5044:5044"  # Beats input
+      - "9600:9600"  # Logstash monitoring
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9600 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - logging-network
+    restart: unless-stopped
+    labels:
+      - "logging.component=logstash"
+
+  # Kibana for log visualization and analysis
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: ai-teddy-kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD:-ai_teddy_secure_2024}
+      - SERVER_NAME=ai-teddy-kibana
+      - SERVER_HOST=0.0.0.0
+      - XPACK_SECURITY_ENABLED=true
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${KIBANA_ENCRYPTION_KEY:-ai_teddy_kibana_key_2024_very_secure}
+    volumes:
+      - kibana_data:/usr/share/kibana/data
+      - ./logging/kibana/config:/usr/share/kibana/config:ro
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - logging-network
+    restart: unless-stopped
+    labels:
+      - "logging.component=kibana"
+
+  # Fluent Bit for lightweight log forwarding
+  fluent-bit:
+    image: fluent/fluent-bit:2.2.0
+    container_name: ai-teddy-fluent-bit
+    volumes:
+      - ./logging/fluent-bit/config:/fluent-bit/etc:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    ports:
+      - "24224:24224"  # Forward input
+      - "2020:2020"    # HTTP monitoring
+    environment:
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ELASTICSEARCH_PORT=9200
+      - ELASTICSEARCH_USER=elastic
+      - ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD:-ai_teddy_secure_2024}
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - logging-network
+    restart: unless-stopped
+    labels:
+      - "logging.component=fluent-bit"
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: ai-teddy-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/config:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    networks:
+      - logging-network
+    restart: unless-stopped
+    labels:
+      - "monitoring.component=prometheus"
+
+  # Grafana for metrics visualization
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: ai-teddy-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-ai_teddy_admin_2024}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      - GF_SECURITY_SECRET_KEY=${GRAFANA_SECRET_KEY:-ai_teddy_grafana_secret_2024}
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - logging-network
+    restart: unless-stopped
+    labels:
+      - "monitoring.component=grafana"
+
+  # AlertManager for handling alerts
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: ai-teddy-alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager/config:/etc/alertmanager:ro
+      - alertmanager_data:/alertmanager
+    networks:
+      - logging-network
+    restart: unless-stopped
+    labels:
+      - "monitoring.component=alertmanager"
+
+  # Redis for caching and session storage
+  redis-logging:
+    image: redis:7.2-alpine
+    container_name: ai-teddy-redis-logging
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-ai_teddy_redis_2024}
+    ports:
+      - "6380:6379"  # Different port to avoid conflicts
+    volumes:
+      - redis_logging_data:/data
+    networks:
+      - logging-network
+    restart: unless-stopped
+    labels:
+      - "logging.component=redis"
+
+  # Log rotation and archival service
+  log-archiver:
+    build:
+      context: ./logging/archiver
+      dockerfile: Dockerfile
+    container_name: ai-teddy-log-archiver
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - S3_BUCKET=${LOG_ARCHIVE_BUCKET:-ai-teddy-logs-archive}
+      - ELASTICSEARCH_HOST=elasticsearch:9200
+      - ELASTICSEARCH_USER=elastic
+      - ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD:-ai_teddy_secure_2024}
+      - ARCHIVE_SCHEDULE=${LOG_ARCHIVE_SCHEDULE:-0 2 * * *}  # Daily at 2 AM
+      - RETENTION_DAYS=30  # Keep local logs for 30 days
+    volumes:
+      - /var/log:/var/log:ro
+      - log_archive_temp:/tmp/archives
+    depends_on:
+      - elasticsearch
+    networks:
+      - logging-network
+    restart: unless-stopped
+    labels:
+      - "logging.component=archiver"
+
+networks:
+  logging-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  elasticsearch_data:
+    driver: local
+  kibana_data:
+    driver: local
+  logstash_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  alertmanager_data:
+    driver: local
+  redis_logging_data:
+    driver: local
+  log_archive_temp:
+    driver: local

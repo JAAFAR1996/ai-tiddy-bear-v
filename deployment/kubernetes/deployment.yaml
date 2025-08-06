@@ -1,0 +1,386 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-teddy-bear-blue
+  namespace: ai-teddy-bear
+  labels:
+    app.kubernetes.io/name: ai-teddy-bear
+    app.kubernetes.io/instance: production
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: ai-teddy-bear
+    app.kubernetes.io/managed-by: kubernetes
+    deployment.strategy: blue-green
+    deployment.color: blue
+    # Child safety and compliance labels
+    coppa.compliant: "true"
+    child.safety.validated: "true"
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    # Child safety annotations
+    child-safety.compliance/coppa: "enabled"
+    child-safety.monitoring/enabled: "true"
+    security.policy/network-policy: "strict"
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ai-teddy-bear
+      app.kubernetes.io/component: backend
+      deployment.color: blue
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ai-teddy-bear
+        app.kubernetes.io/instance: production
+        app.kubernetes.io/version: "1.0.0"
+        app.kubernetes.io/component: backend
+        deployment.color: blue
+        coppa.compliant: "true"
+        child.safety.validated: "true"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+        # Child safety annotations
+        child-safety.compliance/coppa: "enabled"
+        child-safety.monitoring/enabled: "true"
+    spec:
+      serviceAccountName: ai-teddy-bear-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: ai-teddy-bear
+        image: ghcr.io/ai-teddy-bear/ai-teddy-bear:latest
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false  # App needs to write logs
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          capabilities:
+            drop:
+            - ALL
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: ai-teddy-bear-config
+        - secretRef:
+            name: ai-teddy-bear-secrets-managed
+        env:
+        - name: KUBERNETES_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+            ephemeral-storage: 1Gi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+            ephemeral-storage: 2Gi
+        livenessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+        readinessProbe:
+          httpGet:
+            path: /api/v1/health/ready
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        startupProbe:
+          httpGet:
+            path: /api/v1/health/startup
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+          successThreshold: 1
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+        - name: data
+          mountPath: /app/data
+        - name: secure-storage
+          mountPath: /app/secure_storage
+        - name: config-volume
+          mountPath: /app/config/logging.yaml
+          subPath: logging.yaml
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: logs
+        persistentVolumeClaim:
+          claimName: ai-teddy-bear-logs-pvc
+      - name: data
+        persistentVolumeClaim:
+          claimName: ai-teddy-bear-data-pvc
+      - name: secure-storage
+        persistentVolumeClaim:
+          claimName: ai-teddy-bear-secure-pvc
+      - name: config-volume
+        configMap:
+          name: ai-teddy-bear-logging-config
+          defaultMode: 0644
+      - name: tmp
+        emptyDir:
+          sizeLimit: 1Gi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - ai-teddy-bear
+              topologyKey: kubernetes.io/hostname
+      tolerations:
+      - key: node.kubernetes.io/not-ready
+        operator: Exists
+        effect: NoExecute
+        tolerationSeconds: 300
+      - key: node.kubernetes.io/unreachable
+        operator: Exists
+        effect: NoExecute
+        tolerationSeconds: 300
+      terminationGracePeriodSeconds: 60
+      restartPolicy: Always
+---
+# Green deployment (initially with 0 replicas)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-teddy-bear-green
+  namespace: ai-teddy-bear
+  labels:
+    app.kubernetes.io/name: ai-teddy-bear
+    app.kubernetes.io/instance: production
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: ai-teddy-bear
+    app.kubernetes.io/managed-by: kubernetes
+    deployment.strategy: blue-green
+    deployment.color: green
+    # Child safety and compliance labels
+    coppa.compliant: "true"
+    child.safety.validated: "true"
+spec:
+  replicas: 0  # Initially zero for blue-green deployment
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ai-teddy-bear
+      app.kubernetes.io/component: backend
+      deployment.color: green
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ai-teddy-bear
+        app.kubernetes.io/instance: production
+        app.kubernetes.io/version: "1.0.0"
+        app.kubernetes.io/component: backend
+        deployment.color: green
+        coppa.compliant: "true"
+        child.safety.validated: "true"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+        # Child safety annotations
+        child-safety.compliance/coppa: "enabled"
+        child-safety.monitoring/enabled: "true"
+    spec:
+      serviceAccountName: ai-teddy-bear-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: ai-teddy-bear
+        image: ghcr.io/ai-teddy-bear/ai-teddy-bear:latest
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          capabilities:
+            drop:
+            - ALL
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: ai-teddy-bear-config
+        - secretRef:
+            name: ai-teddy-bear-secrets-managed
+        env:
+        - name: KUBERNETES_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+            ephemeral-storage: 1Gi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+            ephemeral-storage: 2Gi
+        livenessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+        readinessProbe:
+          httpGet:
+            path: /api/v1/health/ready
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        startupProbe:
+          httpGet:
+            path: /api/v1/health/startup
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+          successThreshold: 1
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+        - name: data
+          mountPath: /app/data
+        - name: secure-storage
+          mountPath: /app/secure_storage
+        - name: config-volume
+          mountPath: /app/config/logging.yaml
+          subPath: logging.yaml
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: logs
+        persistentVolumeClaim:
+          claimName: ai-teddy-bear-logs-pvc
+      - name: data
+        persistentVolumeClaim:
+          claimName: ai-teddy-bear-data-pvc
+      - name: secure-storage
+        persistentVolumeClaim:
+          claimName: ai-teddy-bear-secure-pvc
+      - name: config-volume
+        configMap:
+          name: ai-teddy-bear-logging-config
+          defaultMode: 0644
+      - name: tmp
+        emptyDir:
+          sizeLimit: 1Gi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - ai-teddy-bear
+              topologyKey: kubernetes.io/hostname
+      tolerations:
+      - key: node.kubernetes.io/not-ready
+        operator: Exists
+        effect: NoExecute
+        tolerationSeconds: 300
+      - key: node.kubernetes.io/unreachable
+        operator: Exists
+        effect: NoExecute
+        tolerationSeconds: 300
+      terminationGracePeriodSeconds: 60
+      restartPolicy: Always

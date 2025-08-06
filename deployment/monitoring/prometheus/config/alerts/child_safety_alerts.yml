@@ -1,0 +1,317 @@
+# 🧸 AI TEDDY BEAR V5 - CHILD SAFETY PROMETHEUS ALERTS
+# ===================================================
+# Critical alerts for child safety and COPPA compliance
+
+groups:
+  - name: child_safety_critical
+    interval: 5s  # Very frequent evaluation for safety alerts
+    rules:
+      # Child Safety Service Availability
+      - alert: ChildSafetyServiceDown
+        expr: up{job="child-safety-service"} == 0
+        for: 0s  # Immediate alert
+        labels:
+          severity: critical
+          category: child_safety
+          priority: emergency
+        annotations:
+          summary: "Child Safety Service is DOWN"
+          description: "Child Safety Service has been down for {{ $value }} seconds. This is a CRITICAL safety system."
+          runbook_url: "https://runbooks.aiteddybear.com/child-safety-service-down"
+          action_required: "immediate_response"
+
+      # Content Moderation Service Down
+      - alert: ContentModerationServiceDown
+        expr: up{job="content-moderation"} == 0
+        for: 0s  # Immediate alert
+        labels:
+          severity: critical
+          category: child_safety
+          priority: emergency
+        annotations:
+          summary: "Content Moderation Service is DOWN"
+          description: "Content Moderation Service is unavailable. Child safety is at risk."
+          runbook_url: "https://runbooks.aiteddybear.com/content-moderation-down"
+
+      # High Rate of Safety Violations
+      - alert: HighSafetyViolationRate
+        expr: rate(child_safety_violations_total[1m]) > 0.1
+        for: 30s
+        labels:
+          severity: critical
+          category: child_safety
+          priority: urgent
+        annotations:
+          summary: "High rate of child safety violations detected"
+          description: "Safety violation rate is {{ $value }} per second over the last minute"
+          runbook_url: "https://runbooks.aiteddybear.com/high-violation-rate"
+
+      # AI Content Filter Failure
+      - alert: AIContentFilterFailure
+        expr: ai_content_filter_success_rate < 0.95
+        for: 10s
+        labels:
+          severity: critical  
+          category: child_safety
+          priority: urgent
+        annotations:
+          summary: "AI Content Filter success rate below threshold"
+          description: "Content filter success rate is {{ $value }}, below 95% threshold"
+          runbook_url: "https://runbooks.aiteddybear.com/content-filter-failure"
+
+      # Predatory Behavior Detection
+      - alert: PredatoryBehaviorDetected
+        expr: increase(child_safety_violations_total{type="predatory_behavior"}[5m]) > 0
+        for: 0s  # Immediate alert
+        labels:
+          severity: critical
+          category: child_safety
+          priority: emergency
+        annotations:
+          summary: "EMERGENCY: Predatory behavior detected"
+          description: "{{ $value }} instances of predatory behavior detected in the last 5 minutes"
+          runbook_url: "https://runbooks.aiteddybear.com/predatory-behavior"
+          action_required: "emergency_response"
+
+      # Grooming Attempt Detection
+      - alert: GroomingAttemptDetected
+        expr: increase(child_safety_violations_total{type="grooming_attempt"}[5m]) > 0
+        for: 0s  # Immediate alert
+        labels:
+          severity: critical
+          category: child_safety
+          priority: emergency
+        annotations:
+          summary: "EMERGENCY: Grooming attempt detected"
+          description: "{{ $value }} grooming attempts detected in the last 5 minutes"
+          runbook_url: "https://runbooks.aiteddybear.com/grooming-attempt"
+
+      # Personal Information Requests
+      - alert: PersonalInfoRequestSpike
+        expr: rate(child_safety_violations_total{type="personal_info_request"}[1m]) > 0.05
+        for: 1m
+        labels:
+          severity: high
+          category: child_safety
+          priority: high
+        annotations:
+          summary: "Spike in personal information requests"
+          description: "Rate of personal info requests: {{ $value }} per second"
+          runbook_url: "https://runbooks.aiteddybear.com/personal-info-spike"
+
+      # Violence or Self-Harm Content
+      - alert: ViolenceOrSelfHarmContent
+        expr: increase(child_safety_violations_total{type=~"violence_threat|self_harm_content"}[1m]) > 0
+        for: 0s  # Immediate alert
+        labels:
+          severity: critical
+          category: child_safety
+          priority: emergency
+        annotations:
+          summary: "EMERGENCY: Violence or self-harm content detected"
+          description: "{{ $value }} instances of violence/self-harm content in the last minute"
+          runbook_url: "https://runbooks.aiteddybear.com/violence-self-harm"
+
+      # Child Safety Response Time Too High
+      - alert: ChildSafetyResponseTimeHigh
+        expr: histogram_quantile(0.95, rate(child_safety_response_time_seconds_bucket[5m])) > 0.1
+        for: 1m
+        labels:
+          severity: high
+          category: child_safety
+          priority: high
+        annotations:
+          summary: "Child safety response time too high"
+          description: "95th percentile response time is {{ $value }}s, above 100ms threshold"
+          runbook_url: "https://runbooks.aiteddybear.com/slow-safety-response"
+
+      # Human Review Queue Overflowing
+      - alert: HumanReviewQueueOverflow
+        expr: child_safety_human_review_queue_size > 100
+        for: 5m
+        labels:
+          severity: high
+          category: child_safety
+          priority: high
+        annotations:
+          summary: "Human review queue overflowing"
+          description: "{{ $value }} items waiting for human review"
+          runbook_url: "https://runbooks.aiteddybear.com/review-queue-overflow"
+
+  - name: coppa_compliance_alerts
+    interval: 10s
+    rules:
+      # COPPA Compliance Service Down
+      - alert: COPPAComplianceServiceDown
+        expr: up{job="coppa-compliance-service"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          category: coppa_compliance
+          priority: urgent
+        annotations:
+          summary: "COPPA Compliance Service is DOWN"
+          description: "COPPA Compliance monitoring is unavailable for {{ $value }} seconds"
+          runbook_url: "https://runbooks.aiteddybear.com/coppa-service-down"
+
+      # Unauthorized Data Collection
+      - alert: UnauthorizedDataCollection
+        expr: increase(coppa_violations_total{type="unauthorized_data_collection"}[1m]) > 0
+        for: 0s  # Immediate alert
+        labels:
+          severity: critical
+          category: coppa_compliance
+          priority: urgent
+        annotations:
+          summary: "COPPA: Unauthorized data collection detected"
+          description: "{{ $value }} instances of unauthorized data collection"
+          runbook_url: "https://runbooks.aiteddybear.com/unauthorized-data-collection"
+
+      # Insufficient Parental Consent
+      - alert: InsufficientParentalConsent
+        expr: rate(coppa_violations_total{type="insufficient_parental_consent"}[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: high
+          category: coppa_compliance
+          priority: high
+        annotations:
+          summary: "High rate of insufficient parental consent violations"
+          description: "Rate: {{ $value }} violations per second over 5 minutes"
+          runbook_url: "https://runbooks.aiteddybear.com/insufficient-consent"
+
+      # Data Retention Violations
+      - alert: DataRetentionViolation
+        expr: increase(coppa_violations_total{type="data_retention_violation"}[10m]) > 0
+        for: 1m
+        labels:
+          severity: high
+          category: coppa_compliance
+          priority: high
+        annotations:
+          summary: "Data retention policy violation"
+          description: "{{ $value }} data retention violations in the last 10 minutes"
+          runbook_url: "https://runbooks.aiteddybear.com/data-retention-violation"
+
+      # Third-Party Data Disclosure
+      - alert: ThirdPartyDataDisclosure
+        expr: increase(coppa_violations_total{type="third_party_disclosure"}[1m]) > 0
+        for: 0s  # Immediate alert
+        labels:
+          severity: critical
+          category: coppa_compliance
+          priority: urgent
+        annotations:
+          summary: "CRITICAL: Third-party data disclosure detected"
+          description: "{{ $value }} instances of unauthorized third-party data disclosure"
+          runbook_url: "https://runbooks.aiteddybear.com/third-party-disclosure"
+
+      # Age Verification Failures
+      - alert: AgeVerificationFailures
+        expr: rate(age_verification_failures_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: medium
+          category: coppa_compliance
+          priority: medium
+        annotations:
+          summary: "High rate of age verification failures"
+          description: "Age verification failure rate: {{ $value }} per second"
+          runbook_url: "https://runbooks.aiteddybear.com/age-verification-failures"
+
+      # Parental Consent Expiring Soon
+      - alert: ParentalConsentExpiringSoon
+        expr: parental_consent_expiring_within_days{days="7"} > 100
+        for: 1h
+        labels:
+          severity: medium
+          category: coppa_compliance
+          priority: medium
+        annotations:
+          summary: "Many parental consents expiring soon"
+          description: "{{ $value }} parental consents expire within 7 days"
+          runbook_url: "https://runbooks.aiteddybear.com/consent-expiring"
+
+  - name: child_safety_performance
+    interval: 15s
+    rules:
+      # AI Model Inference Time Too High
+      - alert: AIModelInferenceSlow
+        expr: histogram_quantile(0.95, rate(ai_model_inference_duration_seconds_bucket[5m])) > 0.5
+        for: 3m
+        labels:
+          severity: medium
+          category: performance
+          priority: medium
+        annotations:
+          summary: "AI model inference time too high"
+          description: "95th percentile inference time: {{ $value }}s"
+          runbook_url: "https://runbooks.aiteddybear.com/slow-ai-inference"
+
+      # Content Moderation Queue Backup
+      - alert: ContentModerationQueueBackup
+        expr: content_moderation_queue_size > 1000
+        for: 5m
+        labels:
+          severity: medium
+          category: performance
+          priority: medium
+        annotations:
+          summary: "Content moderation queue backing up"
+          description: "{{ $value }} items in moderation queue"
+          runbook_url: "https://runbooks.aiteddybear.com/moderation-queue-backup"
+
+      # Safety Database Connection Issues
+      - alert: SafetyDatabaseConnectionIssues
+        expr: safety_database_connection_errors_total > 10
+        for: 1m
+        labels:
+          severity: high
+          category: child_safety
+          priority: high
+        annotations:
+          summary: "Safety database connection issues"
+          description: "{{ $value }} database connection errors"
+          runbook_url: "https://runbooks.aiteddybear.com/safety-db-issues"
+
+  - name: child_safety_business_metrics
+    interval: 60s
+    rules:
+      # High Child Safety Incident Rate
+      - alert: HighChildSafetyIncidentRate
+        expr: rate(child_safety_incidents_total[1h]) > 0.01
+        for: 10m
+        labels:
+          severity: medium
+          category: business
+          priority: medium
+        annotations:
+          summary: "High child safety incident rate"
+          description: "Safety incident rate: {{ $value }} per second over 1 hour"
+          runbook_url: "https://runbooks.aiteddybear.com/high-incident-rate"
+
+      # Parent Notification Delivery Failures
+      - alert: ParentNotificationFailures
+        expr: rate(parent_notification_failures_total[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: high
+          category: child_safety
+          priority: high
+        annotations:
+          summary: "Parent notification delivery failures"
+          description: "Parent notification failure rate: {{ $value }} per second"
+          runbook_url: "https://runbooks.aiteddybear.com/parent-notification-failures"
+
+      # Emergency Contact System Failure
+      - alert: EmergencyContactSystemFailure
+        expr: emergency_contact_system_up == 0
+        for: 30s
+        labels:
+          severity: critical
+          category: child_safety
+          priority: emergency
+        annotations:
+          summary: "EMERGENCY: Emergency contact system failure"
+          description: "Emergency contact system is down"
+          runbook_url: "https://runbooks.aiteddybear.com/emergency-contact-failure"

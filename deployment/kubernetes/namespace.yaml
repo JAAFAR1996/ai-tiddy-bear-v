@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-teddy-bear
+  labels:
+    name: ai-teddy-bear
+    app.kubernetes.io/name: ai-teddy-bear
+    app.kubernetes.io/instance: production
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/component: namespace
+    app.kubernetes.io/part-of: ai-teddy-bear
+    app.kubernetes.io/managed-by: kubernetes
+    # COPPA and Child Safety Labels
+    coppa.compliant: "true"
+    child.safety.validated: "true"
+    data.retention.days: "90"
+    privacy.level: "strict"
+  annotations:
+    # Security annotations
+    security.policy/network-policy: "strict"
+    security.policy/pod-security: "restricted"
+    # Child safety annotations
+    child-safety.compliance/coppa: "enabled"
+    child-safety.compliance/privacy: "strict"
+    child-safety.monitoring/enabled: "true"
+    # Resource management
+    resource.quota/enabled: "true"
+    cost.center: "ai-teddy-bear-production"
+spec: {}
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: ai-teddy-bear-quota
+  namespace: ai-teddy-bear
+  labels:
+    app.kubernetes.io/name: ai-teddy-bear
+    app.kubernetes.io/component: resource-quota
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 16Gi
+    limits.cpu: "16"
+    limits.memory: 32Gi
+    requests.storage: 100Gi
+    persistentvolumeclaims: "10"
+    pods: "50"
+    services: "20"
+    secrets: "30"
+    configmaps: "30"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: ai-teddy-bear-limits
+  namespace: ai-teddy-bear
+  labels:
+    app.kubernetes.io/name: ai-teddy-bear
+    app.kubernetes.io/component: limit-range
+spec:
+  limits:
+  - default:
+      cpu: "1"
+      memory: 2Gi
+    defaultRequest:
+      cpu: 100m
+      memory: 256Mi
+    type: Container
+  - default:
+      storage: 10Gi
+    type: PersistentVolumeClaim

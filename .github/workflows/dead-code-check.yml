@@ -1,0 +1,89 @@
+name: Dead Code Check
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+
+jobs:
+  dead-code-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # Install any required dependencies for the scanner
+        pip install -r requirements.txt || true
+    
+    - name: Run Dead Code Scanner
+      run: |
+        python scripts/dead_code_scanner.py --full-analysis
+      continue-on-error: true
+    
+    - name: Upload Dead Code Report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: dead-code-report
+        path: dead_code_report.json
+    
+    - name: Comment PR with Dead Code Summary
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          
+          try {
+            const report = JSON.parse(fs.readFileSync('dead_code_report.json', 'utf8'));
+            const summary = report.summary;
+            
+            const comment = `## 🧹 Dead Code Report
+            
+            - **Total files scanned**: ${summary.total_files_scanned}
+            - **Empty files found**: ${summary.empty_files}
+            - **Import-only files**: ${summary.import_only_files}
+            - **Orphaned tests**: ${summary.orphaned_tests}
+            - **Duplicate implementations**: ${summary.duplicate_implementations}
+            - **Deletion candidates**: ${summary.deletion_candidates}
+            - **Safe to delete**: ${summary.safe_deletions}
+            
+            ${summary.safe_deletions > 0 ? '⚠️ **Action Required**: Dead code detected! Please review the full report.' : '✅ **No dead code detected!**'}`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+          } catch (error) {
+            console.log('No dead code report found or error reading report');
+          }
+    
+    - name: Fail if dead code detected
+      run: |
+        if [ -f dead_code_report.json ]; then
+          python -c "
+import json
+import sys
+with open('dead_code_report.json', 'r') as f:
+    report = json.load(f)
+if report['summary']['safe_deletions'] > 0:
+    print(f\"❌ Found {report['summary']['safe_deletions']} files that can be safely deleted!\")
+    sys.exit(1)
+else:
+    print('✅ No dead code found!')
+"
+        fi

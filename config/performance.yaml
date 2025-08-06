@@ -1,0 +1,395 @@
+# AI Teddy Bear Performance System Configuration
+# Production-ready performance optimization with child safety compliance
+
+# CDN Configuration - Multi-provider support
+cdn:
+  enabled: true
+  
+  # CloudFlare CDN Configuration
+  cloudflare:
+    enabled: false  # Set to true and provide credentials
+    api_key: "${CLOUDFLARE_API_KEY}"
+    zone_id: "${CLOUDFLARE_ZONE_ID}"
+    priority: 1
+    
+    # Child-safe cache policies
+    cache_policies:
+      static_assets:
+        ttl_seconds: 604800  # 1 week
+        browser_ttl_seconds: 86400  # 1 day
+        child_safe_headers: true
+      
+      api_responses:
+        ttl_seconds: 3600  # 1 hour
+        browser_ttl_seconds: 300  # 5 minutes
+        child_safe_headers: true
+      
+      child_data:
+        ttl_seconds: 0  # No caching
+        bypass_cache_on_cookie: true
+        coppa_compliance: true
+  
+  # AWS CloudFront Configuration
+  aws_cloudfront:
+    enabled: false
+    access_key: "${AWS_ACCESS_KEY_ID}"
+    secret_key: "${AWS_SECRET_ACCESS_KEY}"
+    distribution_id: "${AWS_CLOUDFRONT_DISTRIBUTION_ID}"
+    priority: 2
+  
+  # Azure CDN Configuration  
+  azure_cdn:
+    enabled: false
+    subscription_id: "${AZURE_SUBSCRIPTION_ID}"
+    resource_group: "${AZURE_RESOURCE_GROUP}"
+    priority: 3
+
+# Caching Configuration - Multi-layer strategy
+cache:
+  enabled: true
+  redis_url: "${REDIS_URL:-redis://localhost:6379}"
+  
+  # Cache policies for different content types
+  policies:
+    # API response caching
+    api_responses:
+      ttl_seconds: 300  # 5 minutes
+      max_size: 1000
+      compression: true
+      child_safe: false
+    
+    # Child data caching (special handling)
+    child_data:
+      ttl_seconds: 600  # 10 minutes - shorter for safety
+      max_size: 500
+      encryption: true  # Always encrypt child data
+      child_safe: true
+      coppa_compliance: true
+      levels: ["memory"]  # Only in-memory for sensitivity
+    
+    # Database query caching
+    db_queries:
+      ttl_seconds: 1800  # 30 minutes
+      max_size: 2000
+      compression: true
+      levels: ["memory", "redis"]
+    
+    # TTS audio caching
+    tts_audio:
+      ttl_seconds: 3600  # 1 hour
+      max_size: 100
+      compression: true
+      child_safe: true
+      levels: ["redis"]  # Redis only for large files
+    
+    # Static file caching
+    static_files:
+      ttl_seconds: 86400  # 24 hours
+      max_size: 5000
+      compression: true
+      levels: ["memory", "redis"]
+    
+    # Session data caching
+    sessions:
+      ttl_seconds: 1800  # 30 minutes
+      max_size: 1000
+      encryption: true
+      child_safe: true
+      levels: ["redis"]
+
+# Database Performance Configuration
+database:
+  host: "${DB_HOST:-localhost}"
+  port: ${DB_PORT:-5432}
+  name: "${DB_NAME:-ai_teddy_bear}"
+  username: "${DB_USERNAME:-app_user}"
+  password: "${DB_PASSWORD}"
+  
+  # Connection pool settings
+  pool_size: 10
+  max_overflow: 20
+  pool_timeout: 30
+  pool_recycle: 3600  # 1 hour
+  
+  # Performance settings
+  statement_timeout: 30000  # 30 seconds
+  query_cache_size: 500
+  
+  # Child safety settings
+  child_data_encryption: true
+  child_data_audit: true
+  child_data_retention_days: 30
+  
+  # Pool strategies for different workloads
+  pools:
+    main:
+      strategy: "standard"
+      size: 10
+      max_overflow: 20
+    
+    readonly:
+      strategy: "optimistic"
+      size: 15
+      max_overflow: 25
+    
+    child_data:
+      strategy: "child_safe"
+      size: 3  # Limited for security
+      max_overflow: 2
+      encryption: true
+    
+    bulk:
+      strategy: "pessimistic"
+      size: 5
+      max_overflow: 5
+
+# Compression and Encoding Configuration
+compression:
+  enabled: true
+  
+  # HTTP response compression
+  gzip:
+    enabled: true
+    level: 6  # 1-9, higher = better compression but slower
+    min_size_bytes: 1024
+    mime_types:
+      - "text/html"
+      - "text/css"
+      - "text/javascript"
+      - "application/javascript"
+      - "application/json"
+      - "text/xml"
+      - "application/xml"
+      - "text/plain"
+      - "image/svg+xml"
+  
+  brotli:
+    enabled: true
+    level: 6  # 0-11, higher = better compression but slower
+    min_size_bytes: 1024
+  
+  # Image optimization
+  images:
+    enabled: true
+    webp_quality: 85
+    jpeg_quality: 85
+    png_optimize: true
+    max_width: 1920
+    max_height: 1080
+    child_safe_watermark: true  # Add child-safe indicators
+    preserve_metadata: false    # Remove for privacy
+  
+  # Audio optimization for TTS
+  audio:
+    enabled: true
+    mp3_bitrate: "128k"
+    ogg_quality: 5
+    normalize_audio: true
+    remove_silence: true
+    max_duration_seconds: 300  # 5 minutes max for safety
+    child_content_filter: true
+
+# Performance Monitoring Configuration
+monitoring:
+  enabled: true
+  interval_seconds: 60
+  
+  # Alert configuration
+  alerts:
+    webhook_url: "${WEBHOOK_ALERT_URL}"
+    
+    # Performance thresholds
+    thresholds:
+      # Response time alerts
+      avg_response_time_ms:
+        warning: 200
+        critical: 500
+        emergency: 1000
+        child_safety_impact: true
+      
+      p99_response_time_ms:
+        warning: 500
+        critical: 1000
+        emergency: 2000
+        child_safety_impact: true
+      
+      # System resource alerts
+      cpu_usage_percent:
+        warning: 70
+        critical: 85
+        emergency: 95
+      
+      memory_usage_percent:
+        warning: 80
+        critical: 90
+        emergency: 95
+      
+      # Cache performance alerts
+      cache_hit_ratio:
+        warning: 0.5   # Below 50%
+        critical: 0.3  # Below 30%
+        emergency: 0.1 # Below 10%
+      
+      # Child safety alerts
+      child_safety_violations:
+        warning: 1
+        critical: 5
+        emergency: 10
+        child_safety_impact: true
+      
+      coppa_compliance_score:
+        warning: 95   # Below 95%
+        critical: 90  # Below 90%
+        emergency: 80 # Below 80%
+        child_safety_impact: true
+  
+  # Metrics collection
+  metrics:
+    prometheus_enabled: true
+    export_interval_seconds: 30
+    
+    # Core Web Vitals monitoring
+    core_web_vitals:
+      enabled: true
+      lcp_threshold_ms: 2500  # Largest Contentful Paint
+      fid_threshold_ms: 100   # First Input Delay
+      cls_threshold: 0.1      # Cumulative Layout Shift
+
+# Automated Optimization Configuration
+optimization:
+  auto_enabled: true
+  interval_minutes: 60
+  
+  # Optimization rules
+  rules:
+    cache_optimization:
+      enabled: true
+      min_interval_hours: 24
+      auto_apply: true  # Low-risk optimizations
+    
+    query_optimization:
+      enabled: true
+      min_interval_hours: 12
+      auto_apply: false  # Require manual approval
+    
+    resource_scaling:
+      enabled: true
+      min_interval_hours: 6
+      auto_apply: true
+    
+    child_safety_optimization:
+      enabled: true
+      min_interval_hours: 1  # More frequent for safety
+      auto_apply: true
+      coppa_compliance_required: true
+  
+  # Performance targets
+  targets:
+    response_time_p95_ms: 200
+    response_time_p99_ms: 500
+    cache_hit_ratio: 0.8
+    error_rate_max: 0.01  # 1%
+    coppa_compliance_min: 0.95  # 95%
+
+# Child Safety and COPPA Compliance
+child_safety:
+  data_encryption: true
+  coppa_monitoring: true
+  
+  # Child data handling
+  child_data:
+    encryption_at_rest: true
+    encryption_in_transit: true
+    audit_all_access: true
+    retention_policy_days: 30
+    auto_purge_enabled: true
+    
+    # Cache-specific safety settings
+    cache_ttl_reduction_factor: 0.5  # Child data expires 50% faster
+    memory_only_caching: true
+    no_cdn_caching: true
+  
+  # Privacy protection
+  privacy:
+    anonymize_logs: true
+    mask_sensitive_data: true
+    gdpr_compliance: true
+    
+    # Audit requirements
+    audit_trail: true
+    compliance_reporting: true
+    automated_compliance_checks: true
+
+# Load Testing Configuration
+load_testing:
+  enabled: true
+  
+  # Default test scenarios
+  scenarios:
+    smoke_test:
+      duration_seconds: 60
+      max_users: 2
+      endpoints: ["/health", "/api/v1/children/profiles"]
+    
+    load_test:
+      duration_seconds: 300  # 5 minutes
+      max_users: 50
+      ramp_duration_seconds: 120
+      child_safe_endpoints_only: true
+    
+    stress_test:
+      duration_seconds: 600  # 10 minutes
+      max_users: 200
+      child_safe_endpoints_only: true
+    
+    child_data_volume_test:
+      duration_seconds: 300
+      max_users: 30
+      child_data_volume: 500
+      endpoints:
+        - "/api/v1/children/profiles"
+        - "/api/v1/conversations/start"
+        - "/api/v1/stories/generate"
+  
+  # Performance thresholds for tests
+  thresholds:
+    max_response_time_ms: 2000
+    max_error_rate: 0.05  # 5%
+    min_throughput_rps: 10.0
+
+# Environment-specific overrides
+environments:
+  development:
+    monitoring:
+      interval_seconds: 30
+    optimization:
+      auto_enabled: false
+    load_testing:
+      scenarios:
+        smoke_test:
+          max_users: 1
+  
+  staging:
+    cdn:
+      enabled: false  # Use staging CDN if available
+    monitoring:
+      interval_seconds: 30
+    optimization:
+      auto_enabled: true
+  
+  production:
+    # All optimizations enabled for production
+    cdn:
+      enabled: true
+    cache:
+      enabled: true
+    compression:
+      enabled: true
+    monitoring:
+      enabled: true
+    optimization:
+      auto_enabled: true
+    child_safety:
+      data_encryption: true
+      coppa_monitoring: true
+      audit_trail: true

@@ -1,0 +1,252 @@
+# AI Teddy Bear V5 - Production Deployment Configuration
+# This file defines the production deployment settings using ProductionConfig
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-teddy-bear-config
+  namespace: production
+data:
+  # Environment Configuration
+  ENVIRONMENT: "production"
+  DEBUG: "false"
+  LOG_LEVEL: "INFO"
+  
+  # Database Configuration
+  DATABASE_POOL_SIZE: "20"
+  DATABASE_MAX_OVERFLOW: "30"
+  DATABASE_POOL_TIMEOUT: "30"
+  
+  # Redis Configuration  
+  REDIS_POOL_SIZE: "20"
+  REDIS_TIMEOUT: "5"
+  
+  # AI Services Configuration
+  OPENAI_MODEL: "gpt-4"
+  OPENAI_MAX_TOKENS: "1000"
+  OPENAI_TEMPERATURE: "0.7"
+  WHISPER_MODEL: "medium"
+  
+  # CORS & Security (Production domains only)
+  CORS_ALLOWED_ORIGINS: '["https://app.aiteddybear.com","https://www.aiteddybear.com"]'
+  ALLOWED_HOSTS: '["app.aiteddybear.com","api.aiteddybear.com"]'
+  
+  # Child Safety & COPPA Compliance
+  COPPA_COMPLIANCE_MODE: "true"
+  CONTENT_FILTER_STRICT: "true"
+  
+  # Rate Limiting (Production settings)
+  RATE_LIMIT_REQUESTS_PER_MINUTE: "60"
+  RATE_LIMIT_BURST: "10"
+  
+  # Security Thresholds
+  SECURITY_BRUTE_FORCE_ATTEMPTS: "5"
+  SECURITY_BRUTE_FORCE_WINDOW: "3600"
+  SECURITY_ACCESS_MAX_PER_HOUR: "20"
+  SECURITY_ACCESS_MAX_PER_DAY: "100"
+  SECURITY_ACCESS_MAX_PER_MINUTE: "5"
+  
+  # Content & Safety Thresholds
+  SAFETY_SCORE_THRESHOLD: "0.9"
+  CONTENT_COMPLEXITY_AGE_THRESHOLD_SIMPLE: "5"
+  CONTENT_COMPLEXITY_AGE_THRESHOLD_COMPLEX: "8"
+  
+  # JWT Configuration
+  JWT_ALGORITHM: "HS256"
+  ACCESS_TOKEN_EXPIRE_MINUTES: "15"
+  REFRESH_TOKEN_EXPIRE_DAYS: "7"
+  
+  # API Configuration
+  API_BASE_URL: "https://api.aiteddybear.com"
+  API_TITLE: "AI Teddy Bear API"
+  API_VERSION: "1.0.0"
+  STAGING_URL: "https://staging-api.aiteddybear.com"
+  SUPPORT_EMAIL: "support@aiteddybear.com"
+  DOCS_URL: ""  # Disabled in production
+  REDOC_URL: "" # Disabled in production
+  
+  # Session Configuration (Secure)
+  SESSION_EXPIRE_HOURS: "8"
+  SESSION_SECURE: "true"
+  SESSION_HTTPONLY: "true"
+  SESSION_SAMESITE: "strict"
+  
+  # Feature Flags
+  ENABLE_DATABASE: "true"
+  ENABLE_REDIS: "true" 
+  ENABLE_AI_SERVICES: "true"
+  USE_MOCK_SERVICES: "false"
+  
+  # Data Retention & Privacy
+  DATA_RETENTION_DAYS: "90"
+  AUTO_DELETE_ENABLED: "true"
+  DATA_EXPORT_ENABLED: "true"
+  
+  # Optional Services (Disabled by default)
+  KAFKA_ENABLED: "false"
+  VAULT_ENABLED: "false"
+  
+  # Monitoring & Observability
+  PROMETHEUS_ENABLED: "true"
+  PROMETHEUS_PORT: "9090"
+  ENABLE_METRICS: "true"
+  ENABLE_TRACING: "true"
+  
+  # Server Configuration
+  HOST: "0.0.0.0"
+  PORT: "8000"
+  WORKERS: "4"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ai-teddy-bear-secrets
+  namespace: production
+type: Opaque
+stringData:
+  # CRITICAL: Replace these with actual secure values
+  SECRET_KEY: "REPLACE-WITH-ACTUAL-SECRET-KEY-32-CHARS-MINIMUM"
+  JWT_SECRET_KEY: "REPLACE-WITH-ACTUAL-JWT-SECRET-32-CHARS-MINIMUM"
+  COPPA_ENCRYPTION_KEY: "REPLACE-WITH-ACTUAL-COPPA-KEY-32-CHARS-MIN"
+  DATABASE_URL: "postgresql://username:password@host:5432/database"
+  REDIS_URL: "redis://redis:6379/0"
+  OPENAI_API_KEY: "sk-REPLACE-WITH-ACTUAL-OPENAI-KEY"
+  PARENT_NOTIFICATION_EMAIL: "parent@aiteddybear.com"
+  SENTRY_DSN: "https://your-sentry-dsn@sentry.io/project-id"
+  ELEVENLABS_API_KEY: ""
+  
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-teddy-bear
+  namespace: production
+  labels:
+    app: ai-teddy-bear
+    version: v1.0.0
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: ai-teddy-bear
+  template:
+    metadata:
+      labels:
+        app: ai-teddy-bear
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: ai-teddy-bear
+        image: ai-teddy-bear:v1.0.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        - containerPort: 9090
+          name: metrics
+        envFrom:
+        - configMapRef:
+            name: ai-teddy-bear-config
+        - secretRef:
+            name: ai-teddy-bear-secrets
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: temp
+          mountPath: /tmp
+        - name: logs
+          mountPath: /app/logs
+      volumes:
+      - name: temp
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-teddy-bear-service
+  namespace: production
+  labels:
+    app: ai-teddy-bear
+spec:
+  selector:
+    app: ai-teddy-bear
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8000
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ai-teddy-bear-ingress
+  namespace: production
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  tls:
+  - hosts:
+    - api.aiteddybear.com
+    secretName: ai-teddy-bear-tls
+  rules:
+  - host: api.aiteddybear.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ai-teddy-bear-service
+            port:
+              number: 80

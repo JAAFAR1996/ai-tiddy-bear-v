@@ -1,0 +1,467 @@
+# Kubernetes Configuration Management for AI Teddy Bear
+# =====================================================
+# Complete Kubernetes configuration with ConfigMaps, Secrets, and deployment
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-teddy-bear
+  labels:
+    app: ai-teddy-bear
+    environment: production
+
+---
+# ConfigMap for Application Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-teddy-bear-config
+  namespace: ai-teddy-bear
+  labels:
+    app: ai-teddy-bear
+    component: configuration
+data:
+  # Application Settings
+  APP_NAME: "AI Teddy Bear"
+  APP_VERSION: "1.0.0"
+  DEBUG: "false"
+  HOST: "0.0.0.0"
+  PORT: "8000"
+  
+  # Environment
+  ENVIRONMENT: "production"
+  
+  # Database Configuration (non-sensitive)
+  DATABASE_POOL_SIZE: "20"
+  DATABASE_MAX_OVERFLOW: "30"
+  DATABASE_TIMEOUT: "30"
+  
+  # Redis Configuration (non-sensitive)
+  REDIS_MAX_CONNECTIONS: "200"
+  REDIS_TIMEOUT: "3"
+  
+  # AI Provider Configuration (non-sensitive)
+  AI_PROVIDER_TIMEOUT: "25"
+  AI_PROVIDER_MAX_RETRIES: "2"
+  
+  # Security Configuration (non-sensitive)
+  JWT_ALGORITHM: "HS256"
+  JWT_EXPIRATION_HOURS: "6"
+  RATE_LIMIT_REQUESTS: "1000"
+  ENCRYPT_SENSITIVE_DATA: "true"
+  
+  # Logging Configuration
+  LOG_LEVEL: "INFO"
+  ELASTICSEARCH_HOSTS: "elasticsearch-1:9200,elasticsearch-2:9200"
+  CLOUDWATCH_LOG_GROUP: "/aws/ai-teddy-bear/production"
+  
+  # Child Safety Configuration
+  CHILD_AGE_VERIFICATION_REQUIRED: "true"
+  PARENTAL_CONSENT_REQUIRED: "true"
+  CONTENT_FILTERING_LEVEL: "strict"
+  
+  # Performance Settings
+  REQUEST_TIMEOUT: "20"
+  MAX_CONCURRENT_REQUESTS: "1000"
+  CACHE_TTL_SECONDS: "1800"
+  
+  # SSL/TLS Configuration
+  FORCE_HTTPS: "true"
+  SSL_REDIRECT: "true"
+  
+  # Container Configuration
+  ENABLE_DOCKER_SECRETS: "false"  # Use Kubernetes Secrets instead
+  K8S_CONFIG_MAP_PATH: "/etc/config"
+  K8S_SECRETS_PATH: "/etc/secrets"
+  
+  # Monitoring
+  ENABLE_METRICS: "true"
+  METRICS_PORT: "8001"
+  HEALTH_CHECK_INTERVAL: "15"
+
+---
+# Secret for Sensitive Configuration
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ai-teddy-bear-secrets
+  namespace: ai-teddy-bear
+  labels:
+    app: ai-teddy-bear
+    component: secrets
+type: Opaque
+stringData:
+  # Database Secrets (Base64 encoded in real deployment)
+  DATABASE_URL: "postgresql://user:password@postgres-service:5432/ai_teddy_bear_production"
+  
+  # Redis Secrets
+  REDIS_URL: "redis://:password@redis-service:6379/0"
+  
+  # JWT Secret
+  JWT_SECRET_KEY: "your-jwt-secret-key-here-64-chars-minimum-for-production-use"
+  
+  # AI Provider Keys (Replace with actual keys)
+  OPENAI_API_KEY: "sk-your-openai-api-key-here"
+  ANTHROPIC_API_KEY: "your-anthropic-api-key-here"
+  
+  # AWS Credentials
+  AWS_ACCESS_KEY_ID: "your-aws-access-key-id"
+  AWS_SECRET_ACCESS_KEY: "your-aws-secret-access-key"
+  
+  # Communication Service Keys
+  SENDGRID_API_KEY: "your-sendgrid-api-key"
+  FIREBASE_SERVICE_ACCOUNT: |
+    {
+      "type": "service_account",
+      "project_id": "your-project-id",
+      "private_key_id": "your-key-id",
+      "private_key": "-----BEGIN PRIVATE KEY-----\nYOUR-PRIVATE-KEY-HERE\n-----END PRIVATE KEY-----\n",
+      "client_email": "firebase-adminsdk@your-project.iam.gserviceaccount.com",
+      "client_id": "your-client-id",
+      "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+      "token_uri": "https://oauth2.googleapis.com/token"
+    }
+  
+  # External Service Keys
+  STRIPE_API_KEY: "sk_live_your-stripe-api-key"
+  STRIPE_WEBHOOK_SECRET: "whsec_your-stripe-webhook-secret"
+
+---
+# Deployment for AI Teddy Bear Application
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-teddy-bear-app
+  namespace: ai-teddy-bear
+  labels:
+    app: ai-teddy-bear
+    component: application
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ai-teddy-bear
+      component: application
+  template:
+    metadata:
+      labels:
+        app: ai-teddy-bear
+        component: application
+      annotations:
+        config-hash: "${CONFIG_HASH}"  # For config-driven restarts
+    spec:
+      serviceAccountName: ai-teddy-bear-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: ai-teddy-bear
+        securityContext:
+          capabilities:
+            drop:
+              - ALL
+        image: ai-teddy-bear:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        - containerPort: 8001
+          name: metrics
+          protocol: TCP
+        
+        # Environment variables from ConfigMap
+        envFrom:
+        - configMapRef:
+            name: ai-teddy-bear-config
+        - secretRef:
+            name: ai-teddy-bear-secrets
+        
+        # Additional environment variables
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        
+        # Volume mounts for configuration
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/config
+          readOnly: true
+        - name: secrets-volume
+          mountPath: /etc/secrets
+          readOnly: true
+        - name: app-config
+          mountPath: /app/config
+          readOnly: true
+        
+        # Resource limits
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        # Startup probe
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 12  # 2 minutes to start
+      
+      # Volumes
+      volumes:
+      - name: config-volume
+        configMap:
+          name: ai-teddy-bear-config
+      - name: secrets-volume
+        secret:
+          secretName: ai-teddy-bear-secrets
+      - name: app-config
+        configMap:
+          name: ai-teddy-bear-app-config
+
+---
+# ConfigMap for Application-Specific Configuration Files
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-teddy-bear-app-config
+  namespace: ai-teddy-bear
+  labels:
+    app: ai-teddy-bear
+    component: app-configuration
+data:
+  production.yaml: |
+    # Production configuration loaded from Kubernetes
+    APP_NAME: "AI Teddy Bear (Kubernetes)"
+    DEBUG: false
+    FORCE_HTTPS: true
+    
+    # Override any ConfigMap values here
+    LOG_LEVEL: "INFO"
+    CACHE_TTL_SECONDS: 1800
+    
+    # Kubernetes-specific settings
+    KUBERNETES_MODE: true
+    ENABLE_K8S_HEALTH_CHECKS: true
+
+---
+# Service for AI Teddy Bear Application
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-teddy-bear-service
+  namespace: ai-teddy-bear
+  labels:
+    app: ai-teddy-bear
+    component: service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: http
+    protocol: TCP
+    name: http
+  - port: 8001
+    targetPort: metrics
+    protocol: TCP
+    name: metrics
+  selector:
+    app: ai-teddy-bear
+    component: application
+
+---
+# ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-teddy-bear-service-account
+  namespace: ai-teddy-bear
+  labels:
+    app: ai-teddy-bear
+
+---
+# Role for Configuration Access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: ai-teddy-bear
+  name: ai-teddy-bear-config-reader
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+
+---
+# RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ai-teddy-bear-config-reader-binding
+  namespace: ai-teddy-bear
+subjects:
+- kind: ServiceAccount
+  name: ai-teddy-bear-service-account
+  namespace: ai-teddy-bear
+roleRef:
+  kind: Role
+  name: ai-teddy-bear-config-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Ingress for External Access
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ai-teddy-bear-ingress
+  namespace: ai-teddy-bear
+  labels:
+    app: ai-teddy-bear
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+spec:
+  tls:
+  - hosts:
+    - api.ai-teddybear.com
+    secretName: ai-teddy-bear-tls
+  rules:
+  - host: api.ai-teddybear.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ai-teddy-bear-service
+            port:
+              number: 80
+
+---
+# HorizontalPodAutoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ai-teddy-bear-hpa
+  namespace: ai-teddy-bear
+  labels:
+    app: ai-teddy-bear
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-teddy-bear-app
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+# PodDisruptionBudget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ai-teddy-bear-pdb
+  namespace: ai-teddy-bear
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: ai-teddy-bear
+      component: application
+
+---
+# NetworkPolicy for Security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-teddy-bear-network-policy
+  namespace: ai-teddy-bear
+spec:
+  podSelector:
+    matchLabels:
+      app: ai-teddy-bear
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: nginx-ingress
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  - to: []  # Allow all egress (customize as needed)
+    ports:
+    - protocol: TCP
+      port: 443  # HTTPS
+    - protocol: TCP
+      port: 80   # HTTP
+    - protocol: TCP
+      port: 5432 # PostgreSQL
+    - protocol: TCP
+      port: 6379 # Redis

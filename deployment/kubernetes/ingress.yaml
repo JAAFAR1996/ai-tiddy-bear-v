@@ -1,0 +1,164 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ai-teddy-bear-ingress
+  namespace: ai-teddy-bear
+  labels:
+    app.kubernetes.io/name: ai-teddy-bear
+    app.kubernetes.io/instance: production
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: ai-teddy-bear
+    app.kubernetes.io/managed-by: kubernetes
+    # Child safety compliance
+    coppa.compliant: "true"
+    child.safety.validated: "true"
+  annotations:
+    # Ingress controller configuration
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://app.aiteddybear.com,https://www.aiteddybear.com"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    
+    # SSL/TLS configuration
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+    nginx.ingress.kubernetes.io/ssl-ciphers: "ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384"
+    
+    # Security headers for child safety
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-Frame-Options: SAMEORIGIN";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://api.openai.com https://api.elevenlabs.io; child-src 'none'; object-src 'none'";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()";
+      more_set_headers "X-COPPA-Compliant: true";
+      more_set_headers "X-Child-Safety-Validated: true";
+    
+    # Rate limiting for child safety
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/rate-limit-connections: "10"
+    
+    # Connection and timeout settings
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"  
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    
+    # Load balancing
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$request_uri"
+    nginx.ingress.kubernetes.io/session-cookie-name: "ai-teddy-session"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "86400"
+    
+    # Monitoring and logging
+    nginx.ingress.kubernetes.io/enable-access-log: "true"
+    nginx.ingress.kubernetes.io/log-format: |
+      {
+        "timestamp": "$time_iso8601",
+        "request_id": "$req_id",
+        "remote_addr": "$remote_addr",
+        "remote_user": "$remote_user",
+        "request": "$request",
+        "status": $status,
+        "body_bytes_sent": $body_bytes_sent,
+        "request_time": $request_time,
+        "http_referrer": "$http_referer",
+        "http_user_agent": "$http_user_agent",
+        "http_x_forwarded_for": "$http_x_forwarded_for",
+        "child_safety_compliant": "true",
+        "coppa_validated": "true"
+      }
+    
+    # Certificate management
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    cert-manager.io/acme-challenge-type: "http01"
+    
+    # Child safety specific annotations
+    child-safety.compliance/coppa: "enabled"
+    child-safety.monitoring/enabled: "true"
+    child-safety.content-filter/enabled: "true"
+spec:
+  tls:
+  - hosts:
+    - api.aiteddybear.com
+    - staging-api.aiteddybear.com
+    secretName: ai-teddy-bear-tls
+  rules:
+  - host: api.aiteddybear.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ai-teddy-bear-service
+            port:
+              number: 80
+      - path: /api/v1/health
+        pathType: Exact
+        backend:
+          service:
+            name: ai-teddy-bear-service
+            port:
+              number: 80
+      - path: /metrics
+        pathType: Exact
+        backend:
+          service:
+            name: ai-teddy-bear-service
+            port:
+              number: 9090
+  - host: staging-api.aiteddybear.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ai-teddy-bear-service
+            port:
+              number: 80
+---
+# Separate ingress for canary deployments
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ai-teddy-bear-canary
+  namespace: ai-teddy-bear
+  labels:
+    app.kubernetes.io/name: ai-teddy-bear
+    app.kubernetes.io/component: canary-ingress
+    deployment.strategy: canary
+    coppa.compliant: "true"
+    child.safety.validated: "true"
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-weight: "0"  # Initially 0%
+    nginx.ingress.kubernetes.io/canary-by-header: "X-Canary"
+    nginx.ingress.kubernetes.io/canary-by-header-value: "true"
+    # Child safety annotations
+    child-safety.compliance/coppa: "enabled"
+    child-safety.monitoring/enabled: "true"
+spec:
+  tls:
+  - hosts:
+    - api.aiteddybear.com
+    secretName: ai-teddy-bear-tls
+  rules:
+  - host: api.aiteddybear.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ai-teddy-bear-green  # Points to green deployment
+            port:
+              number: 80

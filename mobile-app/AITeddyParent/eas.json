@@ -1,0 +1,61 @@
+{
+  "cli": {
+    "version": ">= 10.2.3"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "APP_ENV": "development"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": false,
+        "buildConfiguration": "Release"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "APP_ENV": "staging"
+      }
+    },
+    "production": {
+      "ios": {
+        "buildConfiguration": "Release",
+        "autoIncrement": "buildNumber"
+      },
+      "android": {
+        "buildType": "app-bundle",
+        "autoIncrement": "versionCode"
+      },
+      "env": {
+        "APP_ENV": "production",
+        "ENABLE_SSL_PINNING": "true",
+        "ENABLE_ANALYTICS": "true",
+        "ENABLE_CRASH_REPORTING": "true",
+        "ENABLE_LOGGING": "false",
+        "ENABLE_DEV_TOOLS": "false"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "support@aiteddybear.com",
+        "ascAppId": "ai-teddy-bear-parent",
+        "appleTeamId": "XXXXXXXXXX"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-service-account.json",
+        "track": "production"
+      }
+    }
+  }
+}

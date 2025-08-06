@@ -1,0 +1,131 @@
+# Staging Environment Configuration
+# =================================
+# Pre-production staging environment settings for AI Teddy Bear system
+
+# Application Settings
+APP_NAME: "AI Teddy Bear (Staging)"
+APP_VERSION: "1.0.0-staging"
+DEBUG: false
+HOST: "0.0.0.0"
+PORT: 8000
+
+# Database Configuration (Staging Database)
+DATABASE_URL: "postgresql://staging_user:${STAGING_DB_PASSWORD}@staging-db.internal:5432/ai_teddy_bear_staging"
+DATABASE_POOL_SIZE: 10
+DATABASE_MAX_OVERFLOW: 20
+DATABASE_TIMEOUT: 30
+
+# Redis Configuration (Staging Redis)
+REDIS_URL: "redis://staging-redis.internal:6379/0"
+REDIS_MAX_CONNECTIONS: 100
+REDIS_TIMEOUT: 5
+
+# AI Providers (Staging Keys - Lower rate limits)
+# These MUST be set via environment variables or Vault
+OPENAI_API_KEY: "${OPENAI_STAGING_API_KEY}"
+ANTHROPIC_API_KEY: "${ANTHROPIC_STAGING_API_KEY}"
+AI_PROVIDER_TIMEOUT: 30
+AI_PROVIDER_MAX_RETRIES: 3
+
+# Security Configuration (Production-like)
+JWT_SECRET_KEY: "${JWT_STAGING_SECRET_KEY}"
+JWT_ALGORITHM: "HS256"
+JWT_EXPIRATION_HOURS: 12  # Shorter expiration for staging
+RATE_LIMIT_REQUESTS: 5000  # Moderate limits for staging testing
+ENCRYPT_SENSITIVE_DATA: true
+
+# Logging Configuration (Production-like)
+LOG_LEVEL: "INFO"
+# ELK Stack (Staging cluster)
+ELASTICSEARCH_HOSTS: "staging-elasticsearch-1:9200,staging-elasticsearch-2:9200"
+# CloudWatch (Staging log group)
+CLOUDWATCH_LOG_GROUP: "/aws/ai-teddy-bear/staging"
+
+# Storage Configuration (Staging S3)
+AWS_ACCESS_KEY_ID: "${AWS_STAGING_ACCESS_KEY_ID}"
+AWS_SECRET_ACCESS_KEY: "${AWS_STAGING_SECRET_ACCESS_KEY}"
+S3_BUCKET_NAME: "ai-teddy-bear-staging-bucket"
+
+# Communication Services (Staging)
+SENDGRID_API_KEY: "${SENDGRID_STAGING_API_KEY}"
+FIREBASE_SERVICE_ACCOUNT: "${FIREBASE_STAGING_SERVICE_ACCOUNT_JSON}"
+
+# Child Safety Configuration (Production settings)
+CHILD_AGE_VERIFICATION_REQUIRED: true
+PARENTAL_CONSENT_REQUIRED: true
+CONTENT_FILTERING_LEVEL: "strict"
+
+# Staging-Specific Settings
+ENABLE_DEBUG_ROUTES: false
+ENABLE_TEST_DATA: true  # Keep test data for staging validation
+MOCK_EXTERNAL_SERVICES: false  # Use real services in staging
+SKIP_EMAIL_VERIFICATION: false
+ALLOW_UNSAFE_HTML: false
+
+# Performance Settings (Production-like)
+REQUEST_TIMEOUT: 30
+MAX_CONCURRENT_REQUESTS: 500
+CACHE_TTL_SECONDS: 600  # 10 minutes
+
+# Feature Flags (Staging - Test new features)
+ENABLE_ANALYTICS: true
+ENABLE_A_B_TESTING: true
+ENABLE_BETA_FEATURES: true
+
+# Monitoring (Full monitoring in staging)
+ENABLE_METRICS: true
+METRICS_PORT: 8001
+HEALTH_CHECK_INTERVAL: 30
+
+# Documentation (Limited in staging)
+ENABLE_SWAGGER_UI: true
+ENABLE_REDOC: true
+ENABLE_PROFILER: false
+ENABLE_CORS_ALL: false  # Restricted CORS in staging
+
+# File Upload Limits (Production-like)
+MAX_FILE_SIZE_MB: 5
+ALLOWED_FILE_TYPES: "jpg,jpeg,png,mp3,wav"
+
+# Session Configuration (Shorter for staging)
+SESSION_TIMEOUT_MINUTES: 60  # 1 hour
+REMEMBER_ME_DAYS: 7
+
+# Staging Testing Configuration
+ENABLE_LOAD_TESTING: true
+LOAD_TEST_MAX_USERS: 100
+PERFORMANCE_MONITORING: true
+
+# Data Retention (Shorter for staging)
+LOG_RETENTION_DAYS: 30
+DATA_RETENTION_DAYS: 90
+BACKUP_RETENTION_DAYS: 7
+
+# SSL/TLS Configuration
+FORCE_HTTPS: true
+SSL_REDIRECT: true
+HSTS_MAX_AGE: 31536000  # 1 year
+
+# External Service Configuration
+# All external services should use staging/test endpoints
+STRIPE_API_KEY: "${STRIPE_STAGING_API_KEY}"
+STRIPE_WEBHOOK_SECRET: "${STRIPE_STAGING_WEBHOOK_SECRET}"
+
+# Notification Settings
+EMAIL_NOTIFICATIONS: true
+PUSH_NOTIFICATIONS: true
+SMS_NOTIFICATIONS: false  # Disabled in staging
+
+# Environment-Specific URLs
+BASE_URL: "https://staging.ai-teddybear.com"
+API_BASE_URL: "https://api-staging.ai-teddybear.com"
+FRONTEND_URL: "https://app-staging.ai-teddybear.com"
+
+# Database Migration Settings
+AUTO_MIGRATE: false  # Manual migration approval in staging
+MIGRATION_TIMEOUT: 300  # 5 minutes
+
+# Backup Configuration
+ENABLE_AUTOMATED_BACKUPS: true
+BACKUP_INTERVAL_HOURS: 6
+BACKUP_ENCRYPTION: true

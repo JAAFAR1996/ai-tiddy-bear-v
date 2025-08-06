@@ -1,0 +1,120 @@
+# Multi-stage Dockerfile for AI Teddy Bear Backup Services
+# Optimized for production deployment with security and minimal image size
+
+# Build stage
+FROM python:3.11-slim as builder
+
+# Set build arguments
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION
+
+# Labels for image metadata
+LABEL org.opencontainers.image.created=$BUILD_DATE \
+      org.opencontainers.image.source="https://github.com/ai-teddy-bear/backup-system" \
+      org.opencontainers.image.version=$VERSION \
+      org.opencontainers.image.revision=$VCS_REF \
+      org.opencontainers.image.vendor="AI Teddy Bear" \
+      org.opencontainers.image.title="AI Teddy Bear Backup Services" \
+      org.opencontainers.image.description="Comprehensive backup and restore services for AI Teddy Bear application"
+
+# Install system dependencies for building
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    gcc \
+    libc6-dev \
+    libffi-dev \
+    libssl-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Upgrade pip and install wheel
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Copy requirements first for better caching
+COPY requirements-backup.txt /tmp/requirements-backup.txt
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r /tmp/requirements-backup.txt
+
+# Production stage
+FROM python:3.11-slim as production
+
+# Install runtime system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # PostgreSQL client tools
+    postgresql-client \
+    # Compression tools
+    gzip \
+    tar \
+    # Security tools
+    gnupg \
+    openssl \
+    # Networking tools
+    curl \
+    wget \
+    # Process management
+    supervisor \
+    # Cleanup
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user for security
+RUN groupadd -r backup && useradd -r -g backup -s /bin/false backup
+
+# Copy virtual environment from builder stage
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Set working directory
+WORKDIR /app
+
+# Create necessary directories with proper permissions
+RUN mkdir -p /app/backups \
+             /app/logs \
+             /app/config \
+             /app/keys \
+             /var/log/supervisor \
+    && chown -R backup:backup /app \
+    && chmod 755 /app/backups \
+    && chmod 750 /app/keys \
+    && chmod 755 /app/logs
+
+# Copy application code
+COPY --chown=backup:backup src/ /app/src/
+COPY --chown=backup:backup scripts/backup/ /app/scripts/
+COPY --chown=backup:backup deployment/backup/config/ /app/config/
+
+# Copy supervisor configuration
+COPY deployment/backup/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Make scripts executable
+RUN chmod +x /app/scripts/*.py /app/scripts/*.sh
+
+# Health check
+COPY deployment/backup/healthcheck.sh /app/healthcheck.sh
+RUN chmod +x /app/healthcheck.sh
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD /app/healthcheck.sh
+
+# Set environment variables
+ENV PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    BACKUP_SERVICE_MODE=production \
+    LOG_LEVEL=INFO
+
+# Expose metrics port
+EXPOSE 9090
+
+# Use non-root user
+USER backup
+
+# Default command
+CMD ["supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

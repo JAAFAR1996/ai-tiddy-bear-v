@@ -1,0 +1,212 @@
+# Prometheus Alerting Rules for AI Teddy Bear Production
+# Child safety and COPPA compliance focused alerts
+
+groups:
+  # Child Safety Critical Alerts
+  - name: child_safety_critical
+    rules:
+      - alert: ChildSafetyViolation
+        expr: child_safety_violations_total > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: child_safety
+          coppa_incident: "true"
+        annotations:
+          summary: "CRITICAL: Child safety violation detected"
+          description: "{{ $value }} child safety violations detected in the last 5 minutes. Immediate investigation required."
+
+      - alert: ContentFilterFailure
+        expr: content_filter_failures_total > 0
+        for: 1m
+        labels:
+          severity: critical
+          category: child_safety
+        annotations:
+          summary: "CRITICAL: Content filter system failure"
+          description: "Content filtering system is not functioning properly. Child safety may be compromised."
+
+      - alert: COPPAComplianceViolation
+        expr: coppa_violations_total > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: compliance
+          regulatory: "coppa"
+        annotations:
+          summary: "CRITICAL: COPPA compliance violation"
+          description: "{{ $value }} COPPA compliance violations detected. Legal and regulatory review required immediately."
+
+      - alert: UnauthorizedChildDataAccess
+        expr: unauthorized_child_data_access_total > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: child_safety
+          data_breach: "true"
+        annotations:
+          summary: "CRITICAL: Unauthorized access to child data"
+          description: "Unauthorized access to protected child data detected. Security incident response required."
+
+  # Application Health Alerts
+  - name: application_health
+    rules:
+      - alert: ApplicationDown
+        expr: up{job="ai-teddy-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "AI Teddy Bear application is down"
+          description: "The main application has been down for more than 1 minute."
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }}s over the last 5 minutes."
+
+      - alert: DatabaseConnectionFailure
+        expr: database_connections_failed_total > 0
+        for: 1m
+        labels:
+          severity: critical
+          category: database
+        annotations:
+          summary: "Database connection failures"
+          description: "{{ $value }} database connection failures in the last minute."
+
+  # Security Alerts
+  - name: security_alerts
+    rules:
+      - alert: BruteForceAttack
+        expr: rate(auth_failed_attempts_total[5m]) > 10
+        for: 1m
+        labels:
+          severity: warning
+          category: security
+          attack_type: "brute_force"
+        annotations:
+          summary: "Potential brute force attack detected"
+          description: "{{ $value }} failed authentication attempts per second over the last 5 minutes."
+
+      - alert: RateLimitExceeded
+        expr: rate_limit_exceeded_total > 100
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "Rate limit frequently exceeded"
+          description: "Rate limit has been exceeded {{ $value }} times in the last 5 minutes."
+
+      - alert: SuspiciousTraffic
+        expr: suspicious_requests_total > 50
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "Suspicious traffic pattern detected"
+          description: "{{ $value }} suspicious requests detected in the last 2 minutes."
+
+  # Infrastructure Alerts
+  - name: infrastructure
+    rules:
+      - alert: DatabaseDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: database
+        annotations:
+          summary: "PostgreSQL database is down"
+          description: "PostgreSQL database has been unreachable for more than 1 minute."
+
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: cache
+        annotations:
+          summary: "Redis cache is down"
+          description: "Redis cache has been unreachable for more than 1 minute."
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is above 85% for more than 5 minutes."
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is above 80% for more than 10 minutes."
+
+      - alert: DiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "Low disk space"
+          description: "Disk usage is above 85% on {{ $labels.mountpoint }}."
+
+  # Business Logic Alerts
+  - name: business_metrics
+    rules:
+      - alert: LowUserEngagement
+        expr: avg_over_time(daily_active_users[1h]) < 10
+        for: 6h
+        labels:
+          severity: info
+          category: business
+        annotations:
+          summary: "Low user engagement detected"
+          description: "Daily active users have been below 10 for the last 6 hours."
+
+      - alert: HighChurnRate
+        expr: user_churn_rate > 0.2
+        for: 1h
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "High user churn rate"
+          description: "User churn rate is {{ $value | humanizePercentage }}."
+
+      - alert: AIServiceFailure
+        expr: ai_service_requests_failed_total > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: ai_service
+        annotations:
+          summary: "AI service experiencing failures"
+          description: "{{ $value }} AI service failures in the last 5 minutes."

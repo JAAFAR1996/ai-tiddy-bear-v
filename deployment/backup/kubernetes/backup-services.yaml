@@ -1,0 +1,576 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-teddy-backup
+  labels:
+    name: ai-teddy-backup
+    environment: production
+    component: backup-system
+
+---
+# ConfigMap for backup configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-config
+  namespace: ai-teddy-backup
+data:
+  backup.conf: |
+    # Backup Service Configuration
+    BACKUP_RETENTION_DAYS=90
+    BACKUP_COMPRESSION_ENABLED=true
+    BACKUP_ENCRYPTION_ENABLED=true
+    COPPA_COMPLIANCE_MODE=true
+    HOURLY_BACKUP_ENABLED=true
+    DAILY_BACKUP_ENABLED=true
+    WEEKLY_BACKUP_ENABLED=true
+    MONTHLY_BACKUP_ENABLED=true
+    BACKUP_PARALLEL_JOBS=2
+    BACKUP_CHUNK_SIZE_MB=100
+    BACKUP_TIMEOUT_MINUTES=120
+    PROMETHEUS_ENABLED=true
+    BACKUP_TESTING_ENABLED=true
+    ALERT_EMAIL_ENABLED=true
+
+---
+# Secret for sensitive backup configuration
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backup-secrets
+  namespace: ai-teddy-backup
+type: Opaque
+data:
+  # These should be base64 encoded values
+  # Example: echo -n "your-key-here" | base64
+  BACKUP_ENCRYPTION_KEY: ""  # Base64 encoded backup encryption key
+  COPPA_ENCRYPTION_KEY: ""   # Base64 encoded COPPA encryption key
+  DATABASE_BACKUP_URL: ""    # Base64 encoded database URL
+  AWS_BACKUP_ACCESS_KEY_ID: ""
+  AWS_BACKUP_SECRET_ACCESS_KEY: ""
+  AZURE_BACKUP_CONNECTION_STRING: ""
+  BACKUP_SLACK_WEBHOOK_URL: ""
+  BACKUP_PAGERDUTY_KEY: ""
+  ALERT_EMAIL_SMTP_PASSWORD: ""
+
+---
+# PersistentVolumeClaim for backup storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backup-storage
+  namespace: ai-teddy-backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Gi
+  storageClassName: fast-ssd
+
+---
+# PersistentVolumeClaim for backup logs
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backup-logs
+  namespace: ai-teddy-backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: standard
+
+---
+# ServiceAccount for backup services
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backup-service-account
+  namespace: ai-teddy-backup
+
+---
+# ClusterRole for backup services
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backup-cluster-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+
+---
+# ClusterRoleBinding for backup services
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backup-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: backup-cluster-role
+subjects:
+- kind: ServiceAccount
+  name: backup-service-account
+  namespace: ai-teddy-backup
+
+---
+# Deployment for backup orchestrator
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backup-orchestrator
+  namespace: ai-teddy-backup
+  labels:
+    app: backup-orchestrator
+    component: backup-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backup-orchestrator
+  template:
+    metadata:
+      labels:
+        app: backup-orchestrator
+        component: backup-system
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: backup-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: backup-orchestrator
+        image: ai-teddy-bear/backup-services:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 9090
+          name: metrics
+          protocol: TCP
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: PROMETHEUS_PORT
+          value: "9090"
+        # Environment variables from ConfigMap
+        - name: BACKUP_RETENTION_DAYS
+          valueFrom:
+            configMapKeyRef:
+              name: backup-config
+              key: BACKUP_RETENTION_DAYS
+        - name: BACKUP_COMPRESSION_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: backup-config
+              key: BACKUP_COMPRESSION_ENABLED
+        - name: BACKUP_ENCRYPTION_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: backup-config
+              key: BACKUP_ENCRYPTION_ENABLED
+        - name: COPPA_COMPLIANCE_MODE
+          valueFrom:
+            configMapKeyRef:
+              name: backup-config
+              key: COPPA_COMPLIANCE_MODE
+        # Environment variables from Secret
+        - name: BACKUP_ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: backup-secrets
+              key: BACKUP_ENCRYPTION_KEY
+        - name: COPPA_ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: backup-secrets
+              key: COPPA_ENCRYPTION_KEY
+        - name: DATABASE_BACKUP_URL
+          valueFrom:
+            secretKeyRef:
+              name: backup-secrets
+              key: DATABASE_BACKUP_URL
+        - name: AWS_BACKUP_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: backup-secrets
+              key: AWS_BACKUP_ACCESS_KEY_ID
+        - name: AWS_BACKUP_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: backup-secrets
+              key: AWS_BACKUP_SECRET_ACCESS_KEY
+        volumeMounts:
+        - name: backup-storage
+          mountPath: /app/backups
+        - name: backup-logs
+          mountPath: /app/logs
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - /app/healthcheck.sh
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - /app/healthcheck.sh
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: backup-storage
+        persistentVolumeClaim:
+          claimName: backup-storage
+      - name: backup-logs
+        persistentVolumeClaim:
+          claimName: backup-logs
+      restartPolicy: Always
+
+---
+# Deployment for backup scheduler
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backup-scheduler
+  namespace: ai-teddy-backup
+  labels:
+    app: backup-scheduler
+    component: backup-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backup-scheduler
+  template:
+    metadata:
+      labels:
+        app: backup-scheduler
+        component: backup-system
+    spec:
+      serviceAccountName: backup-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: backup-scheduler
+        image: ai-teddy-bear/backup-services:latest
+        imagePullPolicy: Always
+        command: ["python", "/app/scripts/backup_scheduler.py"]
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: SCHEDULER_CHECK_INTERVAL_SECONDS
+          value: "60"
+        - name: BACKUP_QUEUE_MAX_SIZE
+          value: "10"
+        # Inherit configuration from ConfigMap and Secret
+        envFrom:
+        - configMapRef:
+            name: backup-config
+        - secretRef:
+            name: backup-secrets
+        volumeMounts:
+        - name: backup-storage
+          mountPath: /app/backups
+        - name: backup-logs
+          mountPath: /app/logs
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: backup-storage
+        persistentVolumeClaim:
+          claimName: backup-storage
+      - name: backup-logs
+        persistentVolumeClaim:
+          claimName: backup-logs
+      restartPolicy: Always
+
+---
+# Deployment for backup monitor
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backup-monitor
+  namespace: ai-teddy-backup
+  labels:
+    app: backup-monitor
+    component: backup-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backup-monitor
+  template:
+    metadata:
+      labels:
+        app: backup-monitor
+        component: backup-system
+    spec:
+      serviceAccountName: backup-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: backup-monitor
+        image: ai-teddy-bear/backup-services:latest
+        imagePullPolicy: Always
+        command: ["python", "-m", "src.infrastructure.backup.monitoring"]
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: MONITORING_CHECK_INTERVAL_MINUTES
+          value: "15"
+        - name: COMPLIANCE_REPORT_SCHEDULE
+          value: "0 1 * * *"
+        - name: ALERT_ESCALATION_ENABLED
+          value: "true"
+        # Inherit configuration from ConfigMap and Secret
+        envFrom:
+        - configMapRef:
+            name: backup-config
+        - secretRef:
+            name: backup-secrets
+        volumeMounts:
+        - name: backup-storage
+          mountPath: /app/backups
+          readOnly: true
+        - name: backup-logs
+          mountPath: /app/logs
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: backup-storage
+        persistentVolumeClaim:
+          claimName: backup-storage
+      - name: backup-logs
+        persistentVolumeClaim:
+          claimName: backup-logs
+      restartPolicy: Always
+
+---
+# CronJob for backup testing
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-testing
+  namespace: ai-teddy-backup
+  labels:
+    app: backup-testing
+    component: backup-system
+spec:
+  schedule: "0 2 * * 0"  # Weekly on Sunday at 2 AM
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: backup-testing
+            component: backup-system
+        spec:
+          serviceAccountName: backup-service-account
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            fsGroup: 1000
+          containers:
+          - name: backup-testing
+            image: ai-teddy-bear/backup-services:latest
+            imagePullPolicy: Always
+            command: ["python", "/app/scripts/backup_test_runner.py", "--weekly"]
+            env:
+            - name: ENVIRONMENT
+              value: "testing"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: TEST_DATA_PATH
+              value: "/app/test_data"
+            - name: TEST_RESULTS_PATH
+              value: "/app/test_results"
+            # Inherit configuration from ConfigMap and Secret
+            envFrom:
+            - configMapRef:
+                name: backup-config
+            - secretRef:
+                name: backup-secrets
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /app/backups
+            - name: backup-logs
+              mountPath: /app/logs
+            - name: test-data
+              mountPath: /app/test_data
+            - name: test-results
+              mountPath: /app/test_results
+            resources:
+              requests:
+                memory: "512Mi"
+                cpu: "250m"
+              limits:
+                memory: "1Gi"
+                cpu: "500m"
+          volumes:
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: backup-storage
+          - name: backup-logs
+            persistentVolumeClaim:
+              claimName: backup-logs
+          - name: test-data
+            emptyDir: {}
+          - name: test-results
+            emptyDir: {}
+          restartPolicy: OnFailure
+
+---
+# Service for backup orchestrator metrics
+apiVersion: v1
+kind: Service
+metadata:
+  name: backup-orchestrator-service
+  namespace: ai-teddy-backup
+  labels:
+    app: backup-orchestrator
+    component: backup-system
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
+spec:
+  selector:
+    app: backup-orchestrator
+  ports:
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  type: ClusterIP
+
+---
+# ServiceMonitor for Prometheus monitoring
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: backup-services-monitor
+  namespace: ai-teddy-backup
+  labels:
+    app: backup-services
+    component: backup-system
+spec:
+  selector:
+    matchLabels:
+      app: backup-orchestrator
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+
+---
+# HorizontalPodAutoscaler for backup orchestrator
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backup-orchestrator-hpa
+  namespace: ai-teddy-backup
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backup-orchestrator
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+# PodDisruptionBudget for backup services
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backup-services-pdb
+  namespace: ai-teddy-backup
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      component: backup-system
+
+---
+# NetworkPolicy for backup services
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backup-services-network-policy
+  namespace: ai-teddy-backup
+spec:
+  podSelector:
+    matchLabels:
+      component: backup-system
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - namespaceSelector:
+        matchLabels:
+          name: ai-teddy-bear
+    ports:
+    - protocol: TCP
+      port: 9090
+  egress:
+  - to: []  # Allow all outbound traffic for backup operations
+    ports:
+    - protocol: TCP
+    - protocol: UDP

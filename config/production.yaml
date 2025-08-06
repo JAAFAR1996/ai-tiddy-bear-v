@@ -1,0 +1,185 @@
+# Production Environment Configuration
+# ====================================
+# Production settings for AI Teddy Bear system
+# ALL SENSITIVE VALUES MUST BE SET VIA ENVIRONMENT VARIABLES OR VAULT
+
+# Application Settings - PRODUCTION STRICT
+APP_NAME: "AI Teddy Bear"
+APP_VERSION: "1.0.0"
+DEBUG: false
+HOST: "0.0.0.0"
+PORT: 8000
+
+# Database Configuration - PRODUCTION WITH SSL
+DATABASE_URL: "${DATABASE_URL}"
+DATABASE_POOL_SIZE: 20
+DATABASE_MAX_OVERFLOW: 40
+DATABASE_POOL_TIMEOUT: 30
+DATABASE_POOL_RECYCLE: 3600
+DATABASE_ECHO: false
+DATABASE_SSL_MODE: "require"
+
+# Redis Configuration (Production Redis Cluster)
+REDIS_URL: "${REDIS_PRODUCTION_URL}"
+REDIS_MAX_CONNECTIONS: 200
+REDIS_TIMEOUT: 3  # Shorter timeout for production
+
+# AI Providers (Production Keys)
+# ALL API KEYS MUST be set via environment variables or Vault
+OPENAI_API_KEY: "${OPENAI_PRODUCTION_API_KEY}"
+ANTHROPIC_API_KEY: "${ANTHROPIC_PRODUCTION_API_KEY}"
+AI_PROVIDER_TIMEOUT: 25  # Shorter timeout for better UX
+AI_PROVIDER_MAX_RETRIES: 2  # Limited retries in production
+
+# Security Configuration - MAXIMUM PRODUCTION SECURITY
+JWT_SECRET_KEY: "${JWT_SECRET_KEY}"
+JWT_ALGORITHM: "HS256"
+JWT_EXPIRATION_HOURS: 2  # Very short expiration for maximum security
+RATE_LIMIT_REQUESTS: 500  # Strict production rate limits
+ENCRYPT_SENSITIVE_DATA: true
+ENABLE_MFA: true
+SESSION_TIMEOUT_MINUTES: 15
+
+# Logging Configuration - PRODUCTION SECURE LOGGING
+LOG_LEVEL: "WARNING"  # Only warnings and errors in production
+ENABLE_AUDIT_LOGGING: true
+LOG_RETENTION_DAYS: 90
+# ELK Stack (Production cluster)
+ELASTICSEARCH_HOSTS: "${ELASTICSEARCH_PRODUCTION_HOSTS}"
+# CloudWatch (Production log group)
+CLOUDWATCH_LOG_GROUP: "/aws/ai-teddy-bear/production"
+
+# Storage Configuration (Production S3)
+AWS_ACCESS_KEY_ID: "${AWS_PRODUCTION_ACCESS_KEY_ID}"
+AWS_SECRET_ACCESS_KEY: "${AWS_PRODUCTION_SECRET_ACCESS_KEY}"
+S3_BUCKET_NAME: "ai-teddy-bear-production-bucket"
+
+# Communication Services (Production)
+SENDGRID_API_KEY: "${SENDGRID_PRODUCTION_API_KEY}"
+SMTP_HOST: "${SMTP_HOST:-smtp.sendgrid.net}"
+SMTP_PORT: "${SMTP_PORT:-587}"
+SMTP_USERNAME: "${SMTP_USERNAME}"
+SMTP_PASSWORD: "${SMTP_PASSWORD}"
+SMTP_USE_TLS: true
+SMTP_USE_SSL: false
+FROM_EMAIL: "${FROM_EMAIL:-noreply@aiteddybear.com}"
+FIREBASE_SERVICE_ACCOUNT: "${FIREBASE_PRODUCTION_SERVICE_ACCOUNT_JSON}"
+
+# Child Safety Configuration (Strictest Settings)
+CHILD_AGE_VERIFICATION_REQUIRED: true
+PARENTAL_CONSENT_REQUIRED: true
+CONTENT_FILTERING_LEVEL: "strict"
+
+# Production Security Settings
+ENABLE_DEBUG_ROUTES: false
+ENABLE_TEST_DATA: false
+MOCK_EXTERNAL_SERVICES: false
+SKIP_EMAIL_VERIFICATION: false
+ALLOW_UNSAFE_HTML: false
+
+# Performance Settings (Optimized for Production)
+REQUEST_TIMEOUT: 20  # Aggressive timeout for better UX
+MAX_CONCURRENT_REQUESTS: 1000
+CACHE_TTL_SECONDS: 1800  # 30 minutes
+
+# Feature Flags (Production)
+ENABLE_ANALYTICS: true
+ENABLE_A_B_TESTING: false  # Disabled until thoroughly tested
+ENABLE_BETA_FEATURES: false
+
+# Monitoring (Full Production Monitoring)
+ENABLE_METRICS: true
+METRICS_PORT: 8001
+HEALTH_CHECK_INTERVAL: 15  # More frequent health checks
+
+# Documentation (Disabled in Production)
+ENABLE_SWAGGER_UI: false
+ENABLE_REDOC: false
+ENABLE_PROFILER: false
+ENABLE_CORS_ALL: false
+
+# File Upload Limits (Production Limits)
+MAX_FILE_SIZE_MB: 1  # Very strict limits for production
+ALLOWED_FILE_TYPES: "jpg,jpeg,png"  # Only essential file types
+
+# SSL/TLS Configuration (Strict)
+FORCE_HTTPS: true
+SSL_REDIRECT: true
+HSTS_MAX_AGE: 63072000  # 2 years
+SSL_ONLY_COOKIES: true
+
+# External Service Configuration (Production)
+STRIPE_PUBLISHABLE_KEY: "${STRIPE_PRODUCTION_PUBLISHABLE_KEY}"
+STRIPE_SECRET_KEY: "${STRIPE_PRODUCTION_SECRET_KEY}"
+STRIPE_WEBHOOK_SECRET: "${STRIPE_PRODUCTION_WEBHOOK_SECRET}"
+
+# Notification Settings (Production)
+EMAIL_NOTIFICATIONS: true
+PUSH_NOTIFICATIONS: true
+SMS_NOTIFICATIONS: true
+
+# Environment-Specific URLs (Production)
+BASE_URL: "https://aiteddybear.com"
+API_BASE_URL: "https://api.aiteddybear.com"
+FRONTEND_URL: "https://app.aiteddybear.com"
+
+# Database Migration Settings (Strict)
+AUTO_MIGRATE: false  # Never auto-migrate in production
+MIGRATION_TIMEOUT: 600  # 10 minutes for complex migrations
+
+# Backup Configuration (Production)
+ENABLE_AUTOMATED_BACKUPS: true
+BACKUP_INTERVAL_HOURS: 4  # More frequent backups
+BACKUP_ENCRYPTION: true
+BACKUP_RETENTION_DAYS: 90
+
+# Data Retention (Production)
+DATA_RETENTION_DAYS: 2555  # 7 years for compliance
+AUDIT_LOG_RETENTION_DAYS: 2555  # 7 years for audit logs
+
+# Security Headers (Production)
+SECURITY_HEADERS:
+  X-Frame-Options: "DENY"
+  X-Content-Type-Options: "nosniff"
+  X-XSS-Protection: "1; mode=block"
+  Referrer-Policy: "strict-origin-when-cross-origin"
+  Content-Security-Policy: "default-src 'self'; script-src 'self' 'unsafe-inline'"
+
+# COPPA Compliance Settings (Strict)
+COPPA_COMPLIANCE_MODE: true
+DATA_MINIMIZATION: true
+PARENTAL_DASHBOARD_ENABLED: true
+CHILD_DATA_ENCRYPTION: true
+
+# Monitoring and Alerting (Production)
+ALERT_EMAIL: "alerts@aiteddybear.com"
+SLACK_WEBHOOK_URL: "${SLACK_PRODUCTION_WEBHOOK_URL}"
+PAGERDUTY_INTEGRATION_KEY: "${PAGERDUTY_PRODUCTION_KEY}"
+
+# Performance Monitoring
+APM_SERVICE_NAME: "ai-teddy-bear-production"
+APM_SERVER_URL: "${APM_PRODUCTION_SERVER_URL}"
+APM_SECRET_TOKEN: "${APM_PRODUCTION_SECRET_TOKEN}"
+
+# Circuit Breaker Settings (Production)
+CIRCUIT_BREAKER_FAILURE_THRESHOLD: 5
+CIRCUIT_BREAKER_TIMEOUT: 60
+CIRCUIT_BREAKER_HALF_OPEN_REQUESTS: 3
+
+# Resource Limits (Production Hardened)
+MAX_MEMORY_MB: 512
+MAX_CPU_PERCENT: 60
+MAX_DISK_USAGE_PERCENT: 70
+
+# Geographic Configuration (COPPA Strict)
+ALLOWED_COUNTRIES: "US,CA"  # Only COPPA-compliant countries
+DEFAULT_TIMEZONE: "UTC"
+MULTI_REGION_ENABLED: false
+
+# Privacy Settings (MAXIMUM Privacy)
+ANONYMIZE_IP_ADDRESSES: true
+DISABLE_USER_TRACKING: true
+GDPR_COMPLIANT: true
+CCPA_COMPLIANT: true
+MINIMAL_DATA_COLLECTION: true
+GDPR_COMPLIANCE_MODE: true

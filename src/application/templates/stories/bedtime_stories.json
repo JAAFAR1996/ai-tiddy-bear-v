@@ -1,0 +1,26 @@
+[
+  {
+    "id": "bed1",
+    "title": "The Sleepy Bear",
+    "content": "Once upon a time, there was a little bear who lived in a cozy cave. Every evening, the bear would curl up in his soft bed of leaves and dream wonderful dreams about honey and friendship.",
+    "category": "bedtime",
+    "description": "A gentle bedtime story about a sleepy bear",
+    "min_age": 3,
+    "max_age": 8,
+    "tags": ["bedtime", "bear", "gentle", "sleep", "dreams"],
+    "version": "1.0.0",
+    "author": "Story Templates System"
+  },
+  {
+    "id": "bed2",
+    "title": "The Moon Adventure",
+    "content": "A journey to the moon with a little rocket ship. The child astronaut meets friendly moon creatures who show them around the peaceful lunar landscape before safely returning home to bed.",
+    "category": "bedtime",
+    "description": "A peaceful adventure to the moon perfect for bedtime",
+    "min_age": 5,
+    "max_age": 10,
+    "tags": ["bedtime", "moon", "adventure", "space", "dreams"],
+    "version": "1.0.0",
+    "author": "Story Templates System"
+  }
+]

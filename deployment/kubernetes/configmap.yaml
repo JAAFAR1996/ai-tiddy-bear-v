@@ -1,0 +1,180 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-teddy-bear-config
+  namespace: ai-teddy-bear
+  labels:
+    app.kubernetes.io/name: ai-teddy-bear
+    app.kubernetes.io/instance: production
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/component: configuration
+    # Child safety compliance
+    coppa.compliant: "true"
+    child.safety.validated: "true"
+data:
+  # Environment configuration
+  ENVIRONMENT: "production"
+  DEBUG: "false"
+  LOG_LEVEL: "INFO"
+  
+  # Server configuration
+  HOST: "0.0.0.0"
+  PORT: "8000"
+  WORKERS: "4"
+  
+  # Database configuration
+  DATABASE_URL: "postgresql://ai_teddy_user:${DB_PASSWORD}@postgres:5432/ai_teddy_bear"
+  DATABASE_POOL_SIZE: "20"
+  DATABASE_MAX_OVERFLOW: "30"
+  DATABASE_POOL_TIMEOUT: "30"
+  DATABASE_ECHO: "false"
+  
+  # Redis configuration
+  REDIS_URL: "redis://redis:6379/0"
+  REDIS_POOL_SIZE: "20"
+  REDIS_TIMEOUT: "10"
+  
+  # AI Services configuration
+  OPENAI_MODEL: "gpt-4"
+  OPENAI_MAX_TOKENS: "1500"
+  OPENAI_TEMPERATURE: "0.7"
+  WHISPER_MODEL: "medium"
+  
+  # CORS & Security
+  CORS_ALLOWED_ORIGINS: '["https://app.aiteddybear.com","https://www.aiteddybear.com"]'
+  ALLOWED_HOSTS: '["app.aiteddybear.com","api.aiteddybear.com"]'
+  
+  # Child Safety & COPPA Compliance
+  COPPA_COMPLIANCE_MODE: "true"
+  CONTENT_FILTER_STRICT: "true"
+  CHILD_SAFETY_STRICT: "true"
+  DATA_RETENTION_DAYS: "90"
+  AUTO_DELETE_ENABLED: "true"
+  DATA_EXPORT_ENABLED: "true"
+  
+  # Rate Limiting
+  RATE_LIMIT_REQUESTS_PER_MINUTE: "100"
+  RATE_LIMIT_BURST: "20"
+  
+  # Security Thresholds
+  SECURITY_BRUTE_FORCE_ATTEMPTS: "10"
+  SECURITY_BRUTE_FORCE_WINDOW: "3600"
+  SECURITY_ACCESS_MAX_PER_HOUR: "100"
+  SECURITY_ACCESS_MAX_PER_DAY: "1000"
+  SECURITY_ACCESS_MAX_PER_MINUTE: "20"
+  
+  # Content & Safety Scoring
+  SAFETY_SCORE_THRESHOLD: "0.9"
+  CONTENT_COMPLEXITY_AGE_THRESHOLD_SIMPLE: "5"
+  CONTENT_COMPLEXITY_AGE_THRESHOLD_COMPLEX: "8"
+  
+  # JWT Configuration
+  JWT_ALGORITHM: "HS256"
+  ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  REFRESH_TOKEN_EXPIRE_DAYS: "7"
+  
+  # API Configuration
+  API_BASE_URL: "https://api.aiteddybear.com"
+  API_TITLE: "AI Teddy Bear API"
+  API_VERSION: "1.0.0"
+  SUPPORT_EMAIL: "support@aiteddybear.com"
+  DOCS_URL: ""
+  REDOC_URL: ""
+  
+  # Session Configuration
+  SESSION_EXPIRE_HOURS: "24"
+  SESSION_SECURE: "true"
+  SESSION_HTTPONLY: "true"
+  SESSION_SAMESITE: "strict"
+  
+  # Feature Flags
+  ENABLE_DATABASE: "true"
+  ENABLE_REDIS: "true"
+  ENABLE_AI_SERVICES: "true"
+  USE_MOCK_SERVICES: "false"
+  
+  # Monitoring & Observability
+  PROMETHEUS_ENABLED: "true"
+  PROMETHEUS_PORT: "9090"
+  ENABLE_METRICS: "true"
+  ENABLE_TRACING: "true"
+  ENABLE_HEALTH_CHECKS: "true"
+  
+  # Backup and Recovery
+  BACKUP_ENABLED: "true"
+  BACKUP_SCHEDULE: "0 2 * * *"
+  BACKUP_RETENTION_DAYS: "30"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-teddy-bear-logging-config
+  namespace: ai-teddy-bear
+  labels:
+    app.kubernetes.io/name: ai-teddy-bear
+    app.kubernetes.io/component: logging-configuration
+data:
+  logging.yaml: |
+    version: 1
+    disable_existing_loggers: false
+    
+    formatters:
+      default:
+        format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+      json:
+        class: pythonjsonlogger.jsonlogger.JsonFormatter
+        format: '%(asctime)s %(name)s %(levelname)s %(message)s %(pathname)s %(lineno)d'
+      child_safety:
+        class: pythonjsonlogger.jsonlogger.JsonFormatter
+        format: '%(asctime)s %(name)s %(levelname)s CHILD_SAFETY %(message)s %(child_id)s %(parent_id)s'
+    
+    handlers:
+      console:
+        class: logging.StreamHandler
+        level: INFO
+        formatter: json
+        stream: ext://sys.stdout
+      
+      file:
+        class: logging.handlers.RotatingFileHandler
+        level: INFO
+        formatter: json
+        filename: /app/logs/application.log
+        maxBytes: 100000000  # 100MB
+        backupCount: 10
+      
+      child_safety:
+        class: logging.handlers.RotatingFileHandler
+        level: INFO
+        formatter: child_safety
+        filename: /app/logs/child_safety.log
+        maxBytes: 100000000
+        backupCount: 20
+      
+      security:
+        class: logging.handlers.RotatingFileHandler
+        level: WARNING
+        formatter: json
+        filename: /app/logs/security.log
+        maxBytes: 100000000
+        backupCount: 20
+    
+    loggers:
+      uvicorn:
+        level: INFO
+        handlers: [console, file]
+        propagate: false
+      
+      child_safety:
+        level: INFO
+        handlers: [child_safety, console]
+        propagate: false
+      
+      security:
+        level: WARNING
+        handlers: [security, console]
+        propagate: false
+    
+    root:
+      level: INFO
+      handlers: [console, file]

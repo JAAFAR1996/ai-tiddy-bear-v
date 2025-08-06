@@ -1,0 +1,43 @@
+{
+  "name": "aiteddyparent",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "build:android": "eas build --platform android --profile production",
+    "build:ios": "eas build --platform ios --profile production",
+    "build:preview": "eas build --platform all --profile preview",
+    "submit:android": "eas submit --platform android",
+    "submit:ios": "eas submit --platform ios",
+    "test": "jest",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-navigation/native": "^7.1.17",
+    "@react-navigation/stack": "^7.4.5",
+    "axios": "^1.11.0",
+    "expo": "~53.0.20",
+    "expo-constants": "~17.0.3",
+    "expo-device": "~7.0.1",
+    "expo-notifications": "~0.29.5",
+    "expo-secure-store": "~14.2.2",
+    "expo-status-bar": "~2.2.3",
+    "react": "19.0.0",
+    "react-native": "0.79.5",
+    "react-native-safe-area-context": "^5.5.2",
+    "react-native-screens": "^4.13.1",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@types/react": "~19.0.10",
+    "dotenv": "^16.4.5",
+    "typescript": "~5.8.3"
+  },
+  "private": true
+}

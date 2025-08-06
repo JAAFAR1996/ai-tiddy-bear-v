@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.claude/
+
+# Environment
+.env
+.env.*
+!.env.example
+config.py
+settings.py
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# Documentation
+docs/_build/
+site/
+
+# Temporary
+tmp/
+temp/
+
+# IDE settings
+.claude/
+*.local.json
+
+
+#Ignore cursor AI rules
+.cursor\rules\codacy.mdc

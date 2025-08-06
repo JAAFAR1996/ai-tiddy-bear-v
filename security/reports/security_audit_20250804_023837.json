@@ -1,0 +1,3309 @@
+{
+  "timestamp": "20250804_023837",
+  "project_path": ".",
+  "python_version": "3.13.5 (tags/v3.13.5:6cb20a2, Jun 11 2025, 16:15:46) [MSC v.1943 64 bit (AMD64)]",
+  "audits": {
+    "installed_packages": {
+      "total_packages": 139,
+      "critical_packages": 8,
+      "packages": {
+        "aiohappyeyeballs": {
+          "version": "2.6.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "aiohttp": {
+          "version": "3.12.15",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "aioresponses": {
+          "version": "0.7.8",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "aiosignal": {
+          "version": "1.4.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "aiosqlite": {
+          "version": "0.21.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "alembic": {
+          "version": "1.16.4",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "annotated-types": {
+          "version": "0.7.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "anyio": {
+          "version": "4.9.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "asyncpg": {
+          "version": "0.30.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "attrs": {
+          "version": "25.3.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "authlib": {
+          "version": "1.6.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "bandit": {
+          "version": "1.8.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "bcrypt": {
+          "version": "4.3.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "black": {
+          "version": "24.10.0",
+          "is_critical": false,
+          "location": "unknown"
+        },
+        "certifi": {
+          "version": "2025.7.14",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "cffi": {
+          "version": "1.17.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "cfgv": {
+          "version": "3.4.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "charset-normalizer": {
+          "version": "3.4.2",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "click": {
+          "version": "8.2.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "colorama": {
+          "version": "0.4.6",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "coverage": {
+          "version": "7.9.2",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "cryptography": {
+          "version": "45.0.5",
+          "is_critical": true,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "deprecated": {
+          "version": "1.2.18",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "distlib": {
+          "version": "0.4.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "distro": {
+          "version": "1.9.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "dnspython": {
+          "version": "2.7.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "dparse": {
+          "version": "0.6.4",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "email_validator": {
+          "version": "2.2.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "execnet": {
+          "version": "2.1.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "factory_boy": {
+          "version": "3.3.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "faker": {
+          "version": "24.0.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "fastapi": {
+          "version": "0.116.1",
+          "is_critical": true,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "filelock": {
+          "version": "3.12.4",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "flake8": {
+          "version": "7.2.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "freezegun": {
+          "version": "1.5.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "frozenlist": {
+          "version": "1.7.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "greenlet": {
+          "version": "3.2.3",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "h11": {
+          "version": "0.16.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "httpcore": {
+          "version": "1.0.9",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "httpretty": {
+          "version": "1.1.4",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "httpx": {
+          "version": "0.28.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "identify": {
+          "version": "2.6.12",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "idna": {
+          "version": "3.10",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "iniconfig": {
+          "version": "2.1.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "injector": {
+          "version": "0.22.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "isort": {
+          "version": "5.13.2",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "jinja2": {
+          "version": "3.1.6",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "jiter": {
+          "version": "0.10.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "libcst": {
+          "version": "1.7.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "limits": {
+          "version": "5.4.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "linkify-it-py": {
+          "version": "2.0.3",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "mako": {
+          "version": "1.3.10",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "markdown-it-py": {
+          "version": "3.0.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "markupsafe": {
+          "version": "3.0.2",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "marshmallow": {
+          "version": "4.0.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "mccabe": {
+          "version": "0.7.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "mdit-py-plugins": {
+          "version": "0.4.2",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "mdurl": {
+          "version": "0.1.2",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "mirakuru": {
+          "version": "2.6.1",
+          "is_critical": false,
+          "location": "unknown"
+        },
+        "multidict": {
+          "version": "6.6.3",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "mutmut": {
+          "version": "3.3.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "mypy": {
+          "version": "1.16.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "mypy_extensions": {
+          "version": "1.1.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "nodeenv": {
+          "version": "1.9.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "numpy": {
+          "version": "2.3.2",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "openai": {
+          "version": "1.97.1",
+          "is_critical": true,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "packaging": {
+          "version": "25.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "passlib": {
+          "version": "1.7.4",
+          "is_critical": true,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pathspec": {
+          "version": "0.12.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pbr": {
+          "version": "6.1.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pillow": {
+          "version": "11.3.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pip": {
+          "version": "25.1.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "platformdirs": {
+          "version": "4.3.8",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pluggy": {
+          "version": "1.6.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "port-for": {
+          "version": "0.7.4",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pprintpp": {
+          "version": "0.4.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pre_commit": {
+          "version": "4.2.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "propcache": {
+          "version": "0.3.2",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "psutil": {
+          "version": "6.0.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "psycopg": {
+          "version": "3.2.9",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "psycopg2-binary": {
+          "version": "2.9.10",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "py-cpuinfo": {
+          "version": "9.0.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pycodestyle": {
+          "version": "2.13.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pycparser": {
+          "version": "2.22",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pydantic": {
+          "version": "2.9.2",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pydantic_core": {
+          "version": "2.23.4",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pydantic-settings": {
+          "version": "2.1.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pyflakes": {
+          "version": "3.3.2",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pygments": {
+          "version": "2.19.2",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pyjwt": {
+          "version": "2.10.1",
+          "is_critical": true,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pytest": {
+          "version": "8.2.2",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pytest-asyncio": {
+          "version": "0.24.0",
+          "is_critical": false,
+          "location": "unknown"
+        },
+        "pytest-benchmark": {
+          "version": "4.0.0",
+          "is_critical": false,
+          "location": "unknown"
+        },
+        "pytest-clarity": {
+          "version": "1.0.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pytest-cov": {
+          "version": "5.0.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pytest-datadir": {
+          "version": "1.5.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pytest-html-reporter": {
+          "version": "0.2.9",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pytest-mock": {
+          "version": "3.14.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pytest-postgresql": {
+          "version": "6.1.0",
+          "is_critical": false,
+          "location": "unknown"
+        },
+        "pytest-randomly": {
+          "version": "3.16.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pytest-subtests": {
+          "version": "0.14.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pytest-timeout": {
+          "version": "2.3.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pytest-xdist": {
+          "version": "3.6.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "python-dateutil": {
+          "version": "2.9.0.post0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "python-dotenv": {
+          "version": "1.1.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pytz": {
+          "version": "2025.2",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "pyyaml": {
+          "version": "6.0.2",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "redis": {
+          "version": "6.2.0",
+          "is_critical": true,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "requests": {
+          "version": "2.32.4",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "responses": {
+          "version": "0.25.3",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "rich": {
+          "version": "14.1.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "ruamel.yaml": {
+          "version": "0.18.14",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "ruamel.yaml.clib": {
+          "version": "0.2.12",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "safety": {
+          "version": "3.2.10",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "safety-schemas": {
+          "version": "0.0.14",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "setproctitle": {
+          "version": "1.3.6",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "setuptools": {
+          "version": "80.9.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "shellingham": {
+          "version": "1.5.4",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "six": {
+          "version": "1.17.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "slowapi": {
+          "version": "0.1.9",
+          "is_critical": true,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "sniffio": {
+          "version": "1.3.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "sqlalchemy": {
+          "version": "2.0.41",
+          "is_critical": true,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "starlette": {
+          "version": "0.47.2",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "stevedore": {
+          "version": "5.4.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "structlog": {
+          "version": "25.4.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "textual": {
+          "version": "5.0.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "tqdm": {
+          "version": "4.67.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "typer": {
+          "version": "0.16.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "typing_extensions": {
+          "version": "4.14.1",
+          "is_critical": false,
+          "location": "unknown"
+        },
+        "tzdata": {
+          "version": "2025.2",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "ua-parser": {
+          "version": "1.0.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "ua-parser-builtins": {
+          "version": "0.18.0.post1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "uc-micro-py": {
+          "version": "1.0.3",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "urllib3": {
+          "version": "2.5.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "user-agents": {
+          "version": "2.2.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "uvicorn": {
+          "version": "0.35.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "virtualenv": {
+          "version": "20.32.0",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "wrapt": {
+          "version": "1.17.2",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        },
+        "yarl": {
+          "version": "1.20.1",
+          "is_critical": false,
+          "location": "C:\\Users\\jaafa\\Desktop\\ai teddy bear\\venv-test\\Lib\\site-packages"
+        }
+      },
+      "status": "success"
+    },
+    "security_vulnerabilities": {
+      "status": "error",
+      "error": "Expecting value: line 3 column 1 (char 2)"
+    },
+    "code_security": {
+      "status": "error",
+      "error": "Expecting value: line 1 column 1 (char 0)"
+    },
+    "configuration": {
+      "checks": {
+        "requirements_files": {
+          "files_found": [
+            "requirements-backup.txt",
+            "requirements-dev.txt",
+            "requirements-fixed.txt",
+            "requirements-test.txt",
+            "requirements.txt"
+          ],
+          "pinned_versions": 262,
+          "unpinned_versions": 23,
+          "issues": [
+            "غير مثبت الإصدار: numpy>=1.22,<2.3.0",
+            "غير مثبت الإصدار: openai-whisper>=20231117",
+            "غير مثبت الإصدار: librosa>=0.10.0",
+            "غير مثبت الإصدار: torchaudio>=2.0.0",
+            "غير مثبت الإصدار: websockets>=11.0.0",
+            "غير مثبت الإصدار: asyncio-mqtt>=0.16.0",
+            "غير مثبت الإصدار: setuptools>=75.0.0",
+            "غير مثبت الإصدار: wheel>=0.45.0",
+            "غير مثبت الإصدار: pip>=25.0.0",
+            "غير مثبت الإصدار: tomli>=2.0.1; python_version<\"3.11\"",
+            "غير مثبت الإصدار: user-agents",
+            "غير مثبت الإصدار: passlib[argon2]",
+            "غير مثبت الإصدار: argon2-cffi",
+            "غير مثبت الإصدار: numpy>=1.22,<2.3.0",
+            "غير مثبت الإصدار: openai-whisper>=20231117",
+            "غير مثبت الإصدار: librosa>=0.10.0",
+            "غير مثبت الإصدار: torchaudio>=2.0.0",
+            "غير مثبت الإصدار: websockets>=11.0.0",
+            "غير مثبت الإصدار: asyncio-mqtt>=0.16.0",
+            "غير مثبت الإصدار: setuptools>=75.0.0",
+            "غير مثبت الإصدار: wheel>=0.45.0",
+            "غير مثبت الإصدار: pip>=25.0.0",
+            "غير مثبت الإصدار: tomli>=2.0.1; python_version<\"3.11\""
+          ]
+        },
+        "docker_security": {
+          "files_found": [
+            "Dockerfile",
+            "docker-compose.config.yml",
+            "docker-compose.dev.yml",
+            "docker-compose.yml"
+          ],
+          "security_issues": [
+            "Dockerfile: استخدام root user",
+            "docker-compose.config.yml: كلمة مرور محتملة في النص",
+            "docker-compose.dev.yml: كلمة مرور محتملة في النص",
+            "docker-compose.yml: كلمة مرور محتملة في النص"
+          ],
+          "recommendations": []
+        },
+        "environment_variables": {
+          "env_files_found": [
+            ".env",
+            ".env.example"
+          ],
+          "potential_secrets": [
+            ".env:18 - محتمل سر: SECRET_KEY",
+            ".env:18 - محتمل سر: SECRET_KEY",
+            ".env:19 - محتمل سر: JWT_SECRET_KEY",
+            ".env:19 - محتمل سر: JWT_SECRET_KEY",
+            ".env:20 - محتمل سر: COPPA_ENCRYPTION_KEY",
+            ".env:36 - محتمل سر: DB_PASSWORD",
+            ".env:53 - محتمل سر: REDIS_PASSWORD",
+            ".env:59 - محتمل سر: OPENAI_API_KEY",
+            ".env:59 - محتمل سر: OPENAI_API_KEY",
+            ".env:61 - محتمل سر: OPENAI_MAX_TOKENS",
+            ".env:64 - محتمل سر: ELEVENLABS_API_KEY",
+            ".env:64 - محتمل سر: ELEVENLABS_API_KEY",
+            ".env:87 - محتمل سر: SMTP_PASSWORD",
+            ".env:124 - محتمل سر: ACCESS_TOKEN_EXPIRE_MINUTES",
+            ".env:125 - محتمل سر: REFRESH_TOKEN_EXPIRE_DAYS",
+            ".env:139 - محتمل سر: SESSION_SECRET",
+            ".env:139 - محتمل سر: SESSION_SECRET",
+            ".env:163 - محتمل سر: VAULT_TOKEN",
+            ".env.example:22 - محتمل سر: SECRET_KEY",
+            ".env.example:22 - محتمل سر: SECRET_KEY",
+            ".env.example:23 - محتمل سر: JWT_SECRET_KEY",
+            ".env.example:23 - محتمل سر: JWT_SECRET_KEY",
+            ".env.example:24 - محتمل سر: COPPA_ENCRYPTION_KEY",
+            ".env.example:29 - محتمل سر: # Production format: postgresql://user:password@host:port/database?sslmode",
+            ".env.example:30 - محتمل سر: DATABASE_URL",
+            ".env.example:40 - محتمل سر: DB_PASSWORD",
+            ".env.example:72 - محتمل سر: REDIS_PASSWORD",
+            ".env.example:77 - محتمل سر: OPENAI_API_KEY",
+            ".env.example:77 - محتمل سر: OPENAI_API_KEY",
+            ".env.example:79 - محتمل سر: OPENAI_MAX_TOKENS",
+            ".env.example:83 - محتمل سر: ELEVENLABS_API_KEY",
+            ".env.example:83 - محتمل سر: ELEVENLABS_API_KEY",
+            ".env.example:138 - محتمل سر: ACCESS_TOKEN_EXPIRE_MINUTES",
+            ".env.example:139 - محتمل سر: REFRESH_TOKEN_EXPIRE_DAYS",
+            ".env.example:153 - محتمل سر: SESSION_SECRET",
+            ".env.example:153 - محتمل سر: SESSION_SECRET",
+            ".env.example:177 - محتمل سر: VAULT_TOKEN"
+          ],
+          "recommendations": []
+        },
+        "secrets_in_code": {
+          "potential_secrets": [
+            "src\\infrastructure\\container.py: محتمل سر في الكود",
+            "src\\services\\service_registry.py: محتمل سر في الكود",
+            "src\\infrastructure\\audio\\elevenlabs_tts_provider.py: محتمل سر في الكود",
+            "src\\infrastructure\\audio\\openai_tts_provider.py: محتمل سر في الكود",
+            "src\\infrastructure\\backup\\monitoring.py: محتمل سر في الكود",
+            "src\\infrastructure\\caching\\production_redis_cache.py: محتمل سر في الكود",
+            "src\\infrastructure\\communication\\production_email_adapter.py: محتمل سر في الكود",
+            "src\\infrastructure\\communication\\production_notification_service.py: محتمل سر في الكود",
+            "src\\infrastructure\\logging\\log_aggregation.py: محتمل سر في الكود",
+            "src\\infrastructure\\logging\\structured_logger.py: محتمل سر في الكود",
+            "src\\infrastructure\\monitoring\\monitoring_integration.py: محتمل سر في الكود",
+            "src\\infrastructure\\performance\\cdn_manager.py: محتمل سر في الكود",
+            "src\\infrastructure\\security\\jwt_advanced.py: محتمل سر في الكود",
+            "src\\infrastructure\\security\\rate_limiter_advanced.py: محتمل سر في الكود",
+            "src\\infrastructure\\session\\redis_session_store.py: محتمل سر في الكود",
+            "src\\infrastructure\\external\\ai_providers\\ai_factory.py: محتمل سر في الكود",
+            "src\\adapters\\providers\\openai_provider.py: محتمل سر في الكود"
+          ],
+          "files_scanned": 202
+        }
+      },
+      "status": "success"
+    },
+    "available_updates": {
+      "total_outdated": 36,
+      "critical_updates": [
+        {
+          "name": "SQLAlchemy",
+          "version": "2.0.41",
+          "latest_version": "2.0.42",
+          "latest_filetype": "wheel"
+        }
+      ],
+      "security_updates": [],
+      "regular_updates": [
+        {
+          "name": "bandit",
+          "version": "1.8.0",
+          "latest_version": "1.8.6",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "black",
+          "version": "24.10.0",
+          "latest_version": "25.1.0",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "certifi",
+          "version": "2025.7.14",
+          "latest_version": "2025.8.3",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "coverage",
+          "version": "7.9.2",
+          "latest_version": "7.10.1",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "factory_boy",
+          "version": "3.3.1",
+          "latest_version": "3.3.3",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "Faker",
+          "version": "24.0.0",
+          "latest_version": "37.5.3",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "filelock",
+          "version": "3.12.4",
+          "latest_version": "3.18.0",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "flake8",
+          "version": "7.2.0",
+          "latest_version": "7.3.0",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "freezegun",
+          "version": "1.5.1",
+          "latest_version": "1.5.4",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "isort",
+          "version": "5.13.2",
+          "latest_version": "6.0.1",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "libcst",
+          "version": "1.7.0",
+          "latest_version": "1.8.2",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "mutmut",
+          "version": "3.3.0",
+          "latest_version": "3.3.1",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "mypy",
+          "version": "1.16.0",
+          "latest_version": "1.17.1",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "openai",
+          "version": "1.97.1",
+          "latest_version": "1.98.0",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "pip",
+          "version": "25.1.1",
+          "latest_version": "25.2",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "psutil",
+          "version": "6.0.0",
+          "latest_version": "7.0.0",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "pycodestyle",
+          "version": "2.13.0",
+          "latest_version": "2.14.0",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "pydantic",
+          "version": "2.9.2",
+          "latest_version": "2.11.7",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "pydantic_core",
+          "version": "2.23.4",
+          "latest_version": "2.37.2",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "pydantic-settings",
+          "version": "2.1.0",
+          "latest_version": "2.10.1",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "pyflakes",
+          "version": "3.3.2",
+          "latest_version": "3.4.0",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "pytest",
+          "version": "8.2.2",
+          "latest_version": "8.4.1",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "pytest-asyncio",
+          "version": "0.24.0",
+          "latest_version": "1.1.0",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "pytest-benchmark",
+          "version": "4.0.0",
+          "latest_version": "5.1.0",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "pytest-cov",
+          "version": "5.0.0",
+          "latest_version": "6.2.1",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "pytest-datadir",
+          "version": "1.5.0",
+          "latest_version": "1.8.0",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "pytest-mock",
+          "version": "3.14.0",
+          "latest_version": "3.14.1",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "pytest-postgresql",
+          "version": "6.1.0",
+          "latest_version": "7.0.2",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "pytest-subtests",
+          "version": "0.14.0",
+          "latest_version": "0.14.2",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "pytest-timeout",
+          "version": "2.3.1",
+          "latest_version": "2.4.0",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "pytest-xdist",
+          "version": "3.6.0",
+          "latest_version": "3.8.0",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "responses",
+          "version": "0.25.3",
+          "latest_version": "0.25.7",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "safety",
+          "version": "3.2.10",
+          "latest_version": "3.6.0",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "textual",
+          "version": "5.0.1",
+          "latest_version": "5.2.0",
+          "latest_filetype": "wheel"
+        },
+        {
+          "name": "virtualenv",
+          "version": "20.32.0",
+          "latest_version": "20.33.0",
+          "latest_filetype": "wheel"
+        }
+      ],
+      "status": "success"
+    },
+    "dependency_tree": {
+      "dependency_tree": [
+        {
+          "package": {
+            "key": "aiohappyeyeballs",
+            "package_name": "aiohappyeyeballs",
+            "installed_version": "2.6.1"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "aiohttp",
+            "package_name": "aiohttp",
+            "installed_version": "3.12.15"
+          },
+          "dependencies": [
+            {
+              "key": "aiohappyeyeballs",
+              "package_name": "aiohappyeyeballs",
+              "installed_version": "2.6.1",
+              "required_version": ">=2.5.0"
+            },
+            {
+              "key": "aiosignal",
+              "package_name": "aiosignal",
+              "installed_version": "1.4.0",
+              "required_version": ">=1.4.0"
+            },
+            {
+              "key": "attrs",
+              "package_name": "attrs",
+              "installed_version": "25.3.0",
+              "required_version": ">=17.3.0"
+            },
+            {
+              "key": "frozenlist",
+              "package_name": "frozenlist",
+              "installed_version": "1.7.0",
+              "required_version": ">=1.1.1"
+            },
+            {
+              "key": "multidict",
+              "package_name": "multidict",
+              "installed_version": "6.6.3",
+              "required_version": ">=4.5,<7.0"
+            },
+            {
+              "key": "propcache",
+              "package_name": "propcache",
+              "installed_version": "0.3.2",
+              "required_version": ">=0.2.0"
+            },
+            {
+              "key": "yarl",
+              "package_name": "yarl",
+              "installed_version": "1.20.1",
+              "required_version": ">=1.17.0,<2.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "aioresponses",
+            "package_name": "aioresponses",
+            "installed_version": "0.7.8"
+          },
+          "dependencies": [
+            {
+              "key": "aiohttp",
+              "package_name": "aiohttp",
+              "installed_version": "3.12.15",
+              "required_version": ">=3.3.0,<4.0.0"
+            },
+            {
+              "key": "packaging",
+              "package_name": "packaging",
+              "installed_version": "25.0",
+              "required_version": ">=22.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "aiosignal",
+            "package_name": "aiosignal",
+            "installed_version": "1.4.0"
+          },
+          "dependencies": [
+            {
+              "key": "frozenlist",
+              "package_name": "frozenlist",
+              "installed_version": "1.7.0",
+              "required_version": ">=1.1.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "aiosqlite",
+            "package_name": "aiosqlite",
+            "installed_version": "0.21.0"
+          },
+          "dependencies": [
+            {
+              "key": "typing-extensions",
+              "package_name": "typing_extensions",
+              "installed_version": "4.14.1",
+              "required_version": ">=4.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "alembic",
+            "package_name": "alembic",
+            "installed_version": "1.16.4"
+          },
+          "dependencies": [
+            {
+              "key": "mako",
+              "package_name": "Mako",
+              "installed_version": "1.3.10",
+              "required_version": "Any"
+            },
+            {
+              "key": "sqlalchemy",
+              "package_name": "SQLAlchemy",
+              "installed_version": "2.0.41",
+              "required_version": ">=1.4.0"
+            },
+            {
+              "key": "typing-extensions",
+              "package_name": "typing_extensions",
+              "installed_version": "4.14.1",
+              "required_version": ">=4.12"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "annotated-types",
+            "package_name": "annotated-types",
+            "installed_version": "0.7.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "anyio",
+            "package_name": "anyio",
+            "installed_version": "4.9.0"
+          },
+          "dependencies": [
+            {
+              "key": "idna",
+              "package_name": "idna",
+              "installed_version": "3.10",
+              "required_version": ">=2.8"
+            },
+            {
+              "key": "sniffio",
+              "package_name": "sniffio",
+              "installed_version": "1.3.1",
+              "required_version": ">=1.1"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "asyncpg",
+            "package_name": "asyncpg",
+            "installed_version": "0.30.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "attrs",
+            "package_name": "attrs",
+            "installed_version": "25.3.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "authlib",
+            "package_name": "Authlib",
+            "installed_version": "1.6.1"
+          },
+          "dependencies": [
+            {
+              "key": "cryptography",
+              "package_name": "cryptography",
+              "installed_version": "45.0.5",
+              "required_version": "Any"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "bandit",
+            "package_name": "bandit",
+            "installed_version": "1.8.0"
+          },
+          "dependencies": [
+            {
+              "key": "colorama",
+              "package_name": "colorama",
+              "installed_version": "0.4.6",
+              "required_version": ">=0.3.9"
+            },
+            {
+              "key": "pyyaml",
+              "package_name": "PyYAML",
+              "installed_version": "6.0.2",
+              "required_version": ">=5.3.1"
+            },
+            {
+              "key": "rich",
+              "package_name": "rich",
+              "installed_version": "14.1.0",
+              "required_version": "Any"
+            },
+            {
+              "key": "stevedore",
+              "package_name": "stevedore",
+              "installed_version": "5.4.1",
+              "required_version": ">=1.20.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "bcrypt",
+            "package_name": "bcrypt",
+            "installed_version": "4.3.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "black",
+            "package_name": "black",
+            "installed_version": "24.10.0"
+          },
+          "dependencies": [
+            {
+              "key": "click",
+              "package_name": "click",
+              "installed_version": "8.2.1",
+              "required_version": ">=8.0.0"
+            },
+            {
+              "key": "mypy-extensions",
+              "package_name": "mypy_extensions",
+              "installed_version": "1.1.0",
+              "required_version": ">=0.4.3"
+            },
+            {
+              "key": "packaging",
+              "package_name": "packaging",
+              "installed_version": "25.0",
+              "required_version": ">=22.0"
+            },
+            {
+              "key": "pathspec",
+              "package_name": "pathspec",
+              "installed_version": "0.12.1",
+              "required_version": ">=0.9.0"
+            },
+            {
+              "key": "platformdirs",
+              "package_name": "platformdirs",
+              "installed_version": "4.3.8",
+              "required_version": ">=2"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "certifi",
+            "package_name": "certifi",
+            "installed_version": "2025.7.14"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "cffi",
+            "package_name": "cffi",
+            "installed_version": "1.17.1"
+          },
+          "dependencies": [
+            {
+              "key": "pycparser",
+              "package_name": "pycparser",
+              "installed_version": "2.22",
+              "required_version": "Any"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "cfgv",
+            "package_name": "cfgv",
+            "installed_version": "3.4.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "charset-normalizer",
+            "package_name": "charset-normalizer",
+            "installed_version": "3.4.2"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "click",
+            "package_name": "click",
+            "installed_version": "8.2.1"
+          },
+          "dependencies": [
+            {
+              "key": "colorama",
+              "package_name": "colorama",
+              "installed_version": "0.4.6",
+              "required_version": "Any"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "colorama",
+            "package_name": "colorama",
+            "installed_version": "0.4.6"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "coverage",
+            "package_name": "coverage",
+            "installed_version": "7.9.2"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "cryptography",
+            "package_name": "cryptography",
+            "installed_version": "45.0.5"
+          },
+          "dependencies": [
+            {
+              "key": "cffi",
+              "package_name": "cffi",
+              "installed_version": "1.17.1",
+              "required_version": ">=1.14"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "deprecated",
+            "package_name": "Deprecated",
+            "installed_version": "1.2.18"
+          },
+          "dependencies": [
+            {
+              "key": "wrapt",
+              "package_name": "wrapt",
+              "installed_version": "1.17.2",
+              "required_version": ">=1.10,<2"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "distlib",
+            "package_name": "distlib",
+            "installed_version": "0.4.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "distro",
+            "package_name": "distro",
+            "installed_version": "1.9.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "dnspython",
+            "package_name": "dnspython",
+            "installed_version": "2.7.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "dparse",
+            "package_name": "dparse",
+            "installed_version": "0.6.4"
+          },
+          "dependencies": [
+            {
+              "key": "packaging",
+              "package_name": "packaging",
+              "installed_version": "25.0",
+              "required_version": "Any"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "email-validator",
+            "package_name": "email_validator",
+            "installed_version": "2.2.0"
+          },
+          "dependencies": [
+            {
+              "key": "dnspython",
+              "package_name": "dnspython",
+              "installed_version": "2.7.0",
+              "required_version": ">=2.0.0"
+            },
+            {
+              "key": "idna",
+              "package_name": "idna",
+              "installed_version": "3.10",
+              "required_version": ">=2.0.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "execnet",
+            "package_name": "execnet",
+            "installed_version": "2.1.1"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "factory-boy",
+            "package_name": "factory_boy",
+            "installed_version": "3.3.1"
+          },
+          "dependencies": [
+            {
+              "key": "faker",
+              "package_name": "Faker",
+              "installed_version": "24.0.0",
+              "required_version": ">=0.7.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "faker",
+            "package_name": "Faker",
+            "installed_version": "24.0.0"
+          },
+          "dependencies": [
+            {
+              "key": "python-dateutil",
+              "package_name": "python-dateutil",
+              "installed_version": "2.9.0.post0",
+              "required_version": ">=2.4"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "fastapi",
+            "package_name": "fastapi",
+            "installed_version": "0.116.1"
+          },
+          "dependencies": [
+            {
+              "key": "pydantic",
+              "package_name": "pydantic",
+              "installed_version": "2.9.2",
+              "required_version": ">=1.7.4,<3.0.0,!=2.1.0,!=2.0.1,!=2.0.0,!=1.8.1,!=1.8"
+            },
+            {
+              "key": "starlette",
+              "package_name": "starlette",
+              "installed_version": "0.47.2",
+              "required_version": ">=0.40.0,<0.48.0"
+            },
+            {
+              "key": "typing-extensions",
+              "package_name": "typing_extensions",
+              "installed_version": "4.14.1",
+              "required_version": ">=4.8.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "filelock",
+            "package_name": "filelock",
+            "installed_version": "3.12.4"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "flake8",
+            "package_name": "flake8",
+            "installed_version": "7.2.0"
+          },
+          "dependencies": [
+            {
+              "key": "mccabe",
+              "package_name": "mccabe",
+              "installed_version": "0.7.0",
+              "required_version": ">=0.7.0,<0.8.0"
+            },
+            {
+              "key": "pycodestyle",
+              "package_name": "pycodestyle",
+              "installed_version": "2.13.0",
+              "required_version": ">=2.13.0,<2.14.0"
+            },
+            {
+              "key": "pyflakes",
+              "package_name": "pyflakes",
+              "installed_version": "3.3.2",
+              "required_version": ">=3.3.0,<3.4.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "freezegun",
+            "package_name": "freezegun",
+            "installed_version": "1.5.1"
+          },
+          "dependencies": [
+            {
+              "key": "python-dateutil",
+              "package_name": "python-dateutil",
+              "installed_version": "2.9.0.post0",
+              "required_version": ">=2.7"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "frozenlist",
+            "package_name": "frozenlist",
+            "installed_version": "1.7.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "greenlet",
+            "package_name": "greenlet",
+            "installed_version": "3.2.3"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "h11",
+            "package_name": "h11",
+            "installed_version": "0.16.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "httpcore",
+            "package_name": "httpcore",
+            "installed_version": "1.0.9"
+          },
+          "dependencies": [
+            {
+              "key": "certifi",
+              "package_name": "certifi",
+              "installed_version": "2025.7.14",
+              "required_version": "Any"
+            },
+            {
+              "key": "h11",
+              "package_name": "h11",
+              "installed_version": "0.16.0",
+              "required_version": ">=0.16"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "httpretty",
+            "package_name": "httpretty",
+            "installed_version": "1.1.4"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "httpx",
+            "package_name": "httpx",
+            "installed_version": "0.28.1"
+          },
+          "dependencies": [
+            {
+              "key": "anyio",
+              "package_name": "anyio",
+              "installed_version": "4.9.0",
+              "required_version": "Any"
+            },
+            {
+              "key": "certifi",
+              "package_name": "certifi",
+              "installed_version": "2025.7.14",
+              "required_version": "Any"
+            },
+            {
+              "key": "httpcore",
+              "package_name": "httpcore",
+              "installed_version": "1.0.9",
+              "required_version": "==1.*"
+            },
+            {
+              "key": "idna",
+              "package_name": "idna",
+              "installed_version": "3.10",
+              "required_version": "Any"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "identify",
+            "package_name": "identify",
+            "installed_version": "2.6.12"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "idna",
+            "package_name": "idna",
+            "installed_version": "3.10"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "iniconfig",
+            "package_name": "iniconfig",
+            "installed_version": "2.1.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "injector",
+            "package_name": "injector",
+            "installed_version": "0.22.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "isort",
+            "package_name": "isort",
+            "installed_version": "5.13.2"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "jinja2",
+            "package_name": "Jinja2",
+            "installed_version": "3.1.6"
+          },
+          "dependencies": [
+            {
+              "key": "markupsafe",
+              "package_name": "MarkupSafe",
+              "installed_version": "3.0.2",
+              "required_version": ">=2.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "jiter",
+            "package_name": "jiter",
+            "installed_version": "0.10.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "libcst",
+            "package_name": "libcst",
+            "installed_version": "1.7.0"
+          },
+          "dependencies": [
+            {
+              "key": "pyyaml",
+              "package_name": "PyYAML",
+              "installed_version": "6.0.2",
+              "required_version": ">=5.2"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "limits",
+            "package_name": "limits",
+            "installed_version": "5.4.0"
+          },
+          "dependencies": [
+            {
+              "key": "deprecated",
+              "package_name": "Deprecated",
+              "installed_version": "1.2.18",
+              "required_version": ">=1.2"
+            },
+            {
+              "key": "packaging",
+              "package_name": "packaging",
+              "installed_version": "25.0",
+              "required_version": ">=21,<26"
+            },
+            {
+              "key": "typing-extensions",
+              "package_name": "typing_extensions",
+              "installed_version": "4.14.1",
+              "required_version": "Any"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "linkify-it-py",
+            "package_name": "linkify-it-py",
+            "installed_version": "2.0.3"
+          },
+          "dependencies": [
+            {
+              "key": "uc-micro-py",
+              "package_name": "uc-micro-py",
+              "installed_version": "1.0.3",
+              "required_version": "Any"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "mako",
+            "package_name": "Mako",
+            "installed_version": "1.3.10"
+          },
+          "dependencies": [
+            {
+              "key": "markupsafe",
+              "package_name": "MarkupSafe",
+              "installed_version": "3.0.2",
+              "required_version": ">=0.9.2"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "markdown-it-py",
+            "package_name": "markdown-it-py",
+            "installed_version": "3.0.0"
+          },
+          "dependencies": [
+            {
+              "key": "mdurl",
+              "package_name": "mdurl",
+              "installed_version": "0.1.2",
+              "required_version": "~=0.1"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "markupsafe",
+            "package_name": "MarkupSafe",
+            "installed_version": "3.0.2"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "marshmallow",
+            "package_name": "marshmallow",
+            "installed_version": "4.0.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "mccabe",
+            "package_name": "mccabe",
+            "installed_version": "0.7.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "mdit-py-plugins",
+            "package_name": "mdit-py-plugins",
+            "installed_version": "0.4.2"
+          },
+          "dependencies": [
+            {
+              "key": "markdown-it-py",
+              "package_name": "markdown-it-py",
+              "installed_version": "3.0.0",
+              "required_version": ">=1.0.0,<4.0.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "mdurl",
+            "package_name": "mdurl",
+            "installed_version": "0.1.2"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "mirakuru",
+            "package_name": "mirakuru",
+            "installed_version": "2.6.1"
+          },
+          "dependencies": [
+            {
+              "key": "psutil",
+              "package_name": "psutil",
+              "installed_version": "6.0.0",
+              "required_version": ">=4.0.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "multidict",
+            "package_name": "multidict",
+            "installed_version": "6.6.3"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "mutmut",
+            "package_name": "mutmut",
+            "installed_version": "3.3.0"
+          },
+          "dependencies": [
+            {
+              "key": "click",
+              "package_name": "click",
+              "installed_version": "8.2.1",
+              "required_version": "Any"
+            },
+            {
+              "key": "libcst",
+              "package_name": "libcst",
+              "installed_version": "1.7.0",
+              "required_version": "~=1.7.0"
+            },
+            {
+              "key": "pytest",
+              "package_name": "pytest",
+              "installed_version": "8.2.2",
+              "required_version": "Any"
+            },
+            {
+              "key": "setproctitle",
+              "package_name": "setproctitle",
+              "installed_version": "1.3.6",
+              "required_version": "Any"
+            },
+            {
+              "key": "textual",
+              "package_name": "textual",
+              "installed_version": "5.0.1",
+              "required_version": "Any"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "mypy",
+            "package_name": "mypy",
+            "installed_version": "1.16.0"
+          },
+          "dependencies": [
+            {
+              "key": "mypy-extensions",
+              "package_name": "mypy_extensions",
+              "installed_version": "1.1.0",
+              "required_version": ">=1.0.0"
+            },
+            {
+              "key": "pathspec",
+              "package_name": "pathspec",
+              "installed_version": "0.12.1",
+              "required_version": ">=0.9.0"
+            },
+            {
+              "key": "typing-extensions",
+              "package_name": "typing_extensions",
+              "installed_version": "4.14.1",
+              "required_version": ">=4.6.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "mypy-extensions",
+            "package_name": "mypy_extensions",
+            "installed_version": "1.1.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "nodeenv",
+            "package_name": "nodeenv",
+            "installed_version": "1.9.1"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "numpy",
+            "package_name": "numpy",
+            "installed_version": "2.3.2"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "openai",
+            "package_name": "openai",
+            "installed_version": "1.97.1"
+          },
+          "dependencies": [
+            {
+              "key": "anyio",
+              "package_name": "anyio",
+              "installed_version": "4.9.0",
+              "required_version": ">=3.5.0,<5"
+            },
+            {
+              "key": "distro",
+              "package_name": "distro",
+              "installed_version": "1.9.0",
+              "required_version": ">=1.7.0,<2"
+            },
+            {
+              "key": "httpx",
+              "package_name": "httpx",
+              "installed_version": "0.28.1",
+              "required_version": ">=0.23.0,<1"
+            },
+            {
+              "key": "jiter",
+              "package_name": "jiter",
+              "installed_version": "0.10.0",
+              "required_version": ">=0.4.0,<1"
+            },
+            {
+              "key": "pydantic",
+              "package_name": "pydantic",
+              "installed_version": "2.9.2",
+              "required_version": ">=1.9.0,<3"
+            },
+            {
+              "key": "sniffio",
+              "package_name": "sniffio",
+              "installed_version": "1.3.1",
+              "required_version": "Any"
+            },
+            {
+              "key": "tqdm",
+              "package_name": "tqdm",
+              "installed_version": "4.67.1",
+              "required_version": ">4"
+            },
+            {
+              "key": "typing-extensions",
+              "package_name": "typing_extensions",
+              "installed_version": "4.14.1",
+              "required_version": ">=4.11,<5"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "packaging",
+            "package_name": "packaging",
+            "installed_version": "25.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "passlib",
+            "package_name": "passlib",
+            "installed_version": "1.7.4"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "pathspec",
+            "package_name": "pathspec",
+            "installed_version": "0.12.1"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "pbr",
+            "package_name": "pbr",
+            "installed_version": "6.1.1"
+          },
+          "dependencies": [
+            {
+              "key": "setuptools",
+              "package_name": "setuptools",
+              "installed_version": "80.9.0",
+              "required_version": "Any"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "pillow",
+            "package_name": "pillow",
+            "installed_version": "11.3.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "pip",
+            "package_name": "pip",
+            "installed_version": "25.1.1"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "pipdeptree",
+            "package_name": "pipdeptree",
+            "installed_version": "2.28.0"
+          },
+          "dependencies": [
+            {
+              "key": "packaging",
+              "package_name": "packaging",
+              "installed_version": "25.0",
+              "required_version": ">=24.1"
+            },
+            {
+              "key": "pip",
+              "package_name": "pip",
+              "installed_version": "25.1.1",
+              "required_version": ">=24.2"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "platformdirs",
+            "package_name": "platformdirs",
+            "installed_version": "4.3.8"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "pluggy",
+            "package_name": "pluggy",
+            "installed_version": "1.6.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "port-for",
+            "package_name": "port-for",
+            "installed_version": "0.7.4"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "pprintpp",
+            "package_name": "pprintpp",
+            "installed_version": "0.4.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "pre-commit",
+            "package_name": "pre_commit",
+            "installed_version": "4.2.0"
+          },
+          "dependencies": [
+            {
+              "key": "cfgv",
+              "package_name": "cfgv",
+              "installed_version": "3.4.0",
+              "required_version": ">=2.0.0"
+            },
+            {
+              "key": "identify",
+              "package_name": "identify",
+              "installed_version": "2.6.12",
+              "required_version": ">=1.0.0"
+            },
+            {
+              "key": "nodeenv",
+              "package_name": "nodeenv",
+              "installed_version": "1.9.1",
+              "required_version": ">=0.11.1"
+            },
+            {
+              "key": "pyyaml",
+              "package_name": "PyYAML",
+              "installed_version": "6.0.2",
+              "required_version": ">=5.1"
+            },
+            {
+              "key": "virtualenv",
+              "package_name": "virtualenv",
+              "installed_version": "20.32.0",
+              "required_version": ">=20.10.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "propcache",
+            "package_name": "propcache",
+            "installed_version": "0.3.2"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "psutil",
+            "package_name": "psutil",
+            "installed_version": "6.0.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "psycopg",
+            "package_name": "psycopg",
+            "installed_version": "3.2.9"
+          },
+          "dependencies": [
+            {
+              "key": "tzdata",
+              "package_name": "tzdata",
+              "installed_version": "2025.2",
+              "required_version": "Any"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "psycopg2-binary",
+            "package_name": "psycopg2-binary",
+            "installed_version": "2.9.10"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "py-cpuinfo",
+            "package_name": "py-cpuinfo",
+            "installed_version": "9.0.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "pycodestyle",
+            "package_name": "pycodestyle",
+            "installed_version": "2.13.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "pycparser",
+            "package_name": "pycparser",
+            "installed_version": "2.22"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "pydantic",
+            "package_name": "pydantic",
+            "installed_version": "2.9.2"
+          },
+          "dependencies": [
+            {
+              "key": "annotated-types",
+              "package_name": "annotated-types",
+              "installed_version": "0.7.0",
+              "required_version": ">=0.6.0"
+            },
+            {
+              "key": "pydantic-core",
+              "package_name": "pydantic_core",
+              "installed_version": "2.23.4",
+              "required_version": "==2.23.4"
+            },
+            {
+              "key": "typing-extensions",
+              "package_name": "typing_extensions",
+              "installed_version": "4.14.1",
+              "required_version": ">=4.12.2"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "pydantic-core",
+            "package_name": "pydantic_core",
+            "installed_version": "2.23.4"
+          },
+          "dependencies": [
+            {
+              "key": "typing-extensions",
+              "package_name": "typing_extensions",
+              "installed_version": "4.14.1",
+              "required_version": ">=4.6.0,!=4.7.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "pydantic-settings",
+            "package_name": "pydantic-settings",
+            "installed_version": "2.1.0"
+          },
+          "dependencies": [
+            {
+              "key": "pydantic",
+              "package_name": "pydantic",
+              "installed_version": "2.9.2",
+              "required_version": ">=2.3.0"
+            },
+            {
+              "key": "python-dotenv",
+              "package_name": "python-dotenv",
+              "installed_version": "1.1.1",
+              "required_version": ">=0.21.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "pyflakes",
+            "package_name": "pyflakes",
+            "installed_version": "3.3.2"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "pygments",
+            "package_name": "Pygments",
+            "installed_version": "2.19.2"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "pyjwt",
+            "package_name": "PyJWT",
+            "installed_version": "2.10.1"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "pytest",
+            "package_name": "pytest",
+            "installed_version": "8.2.2"
+          },
+          "dependencies": [
+            {
+              "key": "colorama",
+              "package_name": "colorama",
+              "installed_version": "0.4.6",
+              "required_version": "Any"
+            },
+            {
+              "key": "iniconfig",
+              "package_name": "iniconfig",
+              "installed_version": "2.1.0",
+              "required_version": "Any"
+            },
+            {
+              "key": "packaging",
+              "package_name": "packaging",
+              "installed_version": "25.0",
+              "required_version": "Any"
+            },
+            {
+              "key": "pluggy",
+              "package_name": "pluggy",
+              "installed_version": "1.6.0",
+              "required_version": ">=1.5,<2.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "pytest-asyncio",
+            "package_name": "pytest-asyncio",
+            "installed_version": "0.24.0"
+          },
+          "dependencies": [
+            {
+              "key": "pytest",
+              "package_name": "pytest",
+              "installed_version": "8.2.2",
+              "required_version": ">=8.2,<9"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "pytest-benchmark",
+            "package_name": "pytest-benchmark",
+            "installed_version": "4.0.0"
+          },
+          "dependencies": [
+            {
+              "key": "py-cpuinfo",
+              "package_name": "py-cpuinfo",
+              "installed_version": "9.0.0",
+              "required_version": "Any"
+            },
+            {
+              "key": "pytest",
+              "package_name": "pytest",
+              "installed_version": "8.2.2",
+              "required_version": ">=3.8"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "pytest-clarity",
+            "package_name": "pytest-clarity",
+            "installed_version": "1.0.1"
+          },
+          "dependencies": [
+            {
+              "key": "pprintpp",
+              "package_name": "pprintpp",
+              "installed_version": "0.4.0",
+              "required_version": ">=0.4.0"
+            },
+            {
+              "key": "pytest",
+              "package_name": "pytest",
+              "installed_version": "8.2.2",
+              "required_version": ">=3.5.0"
+            },
+            {
+              "key": "rich",
+              "package_name": "rich",
+              "installed_version": "14.1.0",
+              "required_version": ">=8.0.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "pytest-cov",
+            "package_name": "pytest-cov",
+            "installed_version": "5.0.0"
+          },
+          "dependencies": [
+            {
+              "key": "coverage",
+              "package_name": "coverage",
+              "installed_version": "7.9.2",
+              "required_version": ">=5.2.1"
+            },
+            {
+              "key": "pytest",
+              "package_name": "pytest",
+              "installed_version": "8.2.2",
+              "required_version": ">=4.6"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "pytest-datadir",
+            "package_name": "pytest-datadir",
+            "installed_version": "1.5.0"
+          },
+          "dependencies": [
+            {
+              "key": "pytest",
+              "package_name": "pytest",
+              "installed_version": "8.2.2",
+              "required_version": ">=5.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "pytest-html-reporter",
+            "package_name": "pytest-html-reporter",
+            "installed_version": "0.2.9"
+          },
+          "dependencies": [
+            {
+              "key": "pillow",
+              "package_name": "pillow",
+              "installed_version": "11.3.0",
+              "required_version": "Any"
+            },
+            {
+              "key": "pytest",
+              "package_name": "pytest",
+              "installed_version": "8.2.2",
+              "required_version": "Any"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "pytest-mock",
+            "package_name": "pytest-mock",
+            "installed_version": "3.14.0"
+          },
+          "dependencies": [
+            {
+              "key": "pytest",
+              "package_name": "pytest",
+              "installed_version": "8.2.2",
+              "required_version": ">=6.2.5"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "pytest-postgresql",
+            "package_name": "pytest-postgresql",
+            "installed_version": "6.1.0"
+          },
+          "dependencies": [
+            {
+              "key": "mirakuru",
+              "package_name": "mirakuru",
+              "installed_version": "2.6.1",
+              "required_version": "Any"
+            },
+            {
+              "key": "port-for",
+              "package_name": "port-for",
+              "installed_version": "0.7.4",
+              "required_version": ">=0.6.0"
+            },
+            {
+              "key": "psycopg",
+              "package_name": "psycopg",
+              "installed_version": "3.2.9",
+              "required_version": ">=3.0.0"
+            },
+            {
+              "key": "pytest",
+              "package_name": "pytest",
+              "installed_version": "8.2.2",
+              "required_version": ">=6.2"
+            },
+            {
+              "key": "setuptools",
+              "package_name": "setuptools",
+              "installed_version": "80.9.0",
+              "required_version": "Any"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "pytest-randomly",
+            "package_name": "pytest-randomly",
+            "installed_version": "3.16.0"
+          },
+          "dependencies": [
+            {
+              "key": "pytest",
+              "package_name": "pytest",
+              "installed_version": "8.2.2",
+              "required_version": "Any"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "pytest-subtests",
+            "package_name": "pytest-subtests",
+            "installed_version": "0.14.0"
+          },
+          "dependencies": [
+            {
+              "key": "attrs",
+              "package_name": "attrs",
+              "installed_version": "25.3.0",
+              "required_version": ">=19.2.0"
+            },
+            {
+              "key": "pytest",
+              "package_name": "pytest",
+              "installed_version": "8.2.2",
+              "required_version": ">=7.4"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "pytest-timeout",
+            "package_name": "pytest-timeout",
+            "installed_version": "2.3.1"
+          },
+          "dependencies": [
+            {
+              "key": "pytest",
+              "package_name": "pytest",
+              "installed_version": "8.2.2",
+              "required_version": ">=7.0.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "pytest-xdist",
+            "package_name": "pytest-xdist",
+            "installed_version": "3.6.0"
+          },
+          "dependencies": [
+            {
+              "key": "execnet",
+              "package_name": "execnet",
+              "installed_version": "2.1.1",
+              "required_version": ">=2.1"
+            },
+            {
+              "key": "pytest",
+              "package_name": "pytest",
+              "installed_version": "8.2.2",
+              "required_version": ">=7.0.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "python-dateutil",
+            "package_name": "python-dateutil",
+            "installed_version": "2.9.0.post0"
+          },
+          "dependencies": [
+            {
+              "key": "six",
+              "package_name": "six",
+              "installed_version": "1.17.0",
+              "required_version": ">=1.5"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "python-dotenv",
+            "package_name": "python-dotenv",
+            "installed_version": "1.1.1"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "pytz",
+            "package_name": "pytz",
+            "installed_version": "2025.2"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "pyyaml",
+            "package_name": "PyYAML",
+            "installed_version": "6.0.2"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "redis",
+            "package_name": "redis",
+            "installed_version": "6.2.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "requests",
+            "package_name": "requests",
+            "installed_version": "2.32.4"
+          },
+          "dependencies": [
+            {
+              "key": "certifi",
+              "package_name": "certifi",
+              "installed_version": "2025.7.14",
+              "required_version": ">=2017.4.17"
+            },
+            {
+              "key": "charset-normalizer",
+              "package_name": "charset-normalizer",
+              "installed_version": "3.4.2",
+              "required_version": ">=2,<4"
+            },
+            {
+              "key": "idna",
+              "package_name": "idna",
+              "installed_version": "3.10",
+              "required_version": ">=2.5,<4"
+            },
+            {
+              "key": "urllib3",
+              "package_name": "urllib3",
+              "installed_version": "2.5.0",
+              "required_version": ">=1.21.1,<3"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "responses",
+            "package_name": "responses",
+            "installed_version": "0.25.3"
+          },
+          "dependencies": [
+            {
+              "key": "pyyaml",
+              "package_name": "PyYAML",
+              "installed_version": "6.0.2",
+              "required_version": "Any"
+            },
+            {
+              "key": "requests",
+              "package_name": "requests",
+              "installed_version": "2.32.4",
+              "required_version": ">=2.30.0,<3.0"
+            },
+            {
+              "key": "urllib3",
+              "package_name": "urllib3",
+              "installed_version": "2.5.0",
+              "required_version": ">=1.25.10,<3.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "rich",
+            "package_name": "rich",
+            "installed_version": "14.1.0"
+          },
+          "dependencies": [
+            {
+              "key": "markdown-it-py",
+              "package_name": "markdown-it-py",
+              "installed_version": "3.0.0",
+              "required_version": ">=2.2.0"
+            },
+            {
+              "key": "pygments",
+              "package_name": "Pygments",
+              "installed_version": "2.19.2",
+              "required_version": ">=2.13.0,<3.0.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "ruamel-yaml",
+            "package_name": "ruamel.yaml",
+            "installed_version": "0.18.14"
+          },
+          "dependencies": [
+            {
+              "key": "ruamel-yaml-clib",
+              "package_name": "ruamel.yaml.clib",
+              "installed_version": "0.2.12",
+              "required_version": ">=0.2.7"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "ruamel-yaml-clib",
+            "package_name": "ruamel.yaml.clib",
+            "installed_version": "0.2.12"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "safety",
+            "package_name": "safety",
+            "installed_version": "3.2.10"
+          },
+          "dependencies": [
+            {
+              "key": "authlib",
+              "package_name": "Authlib",
+              "installed_version": "1.6.1",
+              "required_version": ">=1.2.0"
+            },
+            {
+              "key": "click",
+              "package_name": "click",
+              "installed_version": "8.2.1",
+              "required_version": ">=8.0.2"
+            },
+            {
+              "key": "dparse",
+              "package_name": "dparse",
+              "installed_version": "0.6.4",
+              "required_version": ">=0.6.4b0"
+            },
+            {
+              "key": "filelock",
+              "package_name": "filelock",
+              "installed_version": "3.12.4",
+              "required_version": "~=3.12.2"
+            },
+            {
+              "key": "jinja2",
+              "package_name": "Jinja2",
+              "installed_version": "3.1.6",
+              "required_version": ">=3.1.0"
+            },
+            {
+              "key": "marshmallow",
+              "package_name": "marshmallow",
+              "installed_version": "4.0.0",
+              "required_version": ">=3.15.0"
+            },
+            {
+              "key": "packaging",
+              "package_name": "packaging",
+              "installed_version": "25.0",
+              "required_version": ">=21.0"
+            },
+            {
+              "key": "psutil",
+              "package_name": "psutil",
+              "installed_version": "6.0.0",
+              "required_version": "~=6.0.0"
+            },
+            {
+              "key": "pydantic",
+              "package_name": "pydantic",
+              "installed_version": "2.9.2",
+              "required_version": ">=1.10.12"
+            },
+            {
+              "key": "requests",
+              "package_name": "requests",
+              "installed_version": "2.32.4",
+              "required_version": "Any"
+            },
+            {
+              "key": "rich",
+              "package_name": "rich",
+              "installed_version": "14.1.0",
+              "required_version": "Any"
+            },
+            {
+              "key": "ruamel-yaml",
+              "package_name": "ruamel.yaml",
+              "installed_version": "0.18.14",
+              "required_version": ">=0.17.21"
+            },
+            {
+              "key": "safety-schemas",
+              "package_name": "safety-schemas",
+              "installed_version": "0.0.14",
+              "required_version": ">=0.0.8"
+            },
+            {
+              "key": "setuptools",
+              "package_name": "setuptools",
+              "installed_version": "80.9.0",
+              "required_version": ">=65.5.1"
+            },
+            {
+              "key": "typer",
+              "package_name": "typer",
+              "installed_version": "0.16.0",
+              "required_version": "Any"
+            },
+            {
+              "key": "typing-extensions",
+              "package_name": "typing_extensions",
+              "installed_version": "4.14.1",
+              "required_version": ">=4.7.1"
+            },
+            {
+              "key": "urllib3",
+              "package_name": "urllib3",
+              "installed_version": "2.5.0",
+              "required_version": ">=1.26.5"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "safety-schemas",
+            "package_name": "safety-schemas",
+            "installed_version": "0.0.14"
+          },
+          "dependencies": [
+            {
+              "key": "dparse",
+              "package_name": "dparse",
+              "installed_version": "0.6.4",
+              "required_version": ">=0.6.4"
+            },
+            {
+              "key": "packaging",
+              "package_name": "packaging",
+              "installed_version": "25.0",
+              "required_version": ">=21.0"
+            },
+            {
+              "key": "pydantic",
+              "package_name": "pydantic",
+              "installed_version": "2.9.2",
+              "required_version": ">=2.6.0,<2.10.0"
+            },
+            {
+              "key": "ruamel-yaml",
+              "package_name": "ruamel.yaml",
+              "installed_version": "0.18.14",
+              "required_version": ">=0.17.21"
+            },
+            {
+              "key": "typing-extensions",
+              "package_name": "typing_extensions",
+              "installed_version": "4.14.1",
+              "required_version": ">=4.7.1"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "setproctitle",
+            "package_name": "setproctitle",
+            "installed_version": "1.3.6"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "setuptools",
+            "package_name": "setuptools",
+            "installed_version": "80.9.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "shellingham",
+            "package_name": "shellingham",
+            "installed_version": "1.5.4"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "six",
+            "package_name": "six",
+            "installed_version": "1.17.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "slowapi",
+            "package_name": "slowapi",
+            "installed_version": "0.1.9"
+          },
+          "dependencies": [
+            {
+              "key": "limits",
+              "package_name": "limits",
+              "installed_version": "5.4.0",
+              "required_version": ">=2.3"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "sniffio",
+            "package_name": "sniffio",
+            "installed_version": "1.3.1"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "sqlalchemy",
+            "package_name": "SQLAlchemy",
+            "installed_version": "2.0.41"
+          },
+          "dependencies": [
+            {
+              "key": "greenlet",
+              "package_name": "greenlet",
+              "installed_version": "3.2.3",
+              "required_version": ">=1"
+            },
+            {
+              "key": "typing-extensions",
+              "package_name": "typing_extensions",
+              "installed_version": "4.14.1",
+              "required_version": ">=4.6.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "starlette",
+            "package_name": "starlette",
+            "installed_version": "0.47.2"
+          },
+          "dependencies": [
+            {
+              "key": "anyio",
+              "package_name": "anyio",
+              "installed_version": "4.9.0",
+              "required_version": ">=3.6.2,<5"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "stevedore",
+            "package_name": "stevedore",
+            "installed_version": "5.4.1"
+          },
+          "dependencies": [
+            {
+              "key": "pbr",
+              "package_name": "pbr",
+              "installed_version": "6.1.1",
+              "required_version": ">=2.0.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "structlog",
+            "package_name": "structlog",
+            "installed_version": "25.4.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "textual",
+            "package_name": "textual",
+            "installed_version": "5.0.1"
+          },
+          "dependencies": [
+            {
+              "key": "markdown-it-py",
+              "package_name": "markdown-it-py",
+              "installed_version": "3.0.0",
+              "required_version": ">=2.1.0"
+            },
+            {
+              "key": "platformdirs",
+              "package_name": "platformdirs",
+              "installed_version": "4.3.8",
+              "required_version": ">=3.6.0,<5"
+            },
+            {
+              "key": "pygments",
+              "package_name": "Pygments",
+              "installed_version": "2.19.2",
+              "required_version": ">=2.19.2,<3.0.0"
+            },
+            {
+              "key": "rich",
+              "package_name": "rich",
+              "installed_version": "14.1.0",
+              "required_version": ">=13.3.3"
+            },
+            {
+              "key": "typing-extensions",
+              "package_name": "typing_extensions",
+              "installed_version": "4.14.1",
+              "required_version": ">=4.4.0,<5.0.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "tqdm",
+            "package_name": "tqdm",
+            "installed_version": "4.67.1"
+          },
+          "dependencies": [
+            {
+              "key": "colorama",
+              "package_name": "colorama",
+              "installed_version": "0.4.6",
+              "required_version": "Any"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "typer",
+            "package_name": "typer",
+            "installed_version": "0.16.0"
+          },
+          "dependencies": [
+            {
+              "key": "click",
+              "package_name": "click",
+              "installed_version": "8.2.1",
+              "required_version": ">=8.0.0"
+            },
+            {
+              "key": "rich",
+              "package_name": "rich",
+              "installed_version": "14.1.0",
+              "required_version": ">=10.11.0"
+            },
+            {
+              "key": "shellingham",
+              "package_name": "shellingham",
+              "installed_version": "1.5.4",
+              "required_version": ">=1.3.0"
+            },
+            {
+              "key": "typing-extensions",
+              "package_name": "typing_extensions",
+              "installed_version": "4.14.1",
+              "required_version": ">=3.7.4.3"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "typing-extensions",
+            "package_name": "typing_extensions",
+            "installed_version": "4.14.1"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "tzdata",
+            "package_name": "tzdata",
+            "installed_version": "2025.2"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "ua-parser",
+            "package_name": "ua-parser",
+            "installed_version": "1.0.1"
+          },
+          "dependencies": [
+            {
+              "key": "ua-parser-builtins",
+              "package_name": "ua-parser-builtins",
+              "installed_version": "0.18.0.post1",
+              "required_version": "Any"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "ua-parser-builtins",
+            "package_name": "ua-parser-builtins",
+            "installed_version": "0.18.0.post1"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "uc-micro-py",
+            "package_name": "uc-micro-py",
+            "installed_version": "1.0.3"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "urllib3",
+            "package_name": "urllib3",
+            "installed_version": "2.5.0"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "user-agents",
+            "package_name": "user-agents",
+            "installed_version": "2.2.0"
+          },
+          "dependencies": [
+            {
+              "key": "ua-parser",
+              "package_name": "ua-parser",
+              "installed_version": "1.0.1",
+              "required_version": ">=0.10.0"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "uvicorn",
+            "package_name": "uvicorn",
+            "installed_version": "0.35.0"
+          },
+          "dependencies": [
+            {
+              "key": "click",
+              "package_name": "click",
+              "installed_version": "8.2.1",
+              "required_version": ">=7.0"
+            },
+            {
+              "key": "h11",
+              "package_name": "h11",
+              "installed_version": "0.16.0",
+              "required_version": ">=0.8"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "virtualenv",
+            "package_name": "virtualenv",
+            "installed_version": "20.32.0"
+          },
+          "dependencies": [
+            {
+              "key": "distlib",
+              "package_name": "distlib",
+              "installed_version": "0.4.0",
+              "required_version": ">=0.3.7,<1"
+            },
+            {
+              "key": "filelock",
+              "package_name": "filelock",
+              "installed_version": "3.12.4",
+              "required_version": ">=3.12.2,<4"
+            },
+            {
+              "key": "platformdirs",
+              "package_name": "platformdirs",
+              "installed_version": "4.3.8",
+              "required_version": ">=3.9.1,<5"
+            }
+          ]
+        },
+        {
+          "package": {
+            "key": "wrapt",
+            "package_name": "wrapt",
+            "installed_version": "1.17.2"
+          },
+          "dependencies": []
+        },
+        {
+          "package": {
+            "key": "yarl",
+            "package_name": "yarl",
+            "installed_version": "1.20.1"
+          },
+          "dependencies": [
+            {
+              "key": "idna",
+              "package_name": "idna",
+              "installed_version": "3.10",
+              "required_version": ">=2.0"
+            },
+            {
+              "key": "multidict",
+              "package_name": "multidict",
+              "installed_version": "6.6.3",
+              "required_version": ">=4.0"
+            },
+            {
+              "key": "propcache",
+              "package_name": "propcache",
+              "installed_version": "0.3.2",
+              "required_version": ">=0.2.1"
+            }
+          ]
+        }
+      ],
+      "conflicts": [],
+      "total_packages": 140,
+      "status": "success"
+    }
+  }
+}

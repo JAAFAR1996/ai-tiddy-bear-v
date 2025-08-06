@@ -1,0 +1,92 @@
+# Development Environment Configuration
+# =====================================
+# Local development settings for AI Teddy Bear system
+
+# Application Settings
+APP_NAME: "AI Teddy Bear (Development)"
+APP_VERSION: "1.0.0-dev"
+DEBUG: true
+HOST: "0.0.0.0"
+PORT: 8000
+
+# Database Configuration
+DATABASE_URL: "postgresql+asyncpg://ai_teddy_user:password@localhost:5432/ai_teddy_bear"
+DATABASE_POOL_SIZE: 5
+DATABASE_MAX_OVERFLOW: 10
+DATABASE_TIMEOUT: 30
+
+# Redis Configuration
+REDIS_URL: "redis://localhost:6379/0"
+REDIS_MAX_CONNECTIONS: 50
+REDIS_TIMEOUT: 5
+
+# AI Providers (Development Keys)
+# NOTE: These should be overridden by environment variables or Vault in production
+OPENAI_API_KEY: "sk-dev-key-placeholder-replace-with-real-key"
+ANTHROPIC_API_KEY: "anthropic-dev-key-placeholder"
+AI_PROVIDER_TIMEOUT: 30
+AI_PROVIDER_MAX_RETRIES: 3
+
+# Security Configuration (Relaxed for Development)
+JWT_SECRET_KEY: "dev-jwt-secret-key-not-for-production-use-only"
+JWT_ALGORITHM: "HS256"
+JWT_EXPIRATION_HOURS: 24
+RATE_LIMIT_REQUESTS: 10000  # Higher limit for dev testing
+ENCRYPT_SENSITIVE_DATA: false  # Disabled for easier debugging
+
+# Logging Configuration
+LOG_LEVEL: "DEBUG"
+# ELK Stack (Local Development)
+ELASTICSEARCH_HOSTS: "localhost:9200"
+# CloudWatch disabled for local development
+# CLOUDWATCH_LOG_GROUP: ""
+
+# Storage Configuration (Local Development)
+# AWS keys not needed for local development
+S3_BUCKET_NAME: "ai-teddy-bear-dev-bucket"
+
+# Communication Services (Development)
+# Use test/sandbox endpoints for development
+SENDGRID_API_KEY: "SG.dev-api-key-placeholder"
+FIREBASE_SERVICE_ACCOUNT: ""  # Path to service account JSON file
+
+# Child Safety Configuration (Strict even in development)
+CHILD_AGE_VERIFICATION_REQUIRED: true
+PARENTAL_CONSENT_REQUIRED: true
+CONTENT_FILTERING_LEVEL: "strict"
+
+# Development-Specific Settings
+ENABLE_DEBUG_ROUTES: true
+ENABLE_TEST_DATA: true
+MOCK_EXTERNAL_SERVICES: true
+SKIP_EMAIL_VERIFICATION: true
+ALLOW_UNSAFE_HTML: false  # Always false for safety
+
+# Performance Settings (Relaxed for Development)
+REQUEST_TIMEOUT: 60
+MAX_CONCURRENT_REQUESTS: 100
+CACHE_TTL_SECONDS: 300  # 5 minutes
+
+# Feature Flags (Development)
+ENABLE_ANALYTICS: false
+ENABLE_A_B_TESTING: false
+ENABLE_BETA_FEATURES: true
+
+# Monitoring (Development)
+ENABLE_METRICS: true
+METRICS_PORT: 8001
+HEALTH_CHECK_INTERVAL: 30
+
+# Development Tools
+ENABLE_SWAGGER_UI: true
+ENABLE_REDOC: true
+ENABLE_PROFILER: true
+ENABLE_CORS_ALL: true  # Allow all origins in development
+
+# File Upload Limits (Development)
+MAX_FILE_SIZE_MB: 10
+ALLOWED_FILE_TYPES: "jpg,jpeg,png,gif,mp3,wav,mp4"
+
+# Session Configuration
+SESSION_TIMEOUT_MINUTES: 480  # 8 hours for development
+REMEMBER_ME_DAYS: 30

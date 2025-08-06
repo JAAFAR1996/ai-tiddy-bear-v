@@ -1,0 +1,165 @@
+# Test Environment Configuration
+# ==============================
+# Configuration for automated testing environments
+
+# Application Settings
+APP_NAME: "AI Teddy Bear (Test)"
+APP_VERSION: "1.0.0-test"
+DEBUG: true
+HOST: "127.0.0.1"
+PORT: 8888  # Different port to avoid conflicts
+
+# Database Configuration (Test Database)
+DATABASE_URL: "postgresql://test_user:test_password@localhost:5432/ai_teddy_bear_test"
+DATABASE_POOL_SIZE: 3  # Minimal pool for testing
+DATABASE_MAX_OVERFLOW: 5
+DATABASE_TIMEOUT: 5  # Short timeout for faster test failures
+
+# Redis Configuration (Test Redis)
+REDIS_URL: "redis://localhost:6379/1"  # Different DB index
+REDIS_MAX_CONNECTIONS: 10
+REDIS_TIMEOUT: 1  # Very short timeout for tests
+
+# AI Providers (Test/Mock Keys)
+OPENAI_API_KEY: "sk-test-key-for-unit-tests-only"
+ANTHROPIC_API_KEY: "test-anthropic-key"
+AI_PROVIDER_TIMEOUT: 5  # Short timeout for tests
+AI_PROVIDER_MAX_RETRIES: 1  # Minimal retries in tests
+
+# Security Configuration (Relaxed for Testing)
+JWT_SECRET_KEY: "test-jwt-secret-key-not-secure"
+JWT_ALGORITHM: "HS256"
+JWT_EXPIRATION_HOURS: 1  # Short expiration for testing
+RATE_LIMIT_REQUESTS: 100000  # No rate limiting in tests
+ENCRYPT_SENSITIVE_DATA: false  # Disabled for test visibility
+
+# Logging Configuration (Test Logging)
+LOG_LEVEL: "DEBUG"
+# ELK Stack disabled for tests
+ELASTICSEARCH_HOSTS: ""
+CLOUDWATCH_LOG_GROUP: ""
+
+# Storage Configuration (Local/Mock Storage)
+S3_BUCKET_NAME: "test-bucket"
+# No real AWS keys needed for tests
+
+# Communication Services (Mock/Test)
+SENDGRID_API_KEY: "test-sendgrid-key"
+FIREBASE_SERVICE_ACCOUNT: ""
+
+# Child Safety Configuration (Test-friendly)
+CHILD_AGE_VERIFICATION_REQUIRED: false  # Simplified for tests
+PARENTAL_CONSENT_REQUIRED: false  # Simplified for tests
+CONTENT_FILTERING_LEVEL: "basic"  # Relaxed for test content
+
+# Test-Specific Settings
+ENABLE_DEBUG_ROUTES: true
+ENABLE_TEST_DATA: true
+MOCK_EXTERNAL_SERVICES: true  # Always mock in tests
+SKIP_EMAIL_VERIFICATION: true
+ALLOW_UNSAFE_HTML: false
+
+# Performance Settings (Fast for Testing)
+REQUEST_TIMEOUT: 5
+MAX_CONCURRENT_REQUESTS: 50
+CACHE_TTL_SECONDS: 10  # Very short cache for tests
+
+# Feature Flags (All disabled for consistent testing)
+ENABLE_ANALYTICS: false
+ENABLE_A_B_TESTING: false
+ENABLE_BETA_FEATURES: false
+
+# Monitoring (Minimal for Testing)
+ENABLE_METRICS: false
+METRICS_PORT: 8889
+HEALTH_CHECK_INTERVAL: 5
+
+# Documentation (Enabled for testing)
+ENABLE_SWAGGER_UI: true
+ENABLE_REDOC: true
+ENABLE_PROFILER: true
+ENABLE_CORS_ALL: true
+
+# File Upload Limits (Test Limits)
+MAX_FILE_SIZE_MB: 1  # Small files for tests
+ALLOWED_FILE_TYPES: "jpg,png,txt"
+
+# Session Configuration (Short for Testing)
+SESSION_TIMEOUT_MINUTES: 5
+REMEMBER_ME_DAYS: 1
+
+# SSL/TLS Configuration (Disabled for Testing)
+FORCE_HTTPS: false
+SSL_REDIRECT: false
+HSTS_MAX_AGE: 0
+
+# External Service Configuration (Test/Mock)
+STRIPE_API_KEY: "sk_test_mock_key"
+STRIPE_WEBHOOK_SECRET: "test_webhook_secret"
+
+# Notification Settings (Disabled for Testing)
+EMAIL_NOTIFICATIONS: false
+PUSH_NOTIFICATIONS: false
+SMS_NOTIFICATIONS: false
+
+# Environment-Specific URLs (Local Testing)
+BASE_URL: "http://localhost:8888"
+API_BASE_URL: "http://localhost:8888/api"
+FRONTEND_URL: "http://localhost:3000"
+
+# Database Migration Settings (Auto for Testing)
+AUTO_MIGRATE: true  # Automatically apply migrations in tests
+MIGRATION_TIMEOUT: 30
+
+# Backup Configuration (Disabled for Testing)
+ENABLE_AUTOMATED_BACKUPS: false
+BACKUP_INTERVAL_HOURS: 0
+
+# Data Retention (Short for Testing)
+LOG_RETENTION_DAYS: 1
+DATA_RETENTION_DAYS: 1
+AUDIT_LOG_RETENTION_DAYS: 1
+
+# Test-Specific Configuration
+TEST_DATABASE_CLEANUP: true  # Clean database between tests
+TEST_PARALLEL_EXECUTION: true
+TEST_TIMEOUT_SECONDS: 30
+TEST_RETRY_COUNT: 2
+
+# Mock Service Configuration
+MOCK_AI_RESPONSES: true
+MOCK_EMAIL_SERVICE: true
+MOCK_PUSH_NOTIFICATIONS: true
+MOCK_FILE_STORAGE: true
+MOCK_EXTERNAL_APIS: true
+
+# Test Data Configuration
+CREATE_TEST_USERS: true
+CREATE_TEST_CHILDREN: true
+CREATE_TEST_STORIES: true
+CREATE_TEST_SESSIONS: true
+
+# Performance Testing
+LOAD_TEST_ENABLED: false
+STRESS_TEST_ENABLED: false
+BENCHMARK_ENABLED: false
+
+# Integration Testing
+INTEGRATION_TEST_ENABLED: true
+E2E_TEST_ENABLED: false  # Separate E2E test environment
+
+# Security Testing
+SECURITY_TEST_MODE: true
+VULNERABILITY_SCAN_ENABLED: false
+PENETRATION_TEST_MODE: false
+
+# CI/CD Specific Settings
+CI_MODE: true
+SKIP_SLOW_TESTS: false
+GENERATE_TEST_REPORTS: true
+COVERAGE_THRESHOLD: 80
+
+# Test Environment Isolation
+ISOLATED_TEST_EXECUTION: true
+CLEANUP_AFTER_TESTS: true
+RESET_STATE_BETWEEN_TESTS: true

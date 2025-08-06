@@ -1,0 +1,26 @@
+[
+  {
+    "id": "game1",
+    "title": "Find the Colors",
+    "content": "Can you find something red in your room? Now look for something blue! Let's explore all the beautiful colors around us together.",
+    "category": "interactive",
+    "description": "An interactive color-finding game for young children",
+    "min_age": 3,
+    "max_age": 6,
+    "tags": ["interactive", "colors", "games", "learning", "exploration"],
+    "version": "1.0.0",
+    "author": "Story Templates System"
+  },
+  {
+    "id": "game2",
+    "title": "Memory Match",
+    "content": "Remember the sequence I show you! First a clap, then a hop, then a spin. Can you repeat it? Let's make it longer each time!",
+    "category": "interactive",
+    "description": "A memory and movement game to develop recall skills",
+    "min_age": 5,
+    "max_age": 10,
+    "tags": ["interactive", "memory", "games", "movement", "skills"],
+    "version": "1.0.0",
+    "author": "Story Templates System"
+  }
+]

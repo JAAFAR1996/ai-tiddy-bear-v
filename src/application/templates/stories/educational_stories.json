@@ -1,0 +1,46 @@
+[
+  {
+    "topic": "math",
+    "title": "Counting Stars",
+    "content": "Let's count the stars together! 1, 2, 3, 4, 5... Can you count with me? Stars are bright and beautiful in the night sky.",
+    "subject": "math",
+    "min_age": 3,
+    "max_age": 7,
+    "difficulty": "easy",
+    "duration": 5,
+    "keywords": ["counting", "numbers", "stars", "math"]
+  },
+  {
+    "topic": "science",
+    "title": "The Water Cycle",
+    "content": "Let me tell you about how rain is made! The sun heats up water from lakes and rivers. It goes up to the sky as clouds, then comes back down as rain to water the plants.",
+    "subject": "science",
+    "min_age": 6,
+    "max_age": 12,
+    "difficulty": "medium",
+    "duration": 10,
+    "keywords": ["water", "rain", "clouds", "science", "nature"]
+  },
+  {
+    "topic": "colors",
+    "title": "Rainbow Colors",
+    "content": "Red, orange, yellow, green, blue, indigo, and violet! These are the colors of the rainbow. Can you name all the colors?",
+    "subject": "art",
+    "min_age": 3,
+    "max_age": 6,
+    "difficulty": "easy",
+    "duration": 3,
+    "keywords": ["colors", "rainbow", "art", "learning"]
+  },
+  {
+    "topic": "animals",
+    "title": "Farm Animals",
+    "content": "On the farm we can see many animals! Cows say 'moo', pigs say 'oink', chickens say 'cluck', and sheep say 'baa'. What sound does your favorite animal make?",
+    "subject": "science",
+    "min_age": 3,
+    "max_age": 8,
+    "difficulty": "easy",
+    "duration": 7,
+    "keywords": ["animals", "farm", "sounds", "nature"]
+  }
+]

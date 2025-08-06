@@ -1,0 +1,976 @@
+{
+    "info": {
+        "name": "AI Teddy Bear API",
+        "description": "Complete API collection for AI Teddy Bear platform with child safety features",
+        "version": "1.0.0",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "auth": {
+        "type": "bearer",
+        "bearer": [
+            {
+                "key": "token",
+                "value": "{{access_token}}",
+                "type": "string"
+            }
+        ]
+    },
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "https://api.aiteddybear.com",
+            "type": "string"
+        },
+        {
+            "key": "access_token",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "refresh_token",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "child_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "conversation_id",
+            "value": "",
+            "type": "string"
+        }
+    ],
+    "item": [
+        {
+            "name": "Authentication",
+            "item": [
+                {
+                    "name": "Register Parent",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"parent@example.com\",\n    \"password\": \"SecurePassword123!\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"phone\": \"+1234567890\",\n    \"consent_to_coppa\": true\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/auth/register",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "auth", "register"]
+                        },
+                        "description": "Register a new parent account with COPPA compliance"
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "if (pm.response.code === 200) {",
+                                    "    const response = pm.response.json();",
+                                    "    pm.collectionVariables.set('access_token', response.access_token);",
+                                    "    pm.collectionVariables.set('refresh_token', response.refresh_token);",
+                                    "    pm.test('Registration successful', function () {",
+                                    "        pm.expect(response.access_token).to.not.be.empty;",
+                                    "    });",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Login Parent",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"parent@example.com\",\n    \"password\": \"SecurePassword123!\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/auth/login",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "auth", "login"]
+                        },
+                        "description": "Authenticate parent and receive JWT tokens"
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "if (pm.response.code === 200) {",
+                                    "    const response = pm.response.json();",
+                                    "    pm.collectionVariables.set('access_token', response.access_token);",
+                                    "    pm.collectionVariables.set('refresh_token', response.refresh_token);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Refresh Token",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"refresh_token\": \"{{refresh_token}}\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/auth/refresh",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "auth", "refresh"]
+                        },
+                        "description": "Refresh access token using refresh token"
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "if (pm.response.code === 200) {",
+                                    "    const response = pm.response.json();",
+                                    "    pm.collectionVariables.set('access_token', response.access_token);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Logout",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/auth/logout",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "auth", "logout"]
+                        },
+                        "description": "Logout and invalidate tokens"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Children",
+            "item": [
+                {
+                    "name": "Create Child Profile",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"Emma\",\n    \"age\": 7,\n    \"interests\": [\"dinosaurs\", \"space\", \"art\"],\n    \"safety_level\": \"high\",\n    \"language_preference\": \"en\",\n    \"voice_preference\": \"child_friendly\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/children",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "children"]
+                        },
+                        "description": "Create a new child profile with safety settings"
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "if (pm.response.code === 201) {",
+                                    "    const response = pm.response.json();",
+                                    "    pm.collectionVariables.set('child_id', response.id);",
+                                    "    pm.test('Child created successfully', function () {",
+                                    "        pm.expect(response.id).to.not.be.empty;",
+                                    "        pm.expect(response.name).to.eql('Emma');",
+                                    "    });",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Child Profile",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/children/{{child_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "children", "{{child_id}}"]
+                        },
+                        "description": "Retrieve child profile information"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Update Child Profile",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"interests\": [\"dinosaurs\", \"space\", \"art\", \"music\"],\n    \"safety_level\": \"high\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/children/{{child_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "children", "{{child_id}}"]
+                        },
+                        "description": "Update child profile settings"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "List Children",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/children",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "children"]
+                        },
+                        "description": "List all children for the authenticated parent"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Delete Child Profile",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/children/{{child_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "children", "{{child_id}}"]
+                        },
+                        "description": "Delete child profile and all associated data (COPPA compliance)"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Conversations",
+            "item": [
+                {
+                    "name": "Start Conversation",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"message\": \"Hi Teddy! Can you tell me about dinosaurs?\",\n    \"voice_enabled\": true,\n    \"safety_level\": \"high\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/conversations",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "conversations"]
+                        },
+                        "description": "Start a new conversation with AI Teddy Bear"
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "if (pm.response.code === 201) {",
+                                    "    const response = pm.response.json();",
+                                    "    pm.collectionVariables.set('conversation_id', response.conversation_id);",
+                                    "    pm.test('Conversation started', function () {",
+                                    "        pm.expect(response.content).to.not.be.empty;",
+                                    "        pm.expect(response.safety_score).to.be.at.least(0.8);",
+                                    "    });",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Send Message",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"conversation_id\": \"{{conversation_id}}\",\n    \"message\": \"What did T-Rex eat?\",\n    \"voice_enabled\": true\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/conversations/{{conversation_id}}/messages",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "conversations", "{{conversation_id}}", "messages"]
+                        },
+                        "description": "Send a message in an existing conversation"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Conversation History",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/conversations/{{conversation_id}}/messages?limit=20",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "conversations", "{{conversation_id}}", "messages"],
+                            "query": [
+                                {
+                                    "key": "limit",
+                                    "value": "20"
+                                }
+                            ]
+                        },
+                        "description": "Retrieve conversation message history"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "List Conversations",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/conversations?limit=10&status=active",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "conversations"],
+                            "query": [
+                                {
+                                    "key": "limit",
+                                    "value": "10"
+                                },
+                                {
+                                    "key": "status",
+                                    "value": "active"
+                                }
+                            ]
+                        },
+                        "description": "List recent conversations for a child"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "End Conversation",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"status\": \"ended\",\n    \"summary\": \"Great conversation about dinosaurs!\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/conversations/{{conversation_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "conversations", "{{conversation_id}}"]
+                        },
+                        "description": "End an active conversation"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Audio",
+            "item": [
+                {
+                    "name": "Generate Speech",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"text\": \"Hello there! I'm your friendly AI Teddy Bear!\",\n    \"voice\": \"child_friendly\",\n    \"format\": \"mp3\",\n    \"speed\": 1.0\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/audio/speech",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "audio", "speech"]
+                        },
+                        "description": "Generate speech audio from text"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Transcribe Audio",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "audio",
+                                    "type": "file",
+                                    "src": "/path/to/audio/file.wav"
+                                },
+                                {
+                                    "key": "language",
+                                    "value": "en",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/audio/transcribe",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "audio", "transcribe"]
+                        },
+                        "description": "Transcribe audio to text"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Safety",
+            "item": [
+                {
+                    "name": "Analyze Content Safety",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"content\": \"Tell me about your favorite toys\",\n    \"child_age\": 7,\n    \"context\": \"conversation\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/safety/analyze",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "safety", "analyze"]
+                        },
+                        "description": "Analyze content for child safety compliance"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Report Safety Concern",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"concern_type\": \"inappropriate_content\",\n    \"description\": \"AI response seemed inappropriate for child's age\",\n    \"conversation_id\": \"{{conversation_id}}\",\n    \"message_id\": \"msg_123456\",\n    \"severity\": \"medium\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/safety/report",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "safety", "report"]
+                        },
+                        "description": "Report a safety concern for review"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Safety Settings",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/safety/settings",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "safety", "settings"]
+                        },
+                        "description": "Get current safety settings for a child"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Update Safety Settings",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"safety_level\": \"high\",\n    \"blocked_topics\": [\"violence\", \"adult_content\"],\n    \"time_restrictions\": {\n        \"daily_limit_minutes\": 60,\n        \"bedtime_start\": \"20:00\",\n        \"bedtime_end\": \"07:00\"\n    },\n    \"content_filters\": {\n        \"language_filter\": true,\n        \"educational_only\": false\n    }\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/safety/settings",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "safety", "settings"]
+                        },
+                        "description": "Update safety settings for a child"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Consent Management",
+            "item": [
+                {
+                    "name": "Check Consent Status",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/consent/status?feature=voice_interaction",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "consent", "status"],
+                            "query": [
+                                {
+                                    "key": "feature",
+                                    "value": "voice_interaction"
+                                }
+                            ]
+                        },
+                        "description": "Check parental consent status for a feature"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Request Consent",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"feature\": \"voice_interaction\",\n    \"description\": \"Enable voice conversations with AI Teddy Bear\",\n    \"data_usage\": \"Voice data is processed for conversation and deleted after 24 hours\",\n    \"parent_notification_method\": \"email\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/consent/request",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "consent", "request"]
+                        },
+                        "description": "Request parental consent for a new feature"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Grant Consent",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"consent_id\": \"consent_123456\",\n    \"granted\": true,\n    \"parent_verification\": true,\n    \"digital_signature\": \"parent_digital_signature_here\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/consent/grant",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "consent", "grant"]
+                        },
+                        "description": "Grant or deny parental consent (parent only)"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Revoke Consent",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"feature\": \"voice_interaction\",\n    \"reason\": \"Parent decision to disable feature\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/consent/revoke",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "consent", "revoke"]
+                        },
+                        "description": "Revoke previously granted consent"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Data Management (COPPA)",
+            "item": [
+                {
+                    "name": "Export Child Data",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"format\": \"json\",\n    \"include_conversations\": true,\n    \"include_audio\": false,\n    \"include_analytics\": true,\n    \"date_range\": {\n        \"start\": \"2025-01-01\",\n        \"end\": \"2025-07-27\"\n    }\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/data/export",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "data", "export"]
+                        },
+                        "description": "Export all child data (COPPA right to data portability)"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Delete Child Data",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"confirmation\": \"DELETE_ALL_DATA\",\n    \"reason\": \"Parent request for data deletion\",\n    \"retain_anonymized_analytics\": false\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/data/delete",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "data", "delete"]
+                        },
+                        "description": "Delete all child data (COPPA right to deletion)"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Data Usage Report",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/data/usage?period=monthly",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "data", "usage"],
+                            "query": [
+                                {
+                                    "key": "period",
+                                    "value": "monthly"
+                                }
+                            ]
+                        },
+                        "description": "Get data usage and retention report"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Analytics & Monitoring",
+            "item": [
+                {
+                    "name": "Get Usage Analytics",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/analytics/usage?timeframe=week",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "analytics", "usage"],
+                            "query": [
+                                {
+                                    "key": "timeframe",
+                                    "value": "week"
+                                }
+                            ]
+                        },
+                        "description": "Get child usage analytics and insights"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Safety Metrics",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/analytics/safety?timeframe=month",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "analytics", "safety"],
+                            "query": [
+                                {
+                                    "key": "timeframe",
+                                    "value": "month"
+                                }
+                            ]
+                        },
+                        "description": "Get safety metrics and violation reports"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Learning Progress",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "X-Child-ID",
+                                "value": "{{child_id}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/analytics/learning?subject=all",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "analytics", "learning"],
+                            "query": [
+                                {
+                                    "key": "subject",
+                                    "value": "all"
+                                }
+                            ]
+                        },
+                        "description": "Get educational progress and learning insights"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "System Health",
+            "item": [
+                {
+                    "name": "Health Check",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/health",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "health"]
+                        },
+                        "description": "Check system health and status"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "API Status",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/status",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "status"]
+                        },
+                        "description": "Get detailed API status and metrics"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Service Dependencies",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/dependencies",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "v1", "dependencies"]
+                        },
+                        "description": "Check status of external service dependencies"
+                    },
+                    "response": []
+                }
+            ]
+        }
+    ],
+    "event": [
+        {
+            "listen": "prerequest",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    "// Auto-refresh token if expired",
+                    "const token = pm.collectionVariables.get('access_token');",
+                    "if (token) {",
+                    "    // Check if token is expired (simplified check)",
+                    "    try {",
+                    "        const payload = JSON.parse(atob(token.split('.')[1]));",
+                    "        const now = Math.floor(Date.now() / 1000);",
+                    "        if (payload.exp && payload.exp < now) {",
+                    "            console.log('Token expired, refreshing...');",
+                    "            // Token refresh would happen here",
+                    "        }",
+                    "    } catch (e) {",
+                    "        console.log('Could not parse token:', e);",
+                    "    }",
+                    "}"
+                ]
+            }
+        },
+        {
+            "listen": "test",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    "// Global test for error handling",
+                    "pm.test('Response should not have server errors', function () {",
+                    "    pm.expect(pm.response.code).to.be.below(500);",
+                    "});",
+                    "",
+                    "// Log correlation ID for debugging",
+                    "if (pm.response.json() && pm.response.json().error) {",
+                    "    const error = pm.response.json().error;",
+                    "    if (error.correlation_id) {",
+                    "        console.log('Error correlation ID:', error.correlation_id);",
+                    "    }",
+                    "}"
+                ]
+            }
+        }
+    ]
+}

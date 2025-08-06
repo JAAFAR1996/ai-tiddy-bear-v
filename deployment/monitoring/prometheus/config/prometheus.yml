@@ -1,0 +1,300 @@
+# 🧸 AI TEDDY BEAR V5 - PROMETHEUS CONFIGURATION
+# =============================================
+# Production monitoring configuration with child safety focus
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'ai-teddy-bear-prod'
+    environment: 'production'
+    service: 'ai-teddy-bear'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "alerts/*.yml"
+  - "recording_rules/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # AI Teddy Bear main application
+  - job_name: 'ai-teddy-bear-app'
+    static_configs:
+      - targets: 
+        - 'ai-teddy-app:8000'
+        - 'ai-teddy-app:8001'
+        - 'ai-teddy-app:8002'
+    scrape_interval: 5s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    honor_labels: true
+    params:
+      format: ['prometheus']
+
+  # Child Safety Service (high frequency monitoring)
+  - job_name: 'child-safety-service'
+    static_configs:
+      - targets: ['child-safety-service:8010']
+    scrape_interval: 1s  # High frequency for safety-critical service
+    metrics_path: /metrics
+    scrape_timeout: 5s
+    honor_labels: true
+
+  # COPPA Compliance Service
+  - job_name: 'coppa-compliance-service'
+    static_configs:
+      - targets: ['coppa-service:8020']
+    scrape_interval: 5s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    honor_labels: true
+
+  # Content Moderation Service
+  - job_name: 'content-moderation'
+    static_configs:
+      - targets: ['content-moderation:8030']
+    scrape_interval: 2s  # High frequency for content safety
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    honor_labels: true
+
+  # Authentication Service
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['auth-service:8040']
+    scrape_interval: 10s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    honor_labels: true
+
+  # User Service
+  - job_name: 'user-service'
+    static_configs:
+      - targets: ['user-service:8050']
+    scrape_interval: 10s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    honor_labels: true
+
+  # Conversation Service
+  - job_name: 'conversation-service'
+    static_configs:
+      - targets: ['conversation-service:8060']
+    scrape_interval: 5s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    honor_labels: true
+
+  # AI Model Service
+  - job_name: 'ai-model-service'
+    static_configs:
+      - targets: ['ai-model-service:8070']
+    scrape_interval: 5s
+    metrics_path: /metrics
+    scrape_timeout: 15s
+    honor_labels: true
+
+  # Database monitoring (PostgreSQL)
+  - job_name: 'postgresql'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # Redis monitoring
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # Node exporter for system metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: 
+        - 'node-exporter-1:9100'
+        - 'node-exporter-2:9100'
+        - 'node-exporter-3:9100'
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # cAdvisor for container metrics
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: 
+        - 'cadvisor-1:8080'
+        - 'cadvisor-2:8080'
+        - 'cadvisor-3:8080'
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # Nginx ingress monitoring
+  - job_name: 'nginx-ingress'
+    static_configs:
+      - targets: ['nginx-ingress:10254']
+    scrape_interval: 10s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # ElasticSearch monitoring
+  - job_name: 'elasticsearch'
+    static_configs:
+      - targets: ['elasticsearch-exporter:9114']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scrape_timeout: 15s
+
+  # Grafana monitoring
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+    scrape_interval: 60s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # AlertManager monitoring
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # Blackbox exporter for endpoint monitoring
+  - job_name: 'blackbox'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]  # Look for a HTTP 200 response
+    static_configs:
+      - targets:
+        - https://api.aiteddybear.com/health
+        - https://app.aiteddybear.com/health
+        - https://admin.aiteddybear.com/health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Child Safety Endpoint Monitoring (Critical)
+  - job_name: 'child-safety-endpoints'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - https://api.aiteddybear.com/child-safety/health
+        - https://api.aiteddybear.com/content-moderation/health
+        - https://api.aiteddybear.com/coppa-compliance/health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+    scrape_interval: 5s  # Very frequent monitoring for safety endpoints
+
+  # AWS CloudWatch integration (if using AWS)
+  - job_name: 'cloudwatch'
+    ec2_sd_configs:
+      - region: us-east-1
+        port: 9100
+    relabel_configs:
+      - source_labels: [__meta_ec2_tag_Name]
+        target_label: instance
+      - source_labels: [__meta_ec2_tag_Environment]
+        target_label: environment
+      - source_labels: [__meta_ec2_tag_Service]
+        target_label: service
+
+  # Mobile app backend monitoring
+  - job_name: 'mobile-backend'
+    static_configs:
+      - targets: ['mobile-backend:8080']
+    scrape_interval: 10s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # Parent dashboard API monitoring
+  - job_name: 'parent-dashboard-api'
+    static_configs:
+      - targets: ['parent-dashboard:8090']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # Notification service monitoring
+  - job_name: 'notification-service'
+    static_configs:
+      - targets: ['notification-service:8100']
+    scrape_interval: 10s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # Log aggregation monitoring
+  - job_name: 'fluent-bit'
+    static_configs:
+      - targets: ['fluent-bit:2020']
+    scrape_interval: 30s
+    metrics_path: /api/v1/metrics/prometheus
+    scrape_timeout: 10s
+
+  # Kubernetes cluster monitoring (if using k8s)
+  - job_name: 'kubernetes-apiservers'
+    kubernetes_sd_configs:
+    - role: endpoints
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+    - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+      action: keep
+      regex: default;kubernetes;https
+
+  # Custom business metrics
+  - job_name: 'business-metrics'
+    static_configs:
+      - targets: ['business-metrics:8110']
+    scrape_interval: 60s  # Business metrics don't need high frequency
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+# Remote write configuration for long-term storage
+remote_write:
+  - url: "${PROMETHEUS_REMOTE_WRITE_URL}"
+    basic_auth:
+      username: "${PROMETHEUS_REMOTE_WRITE_USERNAME}"
+      password: "${PROMETHEUS_REMOTE_WRITE_PASSWORD}"
+    write_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'child_safety_.*|coppa_.*|content_moderation_.*|security_.*'
+        action: keep  # Only send safety-critical metrics to remote storage
+
+# Storage configuration
+storage:
+  tsdb:
+    retention.time: 30d
+    retention.size: 50GB
+    wal-compression: true

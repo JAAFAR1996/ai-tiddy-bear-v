@@ -1,0 +1,91 @@
+# Prometheus Configuration for AI Teddy Bear Production
+# Child-safe AI platform monitoring with COPPA compliance
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'ai-teddy-bear-prod'
+    environment: 'production'
+    coppa_compliant: 'true'
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Rules for child safety alerts
+rule_files:
+  - "alerts.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # AI Teddy Bear Application
+  - job_name: 'ai-teddy-app'
+    static_configs:
+      - targets: ['app:9090']
+    metrics_path: /metrics
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    honor_labels: true
+    metric_relabel_configs:
+      # Child safety metrics
+      - source_labels: [__name__]
+        regex: '(child_safety_.*|coppa_.*|content_filter_.*)'
+        target_label: 'safety_metric'
+        replacement: 'true'
+      # Performance metrics
+      - source_labels: [__name__]
+        regex: '(http_request_duration_.*|database_.*|redis_.*)'
+        target_label: 'performance_metric'
+        replacement: 'true'
+
+  # PostgreSQL Database
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:9187']  # postgres_exporter if available
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # Redis Cache
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:9121']  # redis_exporter if available
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # NGINX Reverse Proxy
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:9113']  # nginx-prometheus-exporter if available
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # System metrics (if node_exporter is available)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['host.docker.internal:9100']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+# Remote write configuration (optional - for long-term storage)
+# remote_write:
+#   - url: "https://your-remote-storage/api/v1/write"
+#     basic_auth:
+#       username: "user"
+#       password: "password"
+
+# Storage configuration
+storage:
+  tsdb:
+    retention.time: 30d
+    retention.size: 10GB
