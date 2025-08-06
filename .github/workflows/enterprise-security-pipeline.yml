@@ -678,7 +678,7 @@ jobs:
           fi
 
       - name: "📄 Upload Container Security Reports"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: container-security-reports
@@ -974,7 +974,7 @@ jobs:
           fi
 
       - name: "📄 Upload Infrastructure Security Reports"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: infrastructure-security-reports
@@ -1234,7 +1234,7 @@ jobs:
           fi
 
       - name: "📄 Upload Production Readiness Reports"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: production-readiness-reports
@@ -1362,7 +1362,7 @@ jobs:
           fi
 
       - name: "📄 Upload Security Summary"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: enterprise-security-summary
