@@ -202,6 +202,8 @@ class CloudWatchHandler(logging.Handler):
         self.buffer_size = 100
         self.flush_interval = 5.0
         self.last_flush = time.time()
+        import threading
+        self._buffer_lock = threading.Lock()
         
         if BOTO3_AVAILABLE:
             try:
@@ -255,47 +257,48 @@ class CloudWatchHandler(logging.Handler):
             return
         
         try:
-            # Format the record
             log_entry = {
                 'timestamp': int(record.created * 1000),
                 'message': self.format(record)
             }
-            
-            self.buffer.append(log_entry)
-            
-            # Flush if buffer is full or time threshold is reached
-            if (len(self.buffer) >= self.buffer_size or 
-                time.time() - self.last_flush >= self.flush_interval):
-                self._flush_buffer()
-                
+            with self._buffer_lock:
+                self.buffer.append(log_entry)
+                if (len(self.buffer) >= self.buffer_size or 
+                    time.time() - self.last_flush >= self.flush_interval):
+                    self._flush_buffer()
         except Exception as e:
             import logging
             logging.getLogger(__name__).error(f"CloudWatch logging error: {e}")
     
     def _flush_buffer(self):
         """Flush buffered log entries to CloudWatch."""
-        if not self.buffer or not self.client:
+        if not self.client:
             return
-        
-        try:
-            kwargs = {
-                'logGroupName': self.log_group,
-                'logStreamName': self.log_stream,
-                'logEvents': self.buffer
-            }
-            
-            if self.sequence_token:
-                kwargs['sequenceToken'] = self.sequence_token
-            
-            response = self.client.put_log_events(**kwargs)
-            self.sequence_token = response.get('nextSequenceToken')
-            
-            self.buffer.clear()
-            self.last_flush = time.time()
-            
-        except ClientError as e:
-            import logging
-            logging.getLogger(__name__).error(f"Failed to flush logs to CloudWatch: {e}")
+        with self._buffer_lock:
+            if not self.buffer:
+                return
+            max_retries = 3
+            for attempt in range(1, max_retries + 1):
+                try:
+                    kwargs = {
+                        'logGroupName': self.log_group,
+                        'logStreamName': self.log_stream,
+                        'logEvents': self.buffer
+                    }
+                    if self.sequence_token:
+                        kwargs['sequenceToken'] = self.sequence_token
+                    response = self.client.put_log_events(**kwargs)
+                    self.sequence_token = response.get('nextSequenceToken')
+                    self.buffer.clear()
+                    self.last_flush = time.time()
+                    break
+                except ClientError as e:
+                    import logging
+                    logging.getLogger(__name__).warning(f"CloudWatch log delivery failed (attempt {attempt}): {e}")
+                    if attempt == max_retries:
+                        logging.getLogger(__name__).error(f"CloudWatch log delivery failed after {max_retries} attempts: {e}")
+                    else:
+                        time.sleep(2 ** attempt)
 
 
 class ElasticsearchHandler(logging.Handler):
@@ -310,20 +313,22 @@ class ElasticsearchHandler(logging.Handler):
         self.buffer_size = 100
         self.flush_interval = 5.0
         self.last_flush = time.time()
-        
-        if ELASTICSEARCH_AVAILABLE:
-            try:
-                auth = None
-                if username and password:
-                    auth = (username, password)
-                
-                self.client = Elasticsearch(
-                    hosts=hosts,
-                    http_auth=auth,
-                    verify_certs=True,
-                    use_ssl=True,
-                    timeout=30,
-                    max_retries=3,
+        import threading
+        self._buffer_lock = threading.Lock()
+        try:
+            log_data = json.loads(self.format(record))
+            doc = {
+                "_index": self.index_name,
+                "_source": log_data
+            }
+            with self._buffer_lock:
+                self.buffer.append(doc)
+                if (len(self.buffer) >= self.buffer_size or 
+                    time.time() - self.last_flush >= self.flush_interval):
+                    self._flush_buffer()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Elasticsearch logging error: {e}")
                     retry_on_timeout=True
                 )
                 
@@ -421,16 +426,37 @@ class ElasticsearchHandler(logging.Handler):
     
     def _flush_buffer(self):
         """Flush buffered log entries to Elasticsearch."""
-        if not self.buffer or not self.client:
+        if not self.client:
             return
-        
-        try:
-            bulk(self.client, self.buffer)
-            self.buffer.clear()
-            self.last_flush = time.time()
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"Failed to bulk insert to Elasticsearch: {e}")
+        with self._buffer_lock:
+            if not self.buffer:
+                return
+            max_retries = 3
+            for attempt in range(1, max_retries + 1):
+                try:
+                    bulk(self.client, self.buffer)
+                    self.buffer.clear()
+                    self.last_flush = time.time()
+                    break
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).warning(f"Elasticsearch log delivery failed (attempt {attempt}): {e}")
+                    if attempt == max_retries:
+                        logging.getLogger(__name__).error(f"Elasticsearch log delivery failed after {max_retries} attempts: {e}")
+                    else:
+                        time.sleep(2 ** attempt)
+# Pre-configured loggers for common components (singleton enforced)
+http_logger = get_logger("http", LogLevel.INFO)
+database_logger = get_logger("database", LogLevel.INFO)
+cache_logger = get_logger("cache", LogLevel.INFO)
+provider_logger = get_logger("provider", LogLevel.INFO)
+security_logger = get_logger("security", LogLevel.WARNING)
+child_safety_logger = get_logger("child_safety", LogLevel.INFO)
+compliance_logger = get_logger("compliance", LogLevel.INFO)
+performance_logger = get_logger("performance", LogLevel.INFO)
+business_logger = get_logger("business", LogLevel.INFO)
+system_logger = get_logger("system", LogLevel.INFO)
+audit_logger = get_logger("audit", LogLevel.INFO)
 
 
 class StructuredLogger:
