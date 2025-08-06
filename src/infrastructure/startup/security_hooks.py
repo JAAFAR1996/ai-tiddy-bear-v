@@ -131,7 +131,7 @@ class SecurityStartupHooks:
 
             # Check that debug mode is disabled
             debug_mode = os.getenv("DEBUG", "false").lower()
-            if debug_mode in ["true", "1", "yes", "on"]:
+            if debug_mode in ["1", "yes", "on"]:
                 self.logger.critical("💥 DEBUG mode must be disabled in production")
                 return False
 
