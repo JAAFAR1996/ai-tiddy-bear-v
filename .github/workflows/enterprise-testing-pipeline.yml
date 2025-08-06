@@ -90,7 +90,7 @@ jobs:
         fi
     
     - name: 📋 Upload Infrastructure Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: infrastructure-validation-reports
@@ -190,7 +190,7 @@ jobs:
         fi
     
     - name: 📋 Upload Core Test Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: core-testing-reports
@@ -244,7 +244,7 @@ jobs:
           > test_reports/enhanced_tests.log 2>&1
     
     - name: 📋 Upload Coverage Enhancement Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: coverage-enhancement-reports
@@ -316,7 +316,7 @@ jobs:
           > test_reports/load_child_safety_validation.log 2>&1
     
     - name: 📋 Upload Load Testing Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: load-testing-reports
@@ -389,7 +389,7 @@ jobs:
           > test_reports/chaos_child_safety_validation.log 2>&1
     
     - name: 📋 Upload Chaos Testing Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: chaos-testing-reports
@@ -474,7 +474,7 @@ jobs:
         exit $PERF_EXIT_CODE
     
     - name: 📋 Upload Performance Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: performance-benchmarking-reports
@@ -558,7 +558,7 @@ jobs:
         EOF
     
     - name: 📋 Upload Executive Reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: executive-reports

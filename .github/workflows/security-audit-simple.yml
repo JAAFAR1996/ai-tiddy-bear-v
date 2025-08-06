@@ -36,7 +36,7 @@ jobs:
           python security/dependency_audit.py
           
       - name: Upload Audit Results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: dependency-audit-results
@@ -73,7 +73,7 @@ jobs:
           bandit -r src/ -f json -o bandit-report.json || true
           
       - name: Upload Security Reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: security-scan-results

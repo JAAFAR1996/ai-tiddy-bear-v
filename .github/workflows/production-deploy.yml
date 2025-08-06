@@ -90,7 +90,7 @@ jobs:
           echo "passed=true" >> $GITHUB_OUTPUT
 
       - name: Upload security reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: security-reports
           path: |
@@ -224,7 +224,7 @@ jobs:
           trivy image --severity HIGH,CRITICAL ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Upload Trivy scan results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: trivy-scan-results
           path: trivy-report.json

@@ -131,7 +131,7 @@ jobs:
         name: codecov-umbrella
     
     - name: Upload coverage HTML report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: coverage-report
@@ -154,7 +154,7 @@ jobs:
     
     - name: Upload performance results
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: performance-benchmark
         path: benchmark.json
@@ -191,7 +191,7 @@ jobs:
         mutmut results
     
     - name: Upload mutation test results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: mutation-test-results
         path: .mutmut-cache

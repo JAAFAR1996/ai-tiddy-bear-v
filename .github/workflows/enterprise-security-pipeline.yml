@@ -182,7 +182,7 @@ jobs:
           fi
 
       - name: "📄 Upload Security Reports"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: dependency-security-reports
@@ -465,7 +465,7 @@ jobs:
           fi
 
       - name: "📄 Upload COPPA Reports"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coppa-compliance-reports
@@ -556,7 +556,7 @@ jobs:
           fi
 
       - name: "📄 Upload Coverage Reports"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage-reports
