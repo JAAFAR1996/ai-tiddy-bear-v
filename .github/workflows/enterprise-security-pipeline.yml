@@ -629,30 +629,20 @@ jobs:
           
           docker build -f Dockerfile.security -t ai-teddy-security:latest .
 
+      - name: "🔍 Install Trivy"
+        uses: aquasecurity/trivy-action@v0.16.1
+
       - name: "🔍 Container Vulnerability Scan"
         id: container-scan
         run: |
           echo "🔍 Scanning container for vulnerabilities..."
-          
-          # Install Trivy
-          sudo apt-get update
-          sudo apt-get install wget apt-transport-https gnupg lsb-release
-          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
-          sudo apt-get update
-          sudo apt-get install trivy
-          
-          # Scan container
           trivy image --format json --output trivy-report.json ai-teddy-security:latest
-          
           # Count vulnerabilities
           CRITICAL=$(jq '.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL") | .VulnerabilityID' trivy-report.json | wc -l)
           HIGH=$(jq '.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH") | .VulnerabilityID' trivy-report.json | wc -l)
           TOTAL_VULNS=$((CRITICAL + HIGH))
-          
           echo "vulnerabilities=$TOTAL_VULNS" >> $GITHUB_OUTPUT
           echo "🔍 Found $TOTAL_VULNS critical/high vulnerabilities"
-          
           if [ "$TOTAL_VULNS" -gt 10 ]; then
             echo "🚨 TOO MANY CONTAINER VULNERABILITIES: $TOTAL_VULNS > 10"
             exit 1
