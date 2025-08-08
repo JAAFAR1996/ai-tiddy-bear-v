@@ -150,6 +150,29 @@ backups/
 dumps/
 migrations/test_*.py
 
+# Application data directories (excluded from Docker images)
+uploads/
+data/
+secure_storage/
+
+# Archives & Media (large files not needed in prod image)
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+*.mp4
+*.mp3
+*.wav
+
+# Local environment configurations (development only)
+.env.local
+.env.development
+.env.production.local
+
+# Tests directory (if not needed in production)
+tests/
+
 # Development containers
 .devcontainer/
 

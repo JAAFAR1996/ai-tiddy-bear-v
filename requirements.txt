@@ -8,6 +8,7 @@
 # ================================
 fastapi>=0.116.1,<0.117.0
 uvicorn[standard]>=0.35.0,<0.36.0
+gunicorn>=21.2.0,<22.0.0
 starlette>=0.47.2,<0.48.0
 python-multipart>=0.0.20,<1.0.0
 websockets>=15.0.1,<16.0.0
@@ -18,7 +19,6 @@ websockets>=15.0.1,<16.0.0
 pydantic>=2.11.7,<3.0.0
 pydantic-settings>=2.1.0,<3.0.0
 pydantic-extra-types>=2.1.0,<3.0.0
-
 # ================================
 # DATABASE & ORM
 # ================================
@@ -96,6 +96,12 @@ torchaudio>=2.6.0
 pillow>=11.0.0,<12.0.0
 opencv-python>=4.8.0,<5.0.0
 imageio>=2.34.0,<3.0.0
+
+# ================================
+# FILE VALIDATION & SECURITY
+# ================================
+python-magic>=0.4.27,<1.0.0
+bleach>=6.0.0,<7.0.0
 
 # ================================
 # NLP & TEXT PROCESSING
@@ -188,4 +194,3 @@ memory-profiler>=0.61.0,<1.0.0
 setuptools>=75.0.0,<76.0.0
 wheel>=0.38.0
 pip>=25.0.0,<26.0.0
-bleach>=6.1.0,<7
