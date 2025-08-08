@@ -39,34 +39,63 @@ jobs:
         run: |
           echo "🚨 SCANNING FOR PRODUCTION QUALITY VIOLATIONS..."
           
-          # Production code quality patterns
-          PRODUCTION_VIOLATIONS=(
-            "temporary.*production.*hack"
-            "production.*stub.*function"
-            "production.*dummy.*value"
-            "development.*only.*code"
-            "hardcoded.*production.*secret"
-            "production.*example.*password"
-            "production.*sample.*key"
-            "production.*placeholder.*token"
-            "debug.*mode.*enabled.*production"
-            "production.*insecure.*default"
-            "production.*bypass.*auth"
-          )
-          
           VIOLATIONS=0
-          for pattern in "${PRODUCTION_VIOLATIONS[@]}"; do
-            if grep -r -i --include="*.py" --include="*.js" --include="*.ts" --include="*.yml" --include="*.yaml" "$pattern" . --exclude-dir=".git" --exclude-dir="node_modules" --exclude-dir="__pycache__"; then
-              echo "❌ CRITICAL: Found production violation pattern: $pattern"
-              VIOLATIONS=$((VIOLATIONS + 1))
-            fi
-          done
           
+          # 1. Check for hardcoded secrets/passwords
+          echo "🔍 Checking for hardcoded secrets..."
+          if grep -r -E "password\s*=\s*['\"][^'\"]{3,}['\"]" src/ --include="*.py" 2>/dev/null | grep -v "password.*input\|password.*prompt"; then
+            echo "❌ CRITICAL: Hardcoded passwords found"
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+          
+          if grep -r -E "api_key\s*=\s*['\"][^'\"]{10,}['\"]" src/ --include="*.py" 2>/dev/null; then
+            echo "❌ CRITICAL: Hardcoded API keys found"
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+          
+          # 2. Check for SQL injection vulnerabilities
+          echo "🔍 Checking for SQL injection risks..."
+          if grep -r -E "execute\(.*%.*\)|query\(.*%.*\)|cursor\.execute\(.*%" src/ --include="*.py" 2>/dev/null; then
+            echo "❌ CRITICAL: Potential SQL injection vulnerability (string formatting in SQL)"
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+          
+          # 3. Check for debug mode in production
+          echo "🔍 Checking for debug mode..."
+          if grep -r -E "debug\s*=\s*True|DEBUG\s*=\s*True" src/ --include="*.py" 2>/dev/null; then
+            echo "❌ CRITICAL: Debug mode enabled in production code"
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+          
+          # 4. Check for unsafe eval/exec usage
+          echo "🔍 Checking for unsafe code execution..."
+          if grep -r -E "eval\(|exec\(" src/ --include="*.py" 2>/dev/null; then
+            echo "❌ CRITICAL: Unsafe eval/exec usage found"
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+          
+          # 5. Check for CORS misconfigurations
+          echo "🔍 Checking for CORS misconfigurations..."
+          if grep -r "allow_origins.*\*\|origins.*\*" src/ --include="*.py" 2>/dev/null; then
+            echo "❌ CRITICAL: CORS configured to allow all origins (*)"
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+          
+          # 6. Check for missing authentication on sensitive endpoints
+          echo "🔍 Checking for unprotected sensitive endpoints..."
+          if grep -r -E "@app\.route.*admin|@router\.(post|put|delete)" src/ --include="*.py" 2>/dev/null | grep -v "Depends\|auth\|login_required" | head -3; then
+            echo "⚠️ WARNING: Potentially unprotected sensitive endpoints found"
+          fi
+          
+          # Summary
+          echo "\n📊 SECURITY SCAN SUMMARY:"
           if [ $VIOLATIONS -gt 0 ]; then
-            echo "🚨 PIPELINE FAILED: $VIOLATIONS production quality violations found"
+            echo "❌ CRITICAL VIOLATIONS: $VIOLATIONS"
+            echo "🚨 PIPELINE FAILED: Critical security issues must be fixed"
             echo "result=FAILED" >> $GITHUB_OUTPUT
             exit 1
           else
+            echo "✅ No critical security violations found"
             echo "✅ Production quality standards met"
             echo "result=PASSED" >> $GITHUB_OUTPUT
           fi
