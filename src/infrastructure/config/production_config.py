@@ -26,6 +26,9 @@ from datetime import datetime
 from pydantic_settings import BaseSettings
 from pydantic import Field, field_validator, model_validator
 
+# Import ConfigurationError to avoid NameError
+from src.core.exceptions import ConfigurationError
+
 logger = logging.getLogger(__name__)
 
 
@@ -459,9 +462,6 @@ class ConfigurationManager:
                         f"Missing required environment variables: {', '.join(missing_vars)}"
                     )
 
-                # Import here to avoid circular imports
-                from src.core.exceptions import ConfigurationError
-
                 # يجب تمرير الرسالة في الحقل message واسم المتغير في config_key فقط — أي استخدام غير ذلك = خطأ إنتاجي ويجب إصلاحه فوراً.
                 raise ConfigurationError(
                     message=f"Configuration validation failed: {str(e)}",
@@ -472,8 +472,6 @@ class ConfigurationManager:
         """Get current configuration with thread safety."""
         with self._config_lock:
             if self._config is None:
-                from src.core.exceptions import ConfigurationError
-
                 # يجب تمرير الرسالة في الحقل message واسم المتغير في config_key فقط — أي استخدام غير ذلك = خطأ إنتاجي ويجب إصلاحه فوراً.
                 raise ConfigurationError(
                     message="Configuration not loaded. Call load_config() first.",
