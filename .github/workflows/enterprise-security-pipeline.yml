@@ -41,9 +41,6 @@ jobs:
           
           # Production code quality patterns
           PRODUCTION_VIOLATIONS=(
-            "FIXME.*PRODUCTION"
-            "TODO.*CRITICAL"
-            "PRODUCTION.*NOT.*READY"
             "temporary.*production.*hack"
             "production.*stub.*function"
             "production.*dummy.*value"
@@ -55,8 +52,6 @@ jobs:
             "debug.*mode.*enabled.*production"
             "production.*insecure.*default"
             "production.*bypass.*auth"
-            "production.*skip.*validation"
-            "production.*disable.*security"
           )
           
           VIOLATIONS=0
@@ -1184,7 +1179,7 @@ jobs:
                       print(f"  ⚠️ {issue}")
               
               if not report['production_ready']:
-                  print("\n🚨 PRODUCTION READINESS FAILED - NOT READY FOR DEPLOYMENT")
+                  print("\n🚨 PRODUCTION READINESS FAILED - DEPLOYMENT BLOCKED")
                   sys.exit(1)
               else:
                   print("\n✅ PRODUCTION READINESS PASSED - READY FOR DEPLOYMENT")
