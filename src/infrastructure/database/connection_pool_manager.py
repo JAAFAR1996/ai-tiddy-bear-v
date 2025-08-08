@@ -80,9 +80,13 @@ class ConnectionPoolManager:
     async def initialize(self) -> None:
         """Initialize the connection pool with optimized settings."""
         try:
-            # Create engine with advanced pool configuration
+            # تأكد من أن database_url يستخدم asyncpg
+            db_url = self.database_url
+            if db_url.startswith("postgresql://") and "+asyncpg" not in db_url:
+                db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            print(f"[DEBUG] Using DATABASE_URL for async engine: {db_url}")
             self.engine = create_async_engine(
-                self.database_url,
+                db_url,
                 pool_size=self.min_size,
                 max_overflow=self.max_overflow,
                 pool_timeout=self.pool_timeout,
@@ -355,23 +359,23 @@ class ConnectionPoolManager:
             except Exception as e:
                 self.logger.error(f"Error closing connection pool: {e}")
             finally:
-                self.engine = None
-                self.session_factory = None
-
-
-# Global pool manager instance
-_pool_manager: Optional[ConnectionPoolManager] = None
-
-
-async def get_pool_manager() -> ConnectionPoolManager:
-    """Get global connection pool manager instance."""
-    global _pool_manager
-    if _pool_manager is None:
-        raise ConfigurationError("Connection pool manager not initialized")
-    return _pool_manager
-
-
-async def initialize_pool_manager(database_url: str, **kwargs) -> ConnectionPoolManager:
+            self.engine = create_async_engine(
+                db_url,
+                pool_size=self.min_size,
+                max_overflow=self.max_overflow,
+                pool_timeout=self.pool_timeout,
+                pool_recycle=self.pool_recycle,
+                pool_pre_ping=True,  # Validate connections before use
+                echo=False,  # Disable SQL logging for performance
+                future=True,
+                connect_args={
+                    "command_timeout": 60,
+                    "server_settings": {
+                        "application_name": "ai_teddy_bear",
+                        "jit": "off",  # Disable JIT for consistent performance
+                    },
+                },
+            )
     """Initialize global connection pool manager."""
     global _pool_manager
 
