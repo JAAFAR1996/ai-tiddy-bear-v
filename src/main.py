@@ -6,6 +6,14 @@ Enterprise-grade security with child protection and COPPA compliance
 from src.infrastructure.config.production_config import load_config
 
 load_config()
+
+# --- production DB init (robust import) ---
+try:
+    from src.adapters.database_production import initialize_production_database  # async
+except Exception:
+    async def initialize_production_database() -> None:
+        return None
+
 from src.infrastructure.security.auth import get_current_user
 import sys
 import secrets

@@ -1117,7 +1117,7 @@ async def get_dashboard_stats(
 # Request model for safety report creation
 class CreateSafetyReportRequest(BaseModel):
     alert_type: str = Field(..., min_length=3, max_length=100)
-    severity: str = Field(..., regex="^(low|medium|high|critical)$")
+    severity: str = Field(..., pattern="^(low|medium|high|critical)$")
     message: str = Field(..., min_length=3, max_length=1000)
 
 
