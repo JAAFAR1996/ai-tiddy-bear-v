@@ -33,7 +33,6 @@ RUN groupadd -r -g 1000 appuser && \
 
 # Install system dependencies including libmagic (CRITICAL for file validation)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Essential runtime dependencies
     libmagic1 \
     build-essential \
     netcat-openbsd \
@@ -41,13 +40,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     dumb-init \
     procps \
-    # Security updates
-    && apt-get upgrade -y \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    && rm -rf /tmp/* \
-    && rm -rf /var/tmp/* \
-    && rm -rf /var/cache/apt/*
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /var/cache/apt/*
 
 # Set working directory
 WORKDIR /app
@@ -76,7 +70,7 @@ RUN find /app -type f -name "*.pyc" -delete && \
 # Switch to non-root user for security
 USER appuser
 
-# Health check for Render monitoring (updated endpoint)
+# Health check for Render monitoring (endpoint must exist and be lightweight)
 HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
@@ -84,7 +78,13 @@ HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=3 \
 # Default port for local development
 EXPOSE 8000
 
-# Production entrypoint with gunicorn + uvicorn workers optimized for Render
-# Using dumb-init for proper signal handling
+# Use dumb-init as entrypoint for proper signal handling
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["bash", "-c", "./docker-entrypoint.sh gunicorn -k uvicorn.workers.UvicornWorker src.main:app --workers 2 --bind 0.0.0.0:${PORT:-8000} --timeout 120 --keep-alive 2 --max-requests 1000 --max-requests-jitter 50 --access-logfile - --error-logfile -"]
+
+# Production CMD with Gunicorn + Uvicorn workers
+# Start with 1 worker on Render free/small plans to avoid memory issues
+CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "src.main:app", \
+     "--workers", "1", "--bind", "0.0.0.0:${PORT}", \
+     "--timeout", "120", "--keep-alive", "2", \
+     "--max-requests", "1000", "--max-requests-jitter", "50", \
+     "--access-logfile", "-", "--error-logfile", "-"]

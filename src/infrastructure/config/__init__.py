@@ -10,7 +10,7 @@ from .config_manager_provider import get_config_manager
 
 __all__ = [
     "get_config",
-    "load_config", 
+    "load_config",
     "reload_config",
     "get_config_manager",
 ]

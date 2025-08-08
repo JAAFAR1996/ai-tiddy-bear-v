@@ -211,6 +211,7 @@ async def config_lifespan(app: FastAPI):
 def get_config_manager() -> ConfigurationManager:
     """Dependency to get configuration manager."""
     from .config_manager_provider import get_config_manager as _get_config_manager
+
     return _get_config_manager()
 
 
