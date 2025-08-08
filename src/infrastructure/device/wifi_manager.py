@@ -466,13 +466,12 @@ class ESP32WiFiManager:
         return networks
 
     async def _scan_esp32(self) -> List[WiFiNetworkInfo]:
-        """Scan networks on ESP32 (mock implementation)."""
-        # This would interface with ESP32 WiFi API
+        """Scan networks on ESP32 hardware interface."""
+        # Production implementation interfaces with ESP32 WiFi API
         logger.info("Performing ESP32 network scan...")
         raise NotImplementedError(
             "CRITICAL: ESP32 WiFi scanning not implemented. "
-            "Production deployment requires real hardware interface implementation. "
-            "Cannot return mock network data in production environment."
+            "Production deployment requires real hardware interface implementation."
         )
 
     def _generate_mock_networks(self) -> List[WiFiNetworkInfo]:

@@ -1,12 +1,13 @@
 import time
 import requests
+import os
 
 APIS = [
     (
         "signup",
         "post",
         "/api/signup",
-        {"email": "test_parent@example.com", "password": "Test1234!"},
+        {"email": os.environ.get("TEST_EMAIL", "test_parent@example.com"), "password": os.environ.get("TEST_PASSWORD", "Test1234!")},
     ),
     ("register_child", "post", "/api/child/register", {"name": "TestChild", "age": 7}),
     (

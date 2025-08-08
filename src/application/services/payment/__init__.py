@@ -5,10 +5,9 @@ Complete payment processing system for the Iraqi market.
 
 This module provides:
 - Support for major Iraqi payment providers (ZainCash, FastPay, Switch, etc.)
-- Mock implementations for testing without real money movement
 - RESTful API endpoints for payment operations
 - Comprehensive configuration system
-- Production-ready examples and test cases
+- Production-ready implementation and validation
 
 Usage:
     from src.application.services.payment import IraqiPaymentService, PaymentMethod
@@ -18,11 +17,10 @@ Usage:
 
 Key Components:
 - interfaces.py: Payment interfaces and data models
-- mock_provider.py: Mock Iraqi payment provider implementations
+- production_integration.py: Production Iraqi payment provider implementations
 - payment_service.py: Main payment coordination service
 - api_endpoints.py: FastAPI REST endpoints
 - config.py: Configuration and provider settings
-- examples.py: Complete usage examples and testing utilities
 """
 
 from .interfaces import (

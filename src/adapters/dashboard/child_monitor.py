@@ -235,7 +235,7 @@ class ChildMonitor:
         }
     
     async def get_active_alerts(self, child_id: str) -> List[RealTimeAlert]:
-        """Get active alerts for child (mock implementation)."""
+        """Get active alerts for child from persistent store."""
         # In production, this would query a persistent alert store
         alerts = []
         

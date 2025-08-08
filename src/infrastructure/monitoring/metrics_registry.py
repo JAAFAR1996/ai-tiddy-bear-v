@@ -1,180 +1,23 @@
 import os
+import logging
+import threading
+import time
+from contextlib import contextmanager
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
-try:
-    from prometheus_client import (
-        Counter,
-        Gauge,
-        Histogram,
-        Summary,
-        Info,
-        Enum as PrometheusEnum,
-        CollectorRegistry,
-    )
+# Production deployment requires prometheus_client
+from prometheus_client import (
+    Counter,
+    Gauge,
+    Histogram,
+    Summary,
+    Info,
+    Enum as PrometheusEnum,
+    CollectorRegistry,
+    generate_latest,
+)
 
-    PROMETHEUS_AVAILABLE = True
-except ImportError as e:
-    # Fail fast in production, allow fallback only in development/testing
-    if os.environ.get("ENV", "production").lower() == "production":
-        raise RuntimeError("Fatal: prometheus_client is required in production") from e
-    PROMETHEUS_AVAILABLE = False
-
-    # -----------------------------
-    # Fallback/mock classes section (development/testing only)
-    # -----------------------------
-    # These classes are used ONLY in development/testing if prometheus_client is not installed.
-    # They provide a no-op/mock implementation to keep the app running and avoid crashes.
-    # All metrics will be local-only and not exported/prometheus-compatible.
-    # DO NOT USE THIS IN PRODUCTION!
-    class Counter:
-        """Mock Counter for fallback if prometheus_client is missing (development only)."""
-
-        def __init__(self, *args, **kwargs):
-            self._value = 0
-
-        def inc(self, amount=1):
-            self._value += amount
-
-        def labels(self, *kwargs):
-            return self
-
-    class Histogram:
-        """Mock Histogram for fallback if prometheus_client is missing (development only)."""
-
-        def __init__(self, *args, **kwargs):
-            self._observations = []
-
-        def observe(self, amount):
-            self._observations.append(amount)
-
-        def labels(self, *kwargs):
-            return self
-
-    class Gauge:
-        """Mock Gauge for fallback if prometheus_client is missing (development only)."""
-
-        def __init__(self, *args, **kwargs):
-            self._value = 0
-
-        def set(self, value):
-            self._value = value
-
-        def inc(self, amount=1):
-            self._value += amount
-
-        def dec(self, amount=1):
-            self._value -= amount
-
-        def set_to_current_time(self):
-            import time
-
-            self._value = time.time()
-
-        def labels(self, *kwargs):
-            return self
-
-    class Summary:
-        """Mock Summary for fallback if prometheus_client is missing (development only)."""
-
-        def __init__(self, *args, **kwargs):
-            self._observations = []
-
-        def observe(self, amount):
-            self._observations.append(amount)
-
-        def labels(self, *kwargs):
-            return self
-
-    class Info:
-        """Mock Info for fallback if prometheus_client is missing (development only)."""
-
-        def __init__(self, *args, **kwargs):
-            self._info = {}
-
-        def info(self, data):
-            self._info.update(data)
-
-        def labels(self, *kwargs):
-            return self
-
-    class PrometheusEnum:
-        """Mock Enum for fallback if prometheus_client is missing (development only)."""
-
-        def __init__(self, *args, **kwargs):
-            self._state = None
-
-        def state(self, state):
-            self._state = state
-
-        def labels(self, *kwargs):
-            return self
-
-    class CollectorRegistry:
-        """Mock CollectorRegistry for fallback if prometheus_client is missing (development only)."""
-
-        def __init__(self):
-            self._collectors = {}
-
-        def register(self, collector):
-            pass
-
-        def unregister(self, collector):
-            pass
-            self._value = 0
-
-        def set(self, value):
-            self._value = value
-
-        def inc(self, amount=1):
-            self._value += amount
-
-        def dec(self, amount=1):
-            self._value -= amount
-
-        def set_to_current_time(self):
-            self._value = time.time()
-
-        def labels(self, **kwargs):
-            return self
-
-    class Summary:
-        def __init__(self, *args, **kwargs):
-            self._observations = []
-
-        def observe(self, amount):
-            self._observations.append(amount)
-
-        def labels(self, **kwargs):
-            return self
-
-    class Info:
-        def __init__(self, *args, **kwargs):
-            self._info = {}
-
-        def info(self, data):
-            self._info.update(data)
-
-        def labels(self, **kwargs):
-            return self
-
-    class PrometheusEnum:
-        def __init__(self, *args, **kwargs):
-            self._state = None
-
-        def state(self, state):
-            self._state = state
-
-        def labels(self, **kwargs):
-            return self
-
-    class CollectorRegistry:
-        def __init__(self):
-            self._collectors = {}
-
-        def register(self, collector):
-            pass
-
-        def unregister(self, collector):
-            pass
 
 
 logger = logging.getLogger(__name__)
@@ -193,10 +36,10 @@ class MetricType(Enum):
 
 class MetricsRegistry:
     """
-    Centralized registry for Prometheus metrics.
+    Production-grade centralized registry for Prometheus metrics.
 
-    Provides thread-safe access to metrics with automatic creation,
-    caching, and fallback mechanisms when Prometheus is unavailable.
+    Provides thread-safe access to metrics with automatic creation
+    and caching. Requires prometheus_client to be installed.
     """
 
     _instance = None
@@ -219,13 +62,9 @@ class MetricsRegistry:
         self._metrics_cache: Dict[str, Any] = {}
         self._registry_lock = threading.RLock()
 
-        # Initialize Prometheus registry
-        if PROMETHEUS_AVAILABLE:
-            self._registry = CollectorRegistry()
-            logger.info("Prometheus metrics registry initialized")
-        else:
-            self._registry = CollectorRegistry()  # Mock registry
-            logger.warning("Prometheus not available - using mock metrics registry")
+        # Initialize Prometheus registry (production only)
+        self._registry = CollectorRegistry()
+        logger.info("Prometheus metrics registry initialized")
 
     @property
     def registry(self) -> CollectorRegistry:
@@ -526,8 +365,8 @@ class MetricsRegistry:
                         "error": str(e),
                     },
                 )
-                # Return a fallback metric to prevent application crashes # Development only
-                return self._create_mock_metric(metric_type)  # Fallback only
+                # Re-raise error in production - no fallbacks allowed
+                raise
 
     def _create_metric(
         self,
@@ -569,27 +408,6 @@ class MetricsRegistry:
         else:
             raise ValueError(f"Unsupported metric type: {metric_type}")
 
-    def _create_mock_metric(self, metric_type: MetricType) -> Any:
-        """Create a fallback metric when Prometheus is unavailable or creation fails.
-        
-        WARNING: This is a fallback mechanism to prevent application crashes.
-        Production deployments should always have prometheus_client properly installed.
-        These mock metrics do not report to any monitoring system.
-        """
-        if metric_type == MetricType.COUNTER:
-            return Counter()
-        elif metric_type == MetricType.HISTOGRAM:
-            return Histogram()
-        elif metric_type == MetricType.GAUGE:
-            return Gauge()
-        elif metric_type == MetricType.SUMMARY:
-            return Summary()
-        elif metric_type == MetricType.INFO:
-            return Info()
-        elif metric_type == MetricType.ENUM:
-            return PrometheusEnum()
-        else:
-            return Gauge()  # Default fallback
 
     def _build_metric_name(
         self, name: str, namespace: str, subsystem: str, unit: str
@@ -634,20 +452,17 @@ class MetricsRegistry:
         with self._registry_lock:
             return {
                 "cached_metrics": len(self._metrics_cache),
-                "prometheus_available": PROMETHEUS_AVAILABLE,
+                "prometheus_available": True,
                 "registry_type": type(self._registry).__name__,
             }
 
     def get_metrics_output(self) -> str:
         """Get metrics in Prometheus format."""
-        if PROMETHEUS_AVAILABLE:
-            try:
-                return generate_latest(self._registry).decode("utf-8")
-            except Exception as e:
-                logger.error(f"Failed to generate metrics output: {e}")
-                return "# Metrics generation failed\n"
-        else:
-            return "# Prometheus not available\n"
+        try:
+            return generate_latest(self._registry).decode("utf-8")
+        except Exception as e:
+            logger.error(f"Failed to generate metrics output: {e}")
+            return "# Metrics generation failed\n"
 
     @contextmanager
     def measure_time(self, histogram_metric: Histogram, **labels):
@@ -665,8 +480,8 @@ class MetricsRegistry:
     def health_check(self) -> Dict[str, Any]:
         """Perform health check on the metrics registry."""
         return {
-            "status": "healthy" if PROMETHEUS_AVAILABLE else "degraded",
-            "prometheus_available": PROMETHEUS_AVAILABLE,
+            "status": "healthy",
+            "prometheus_available": True,
             "cached_metrics": len(self._metrics_cache),
             "registry_initialized": hasattr(self, "_registry"),
             "thread_safe": True,
@@ -754,7 +569,6 @@ __all__ = [
     "create_histogram",
     "create_gauge",
     "create_summary",
-    "PROMETHEUS_AVAILABLE",
 ]
 
 
@@ -788,7 +602,4 @@ if __name__ == "__main__":
     print(f"Cache stats: {registry.get_cache_stats()}")
     print(f"Health check: {registry.health_check()}")
 
-    if PROMETHEUS_AVAILABLE:
-        print("Prometheus metrics available")
-    else:
-        print("Using mock metrics (Prometheus not available)")
+    print("Prometheus metrics available")

@@ -20,14 +20,14 @@ REDIS_URL: "redis://localhost:6379/1"  # Different DB index
 REDIS_MAX_CONNECTIONS: 10
 REDIS_TIMEOUT: 1  # Very short timeout for tests
 
-# AI Providers (Test/Mock Keys)
-OPENAI_API_KEY: "sk-test-key-for-unit-tests-only"
-ANTHROPIC_API_KEY: "test-anthropic-key"
+# AI Providers (Environment Variables)
+OPENAI_API_KEY: "${TEST_OPENAI_API_KEY}"
+ANTHROPIC_API_KEY: "${TEST_ANTHROPIC_API_KEY}"
 AI_PROVIDER_TIMEOUT: 5  # Short timeout for tests
 AI_PROVIDER_MAX_RETRIES: 1  # Minimal retries in tests
 
 # Security Configuration (Relaxed for Testing)
-JWT_SECRET_KEY: "test-jwt-secret-key-not-secure"
+JWT_SECRET_KEY: "${TEST_JWT_SECRET_KEY}"
 JWT_ALGORITHM: "HS256"
 JWT_EXPIRATION_HOURS: 1  # Short expiration for testing
 RATE_LIMIT_REQUESTS: 100000  # No rate limiting in tests
@@ -44,7 +44,7 @@ S3_BUCKET_NAME: "test-bucket"
 # No real AWS keys needed for tests
 
 # Communication Services (Mock/Test)
-SENDGRID_API_KEY: "test-sendgrid-key"
+SENDGRID_API_KEY: "${TEST_SENDGRID_API_KEY}"
 FIREBASE_SERVICE_ACCOUNT: ""
 
 # Child Safety Configuration (Test-friendly)
@@ -94,8 +94,8 @@ SSL_REDIRECT: false
 HSTS_MAX_AGE: 0
 
 # External Service Configuration (Test/Mock)
-STRIPE_API_KEY: "sk_test_mock_key"
-STRIPE_WEBHOOK_SECRET: "test_webhook_secret"
+STRIPE_API_KEY: "${TEST_STRIPE_API_KEY}"
+STRIPE_WEBHOOK_SECRET: "${TEST_STRIPE_WEBHOOK_SECRET}"
 
 # Notification Settings (Disabled for Testing)
 EMAIL_NOTIFICATIONS: false

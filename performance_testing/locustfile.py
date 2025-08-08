@@ -1,9 +1,17 @@
 from locust import HttpUser, TaskSet, task, between
 import random
 import time
+import os
 
-# بيانات اختبارية افتراضية
-TEST_USER = {"email": "test_parent@example.com", "password": "Test1234!"}
+# Load test user credentials from environment variables
+TEST_USER = {
+    "email": os.environ.get("TEST_EMAIL", "test_parent@example.com"), 
+    "password": os.environ.get("TEST_PASSWORD", "Test1234!")
+}
+
+# Validate required environment variables
+if not os.environ.get("TEST_EMAIL") or not os.environ.get("TEST_PASSWORD"):
+    raise EnvironmentError("TEST_EMAIL and TEST_PASSWORD environment variables are required for production testing")
 TEST_CHILD = {"name": "TestChild", "age": 7}
 TEST_DEVICE = {"device_id": "esp32-001", "pairing_code": "123456"}
 

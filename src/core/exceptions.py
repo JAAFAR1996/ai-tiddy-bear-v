@@ -330,20 +330,29 @@ class DatabaseError(AITeddyBearException):
 
     def __init__(
         self,
+        message: str = None,
         operation: str = None,
         table: str = None,
         *,
         context: dict = None,
         **kwargs,
     ):
-        message = "Database operation failed"
-        if operation:
-            message += f" ({operation})"
-        if table:
-            message += f" on table '{table}'"
+        # If a custom message is provided, use it; otherwise, build from operation/table
+        if message is not None:
+            final_message = message
+        else:
+            final_message = "Database operation failed"
+            if operation:
+                final_message += f" ({operation})"
+            if table:
+                final_message += f" on table '{table}'"
         ctx = context or {}
-        ctx.update({"operation": operation, "table": table})
-        super().__init__(message, context=ctx, **kwargs)
+        # Only add operation/table if not already in context
+        if "operation" not in ctx:
+            ctx["operation"] = operation
+        if "table" not in ctx:
+            ctx["table"] = table
+        super().__init__(final_message, context=ctx, **kwargs)
 
 
 class RateLimitExceeded(AITeddyBearException):

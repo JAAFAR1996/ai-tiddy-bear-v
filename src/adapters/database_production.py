@@ -28,6 +28,8 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
+from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+import ssl
 
 # Third-party imports
 from sqlalchemy import (
@@ -76,6 +78,53 @@ logger = logging.getLogger(__name__)
 # ================================
 # UTILITY FUNCTIONS
 # ================================
+
+
+def _normalize_asyncpg_url(url: str) -> str:
+    """Normalize URL to use asyncpg dialect."""
+    return (
+        url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        if url.startswith("postgresql://")
+        else url
+    )
+
+
+def _strip_sslmode_and_channel_binding(url: str):
+    """Strip sslmode and channel_binding from URL and return clean URL with SSL config."""
+    p = urlparse(url)
+    q = dict(parse_qsl(p.query))
+    mode = (q.pop("sslmode", "") or "").strip().lower()
+    q.pop("channel_binding", None)
+
+    ssl_val = None
+    if mode in ("disable", "off"):
+        ssl_val = False
+    elif mode in ("require", "prefer", "allow"):
+        ssl_val = True
+    elif mode in ("verify-ca", "verify_full", "verify-full"):
+        ctx = ssl.create_default_context()
+        ctx.verify_mode = ssl.CERT_REQUIRED
+        ctx.check_hostname = mode != "verify-ca"
+        ssl_val = ctx
+
+    clean = urlunparse(p._replace(query=urlencode(q)))
+    return clean, ssl_val
+
+
+def _filter_connect_args(connect_args: dict | None, ssl_from_url):
+    """Filter connect_args to only include what asyncpg supports."""
+    allowed = {}
+    if connect_args:
+        # اسمح فقط بما يدعمه asyncpg
+        if "ssl" in connect_args:
+            allowed["ssl"] = connect_args["ssl"]
+        if "server_settings" in connect_args:
+            allowed["server_settings"] = connect_args["server_settings"]
+        if "command_timeout" in connect_args:
+            allowed["command_timeout"] = connect_args["command_timeout"]
+    if "ssl" not in allowed and ssl_from_url is not None:
+        allowed["ssl"] = ssl_from_url
+    return allowed
 
 
 def _validate_uuid(value: Union[str, uuid.UUID], field_name: str) -> uuid.UUID:
@@ -156,21 +205,35 @@ class DatabaseConnectionManager:
             # Debug: Print DATABASE_URL to verify format
             print(f"🔍 DATABASE_URL: {self.config.DATABASE_URL}")
 
-            # Create async engine
+            # تطبيق منطق التنظيف للـ URL
+            url = _normalize_asyncpg_url(self.config.DATABASE_URL)
+            url, ssl_from_url = _strip_sslmode_and_channel_binding(url)
+            engine_connect_args = _filter_connect_args(
+                getattr(self, "connect_args", None), ssl_from_url
+            )
+
+            # Debug: Print final values with password protection
+            import re
+
+            safe_url = re.sub(r"://([^:]+):([^@]+)@", r"://\1:***MASKED***@", url)
+            logger.warning(
+                {"DB_URL_FINAL": safe_url, "CONNECT_ARGS_FINAL": engine_connect_args}
+            )
+
+            # Create async engine with cleaned URL and connect_args
             self.async_engine = create_async_engine(
-                self.config.DATABASE_URL,
+                url,
                 pool_size=self.config.DATABASE_POOL_SIZE,
                 max_overflow=self.config.DATABASE_MAX_OVERFLOW,
                 pool_timeout=self.config.DATABASE_POOL_TIMEOUT,
                 pool_recycle=3600,
                 echo=self.config.DEBUG,
                 future=True,
+                connect_args=engine_connect_args,
             )
 
-            # Create sync engine for migrations and compatibility
-            sync_url = self.config.DATABASE_URL.replace(
-                "+asyncpg", "+psycopg2"
-            ).replace("postgresql://", "postgresql://")
+            # For migrations, use psycopg (psycopg3) instead of psycopg2
+            sync_url = url.replace("+asyncpg", "+psycopg")
             self.sync_engine = create_engine(
                 sync_url,
                 pool_size=self.config.DATABASE_POOL_SIZE,
@@ -178,6 +241,7 @@ class DatabaseConnectionManager:
                 pool_timeout=self.config.DATABASE_POOL_TIMEOUT,
                 pool_recycle=3600,
                 echo=self.config.DEBUG,
+                connect_args={"sslmode": "require"},  # SSL for psycopg
             )
 
             # Create session factories
@@ -202,7 +266,9 @@ class DatabaseConnectionManager:
 
         except Exception as e:
             logger.error(f"Failed to initialize database connections: {e}")
-            raise DatabaseError(f"Database initialization failed: {e}", context={"error": str(e)}) from e
+            raise DatabaseError(
+                f"Database initialization failed: {e}", context={"error": str(e)}
+            ) from e
 
     @asynccontextmanager
     async def get_async_session(self):
@@ -1215,7 +1281,10 @@ class ProductionDatabaseAdapter(IDatabaseAdapter):
                 return result
             except Exception as e:
                 await session.rollback()
-                raise DatabaseError(f"Query execution failed: {e}", context={"query": query, "error": str(e)})
+                raise DatabaseError(
+                    f"Query execution failed: {e}",
+                    context={"query": query, "error": str(e)},
+                )
 
     async def execute_transaction(self, queries: List[Dict[str, Any]]) -> bool:
         """Execute multiple queries in transaction with security validation."""
@@ -1318,11 +1387,14 @@ async def initialize_production_database() -> ProductionDatabaseAdapter:
 
     try:
         # Initialize connection pool manager first
-        from src.infrastructure.database.connection_pool_manager import initialize_pool_manager
+        from src.infrastructure.database.connection_pool_manager import (
+            initialize_pool_manager,
+        )
+
         config = get_config()
         await initialize_pool_manager(config.DATABASE_URL)
         logger.info("✅ Connection pool manager initialized")
-        
+
         adapter = ProductionDatabaseAdapter()
         await adapter.initialize()
         await adapter.create_tables()
@@ -1339,7 +1411,9 @@ async def initialize_production_database() -> ProductionDatabaseAdapter:
 
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
-        raise DatabaseError(f"Database initialization failed: {e}", context={"error": str(e)}) from e
+        raise DatabaseError(
+            f"Database initialization failed: {e}", context={"error": str(e)}
+        ) from e
 
 
 # Global adapter instance

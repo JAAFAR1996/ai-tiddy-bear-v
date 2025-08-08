@@ -1121,7 +1121,6 @@ def create_parent_dashboard(
     )
 
 
-# Test dashboard creation removed for production - use create_dashboard() with real services only
 
 
 # Backward compatibility alias
