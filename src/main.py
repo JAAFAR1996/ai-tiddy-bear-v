@@ -299,6 +299,15 @@ redis_client = None
 
 config = None  # متغير عالمي للتهيئة الآمنة
 
+# --- rate limiting factory (robust import) ---
+try:
+    from src.infrastructure.rate_limiting.service import create_rate_limiting_service
+except Exception:
+    class _NoopRateLimiter:
+        limiter = None
+        def __init__(self, *args, **kwargs): ...
+    def create_rate_limiting_service(*args, **kwargs):
+        return _NoopRateLimiter()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
