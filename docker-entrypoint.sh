@@ -1,4 +1,4 @@
-#\!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 # AI Teddy Bear Docker Entrypoint Script
@@ -125,4 +125,3 @@ else
     # Normal startup
     main "$@"
 fi
-EOF < /dev/null

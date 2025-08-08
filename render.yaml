@@ -1,0 +1,77 @@
+# Render.com Deployment Configuration for AI Teddy Bear
+# ===================================================
+# This file optimizes deployment on Render platform
+
+services:
+  # Main AI Teddy Bear Web Service
+  - type: web
+    name: ai-teddy-bear
+    runtime: docker
+    plan: standard  # Adjust based on needs (starter/standard/pro)
+    region: oregon  # Choose region closest to your users
+    branch: main
+    rootDir: .
+    dockerfilePath: ./Dockerfile
+    
+    # Environment configuration
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+        
+      - key: PYTHONPATH
+        value: /app/src
+        
+      - key: COPPA_COMPLIANCE_MODE
+        value: "1"
+        
+      - key: CHILD_SAFETY_STRICT
+        value: "1"
+        
+      # Database connection (will be auto-populated by Render if you add PostgreSQL)
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-teddy-bear-db
+          property: connectionString
+          
+      # Redis connection (will be auto-populated by Render if you add Redis)
+      - key: REDIS_URL
+        fromService:
+          name: ai-teddy-bear-redis
+          type: redis
+          property: connectionString
+    
+    # Health check configuration
+    healthCheckPath: /health
+    
+    # Build configuration
+    buildCommand: echo "Using Docker build - no additional build command needed"
+    
+    # Auto-deploy on successful build
+    autoDeploy: true
+    
+    # Resource allocation
+    disk:
+      name: ai-teddy-bear-disk
+      sizeGB: 10
+      mountPath: /app/data
+    
+  # Redis Cache Service
+  - type: redis
+    name: ai-teddy-bear-redis
+    plan: starter  # Adjust based on needs
+    region: oregon
+    maxmemoryPolicy: allkeys-lru
+    
+    # Redis configuration
+    ipAllowList: []  # Empty means internal services only
+
+# Database Service (PostgreSQL)
+databases:
+  - name: ai-teddy-bear-db
+    plan: starter  # Adjust based on needs (starter/standard/pro)
+    region: oregon
+    databaseName: ai_teddy_bear
+    user: app_user
+    
+    # Backup configuration
+    version: "15"  # PostgreSQL 15
