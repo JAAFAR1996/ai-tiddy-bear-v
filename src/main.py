@@ -11,8 +11,10 @@ load_config()
 try:
     from src.adapters.database_production import initialize_production_database  # async
 except Exception:
+
     async def initialize_production_database() -> None:
         return None
+
 
 from src.infrastructure.security.auth import get_current_user
 import sys
