@@ -44,7 +44,8 @@ RUN pip install --upgrade pip && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /var/cache/apt/*
 
 # app code (يكفي مرة واحدة)
-COPY --chown=appuser:appuser . .
+COPY --chown=appuser:appuser src/ ./src
+COPY --chown=appuser:appuser entrypoint.sh .
 
 # FS prep & perms
 RUN chmod 0755 /app/entrypoint.sh && \

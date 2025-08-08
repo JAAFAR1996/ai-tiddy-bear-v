@@ -203,3 +203,49 @@ $RECYCLE.BIN/
 # Security scanning
 .scannerwork/
 dependency-check-report.html
+
+# git & venv & caches
+.git
+.gitignore
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+pip-wheel-metadata/
+
+# node/frontend
+node_modules/
+dist/
+build/
+*.log
+
+# data/models/media
+data/
+datasets/
+models/
+checkpoints/
+wandb/
+mlruns/
+*.pt
+*.pth
+*.onnx
+*.bin
+*.safetensors
+*.mp3
+*.wav
+*.mp4
+*.mov
+uploads/
+logs/
+tmp/
+.cache/
+.huggingface/
+
+# misc
+.DS_Store
+.env
+.env.*
+*.sqlite
