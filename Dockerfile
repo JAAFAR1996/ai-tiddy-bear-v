@@ -56,8 +56,8 @@ RUN pip install --upgrade pip && \
 # Copy application code with proper ownership
 COPY --chown=appuser:appuser . .
 
-# Fix entrypoint permissions and create necessary directories
-RUN chmod +x docker-entrypoint.sh && \
+# Fix entrypoint permissions وتهيئة الدلائل
+RUN chmod +x entrypoint.sh && \
     mkdir -p logs uploads temp data secure_storage && \
     chown -R appuser:appuser /app && \
     chmod 750 logs uploads temp data && \
