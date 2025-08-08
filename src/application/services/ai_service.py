@@ -845,7 +845,7 @@ class InputSanitizer:
             # LDAP Injection patterns
             r"(?i)[\(\)\*\\\/\+\-\=\<\>\~\!\&\|]",
             # NoSQL Injection patterns
-            r"(?i)\$where|\$regex|\$gt|\$lt|\$ne|\$in|\$nin",
+            r"(?i)\$where|\$|\$gt|\$lt|\$ne|\$in|\$nin",
             # Template Injection patterns
             r"(?i)\{\{.*?\}\}|\{%.*?%\}|\${.*?}",
             # AI Prompt Injection patterns

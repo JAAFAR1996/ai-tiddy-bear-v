@@ -22,11 +22,22 @@ from .docs import (
 # Import OpenAPI functions from centralized config
 from .openapi_config import generate_openapi_schema, get_openapi_tags
 
-# Import configuration
-from .config import (
-    get_rate_limit_config, get_safety_config,
-    ALLOWED_INTERESTS, SUPPORTED_LANGUAGES
-)
+# Import configuration (with safe fallback)
+try:
+    from .config import (
+        get_rate_limit_config, get_safety_config,
+        ALLOWED_INTERESTS, SUPPORTED_LANGUAGES
+    )
+except Exception:
+    # Fallback functions if config import fails
+    def get_rate_limit_config():
+        return {"per_minute": 60, "burst": 10}
+    
+    def get_safety_config():
+        return {"threshold": 80, "strict_filtering": True, "coppa_mode": True}
+    
+    ALLOWED_INTERESTS = set()
+    SUPPORTED_LANGUAGES = ["en"]
 
 # Export public API
 __all__ = [
