@@ -78,12 +78,16 @@ HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=3 \
 # Default port for local development
 EXPOSE 8000
 
-# Use dumb-init as entrypoint for proper signal handling
-ENTRYPOINT ["dumb-init", "--"]
 
-# Production CMD with Gunicorn + Uvicorn workers
-# Start with 1 worker on Render free/small plans to avoid memory issues
-CMD ["sh", "-c", "gunicorn -k uvicorn.workers.UvicornWorker src.main:app \
+# انسخ السكربت وفعّله
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# استخدم dumb-init + entrypoint الذي يفرض التوسعة
+ENTRYPOINT ["dumb-init", "--", "/app/entrypoint.sh"]
+
+# اترك CMD كسطر واحد؛ entrypoint سيشغّله عبر sh -c ويوسّع ${PORT}
+CMD ["gunicorn -k uvicorn.workers.UvicornWorker src.main:app \
     --workers 1 --bind 0.0.0.0:${PORT:-8000} \
     --timeout 120 --keep-alive 2 \
     --max-requests 1000 --max-requests-jitter 50 \
