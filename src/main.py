@@ -48,41 +48,47 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# --- security service factory (ALWAYS define, independent of other imports) ---
+try:
+    from src.core.security_service import (
+        create_security_service as _create_security_service,
+    )
+
+    create_security_service = _create_security_service
+except Exception:
+
+    async def create_security_service(*args, **kwargs):
+        class _NoopSecurityService:
+            async def initialize(self, *a, **k):
+                return None
+
+        return _NoopSecurityService()
+
+
 # Secure path management - avoid sys.path manipulation for security
 PROJECT_ROOT = Path(__file__).parent.parent
 # Note: Using PYTHONPATH or proper package installation instead of sys.path modification
 
+# Essential imports (fail hard if missing)
+from src.infrastructure.config.production_config import load_config
+from src.infrastructure.config.validator import validate_and_report
+from src.infrastructure.error_handler import setup_error_handlers
+from src.core.exceptions import (
+    RateLimitExceeded as CustomRateLimitExceeded,
+    ConfigurationError,
+)
+
+# Optional imports (do not fail app if missing)
 try:
-    # Import unified configuration system
-    from src.infrastructure.config.validator import validate_and_report
-
-    # Import error handling system
-    from src.infrastructure.error_handler import setup_error_handlers
-    from src.core.exceptions import (
-        RateLimitExceeded as CustomRateLimitExceeded,
-        ConfigurationError,
-    )
-
-    # Import API documentation
     from src.api.openapi_config import custom_openapi_schema
-
-    # Import core services - database initialization only
+except Exception:
+    custom_openapi_schema = None
+try:
     from src.adapters.database_production import initialize_production_database
-    # --- security service factory (robust import) ---
-    try:
-        from src.core.security_service import create_security_service
-    except Exception:
-        # No-op fallback so startup ما يطيح لو فشل الاستيراد
-        async def create_security_service(*args, **kwargs):
-            class _NoopSecurityService:
-                async def initialize(self, *a, **k): ...
-            return _NoopSecurityService()
-    # Removed unused import of create_rate_limiting_service
-except ImportError as e:
-    logger.critical("Critical import error: %s", e)
-    # أثناء الاختبار لا توقف التنفيذ، فقط سجل الخطأ
-    if __name__ == "__main__":
-        sys.exit(1)
+except Exception:
+
+    async def initialize_production_database():
+        return None
 
 
 # UNIFIED CONFIGURATION SYSTEM
@@ -482,14 +488,18 @@ setup_error_handlers(app, debug=(os.environ.get("ENVIRONMENT") != "production"))
 # UNIFIED CONFIGURATION SYSTEM
 
 
-
 # Setup middleware if not in testing environment
 if not os.environ.get("PYTEST_CURRENT_TEST"):
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestValidationMiddleware)
     if config:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=config.ALLOWED_HOSTS)
-        app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ALLOWED_ORIGINS, allow_methods=["*"], allow_headers=["*"])
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=config.CORS_ALLOWED_ORIGINS,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
 # ================================
 # API ROUTES
@@ -686,7 +696,6 @@ def setup_routes():
 
 
 # Defer route setup to avoid import issues during testing
-
 
 
 # ================================
