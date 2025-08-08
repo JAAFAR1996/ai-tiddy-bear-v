@@ -1,3 +1,5 @@
+from sqlalchemy.exc import SQLAlchemyError
+
 """
 Advanced Connection Pool Manager for AI Teddy Bear
 Optimized database connection management with monitoring and auto-scaling
@@ -9,13 +11,12 @@ import time
 from typing import Dict, Optional, Any, List
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 
-import asyncpg
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy import event, text  # Ensure text is imported for SQL string safety
 
-from src.core.exceptions import DatabaseError, ConfigurationError
+from src.core.exceptions import DatabaseError
 
 
 @dataclass
@@ -75,7 +76,7 @@ class ConnectionPoolManager:
         self.connection_history: List[Dict[str, Any]] = []
         self._lock = asyncio.Lock()
 
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger("ai_teddy_bear.db")
 
     async def initialize(self) -> None:
         """Initialize the connection pool with optimized settings."""
@@ -131,13 +132,13 @@ class ConnectionPoolManager:
             raise DatabaseError(
                 "Connection pool initialization failed",
                 context={"operation": "initialize", "error": str(e)},
-            )
+            ) from e
 
     def _setup_monitoring(self) -> None:
         """Set up connection pool monitoring."""
 
         @event.listens_for(self.engine.sync_engine, "connect")
-        def on_connect(dbapi_conn, connection_record):
+        def on_connect(dbapi_conn, _connection_record):
             """Handle new connection creation."""
             self.metrics.total_connections += 1
             self.metrics.peak_connections = max(
@@ -154,7 +155,7 @@ class ConnectionPoolManager:
                 )
 
         @event.listens_for(self.engine.sync_engine, "close")
-        def on_close(dbapi_conn, connection_record):
+        def on_close(dbapi_conn, _connection_record):
             """Handle connection closure."""
             self.metrics.total_connections = max(0, self.metrics.total_connections - 1)
 
@@ -178,7 +179,7 @@ class ConnectionPoolManager:
             raise DatabaseError(
                 "Database connection test failed",
                 context={"operation": "test_connection", "error": str(e)},
-            )
+            ) from e
 
     @asynccontextmanager
     async def get_session(self):
@@ -210,12 +211,12 @@ class ConnectionPoolManager:
             # Commit transaction on success
             await session.commit()
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             # Rollback on error
             if session:
                 try:
                     await session.rollback()
-                except Exception as rollback_error:
+                except SQLAlchemyError as rollback_error:
                     self.logger.error(f"Session rollback failed: {rollback_error}")
 
             # Update error metrics
@@ -226,14 +227,14 @@ class ConnectionPoolManager:
             raise DatabaseError(
                 "Database session error",
                 context={"operation": "session_management", "error": str(e)},
-            )
+            ) from e
 
         finally:
             # Clean up session
             if session:
                 try:
                     await session.close()
-                except Exception as close_error:
+                except SQLAlchemyError as close_error:
                     self.logger.error(f"Session close failed: {close_error}")
 
             # Update metrics
@@ -359,38 +360,4 @@ class ConnectionPoolManager:
             except Exception as e:
                 self.logger.error(f"Error closing connection pool: {e}")
             finally:
-            self.engine = create_async_engine(
-                db_url,
-                pool_size=self.min_size,
-                max_overflow=self.max_overflow,
-                pool_timeout=self.pool_timeout,
-                pool_recycle=self.pool_recycle,
-                pool_pre_ping=True,  # Validate connections before use
-                echo=False,  # Disable SQL logging for performance
-                future=True,
-                connect_args={
-                    "command_timeout": 60,
-                    "server_settings": {
-                        "application_name": "ai_teddy_bear",
-                        "jit": "off",  # Disable JIT for consistent performance
-                    },
-                },
-            )
-    """Initialize global connection pool manager."""
-    global _pool_manager
-
-    if _pool_manager is not None:
-        await _pool_manager.close()
-
-    _pool_manager = ConnectionPoolManager(database_url, **kwargs)
-    await _pool_manager.initialize()
-
-    return _pool_manager
-
-
-async def close_pool_manager() -> None:
-    """Close global connection pool manager."""
-    global _pool_manager
-    if _pool_manager is not None:
-        await _pool_manager.close()
-        _pool_manager = None
+                self.engine = None

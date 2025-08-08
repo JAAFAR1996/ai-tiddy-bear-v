@@ -1,0 +1,25 @@
+name: Dummy/Mock Code Killer
+
+on:
+  push:
+    paths:
+      - 'src/**'
+      - 'scripts/ci/check_no_dummy_code.sh'
+      - '.github/workflows/dummy-code-check.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'scripts/ci/check_no_dummy_code.sh'
+      - '.github/workflows/dummy-code-check.yml'
+
+jobs:
+  dummy-code-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run dummy/mock/fake code scan
+        run: |
+          chmod +x scripts/ci/check_no_dummy_code.sh
+          bash scripts/ci/check_no_dummy_code.sh
