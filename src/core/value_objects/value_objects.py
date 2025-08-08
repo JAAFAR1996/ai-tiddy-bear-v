@@ -8,7 +8,7 @@ from typing import Optional
 def _get_config_value(attr_name: str, default_value):
     """Get configuration value with fallback to default."""
     try:
-        from src.infrastructure.config.production_config import get_config
+        from src.infrastructure.config.config_provider import get_config
 
         def get_config_value(attr_name, default_value=None, config=None):
             config = config or get_config()

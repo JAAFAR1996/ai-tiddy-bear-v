@@ -66,7 +66,7 @@ from src.interfaces.repositories import (
 )
 from src.interfaces.adapters import IDatabaseAdapter
 from src.interfaces.exceptions import DatabaseError, ValidationError
-from src.infrastructure.config.production_config import get_config, load_config
+from src.infrastructure.config.config_provider import get_config, load_config
 
 # Ensure config is loaded at startup
 load_config()

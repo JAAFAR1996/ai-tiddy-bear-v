@@ -43,7 +43,11 @@ class ChatService:
         rate_limiter: Optional[RateLimitingService] = None,
         config=None,
     ):
-        from src.infrastructure.config.production_config import get_config
+        # Import locally to avoid circular imports during module initialization
+        if config is None:
+            from src.infrastructure.config.config_provider import get_config
+            config = get_config()
+        
         from src.infrastructure.rate_limiting.rate_limiter import (
             create_rate_limiting_service,
         )

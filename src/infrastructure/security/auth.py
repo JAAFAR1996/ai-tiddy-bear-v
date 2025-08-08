@@ -15,7 +15,7 @@ from passlib.context import CryptContext
 from passlib.hash import argon2
 import redis.asyncio as redis
 
-from ..config.production_config import get_config
+from ..config.config_provider import get_config
 from ..logging.production_logger import get_logger, security_logger
 from ..monitoring.audit import coppa_audit
 from .jwt_advanced import AdvancedJWTManager, TokenType, JWTClaims
@@ -47,7 +47,7 @@ class TokenManager:
     """Unified JWT token management with advanced security features."""
 
     def __init__(self, config=None):
-        from src.infrastructure.config.production_config import get_config
+        from src.infrastructure.config.config_provider import get_config
 
         self.config = config or get_config()
         self.advanced_jwt = AdvancedJWTManager()

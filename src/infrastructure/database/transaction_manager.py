@@ -30,7 +30,7 @@ from asyncpg.exceptions import (
 )
 
 from .database_manager import database_manager, get_connection
-from ..config import get_config_manager
+from ..config.config_manager_provider import get_config_manager
 from ..logging import get_logger, audit_logger, security_logger
 
 
