@@ -13,11 +13,14 @@ CLEANUP LOG (2025-08-06):
 
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
-import random
+import uuid
 
 from fastapi import APIRouter, HTTPException, Depends, status, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, and_, func, desc
+from sqlalchemy.orm import selectinload, joinedload
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.infrastructure.security.auth import get_current_user
 from src.infrastructure.database.database_manager import get_db
@@ -28,7 +31,6 @@ from src.infrastructure.database.models import (
     Conversation,
     Interaction,
     SafetyReport,
-    UserRole,
     SafetyLevel,
 )
 from src.core.exceptions import ValidationError
@@ -46,11 +48,6 @@ class BusinessLogicError(Exception):
 
     pass
 
-
-from sqlalchemy import select, and_, func, desc, or_
-from sqlalchemy.orm import selectinload, joinedload
-from sqlalchemy.exc import SQLAlchemyError
-import uuid
 
 # Setup
 router = APIRouter(tags=["Dashboard"])
@@ -71,8 +68,8 @@ async def validate_parent_authorization(
         and_(
             User.id == parent_uuid,
             User.role == user_role,
-            User.is_active == True,
-            User.is_deleted == False,
+            User.is_active,
+            ~User.is_deleted,
         )
     )
 
@@ -103,7 +100,7 @@ async def validate_child_access(
         and_(
             Child.id == child_uuid,
             Child.parent_id == parent_uuid,
-            Child.is_deleted == False,
+            ~Child.is_deleted,
         )
     )
 
@@ -132,8 +129,8 @@ async def validate_child_ownership(
         and_(
             Child.id == child_uuid,
             Child.parent_id == parent_uuid,
-            Child.is_deleted == False,
-            Child.parental_consent == True,  # COPPA compliance
+            ~Child.is_deleted,
+            Child.parental_consent,  # COPPA compliance
         )
     )
 
@@ -150,7 +147,8 @@ async def validate_child_ownership(
 
 def apply_child_safety_filters(child: Child, data: dict) -> dict:
     """Apply safety filtering based on child's safety level."""
-    if child.safety_level.value == "blocked":
+    level = getattr(child.safety_level, "value", "safe")
+    if level == "blocked":
         # Filter sensitive content
         if "message" in data and data.get("flagged", False):
             data["message"] = "[Content filtered for safety]"
@@ -276,9 +274,15 @@ class DashboardStatsResponse(BaseModel):
 
 @router.get("/children", response_model=List[ChildResponse])
 async def get_children(
-    current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
 ):
     """Get all children for the authenticated parent with complete business logic."""
+    # تحقق صريح من الدور
+    if current_user.get("role") != "parent":
+        raise AuthorizationError("Only parents can access this endpoint")
     try:
         # Validate parent_id
         try:
@@ -293,8 +297,8 @@ async def get_children(
             and_(
                 User.id == parent_uuid,
                 User.role == "parent",
-                User.is_active == True,
-                User.is_deleted == False,
+                User.is_active,
+                ~User.is_deleted,
             )
         )
         parent_result = await db.execute(parent_stmt)
@@ -309,8 +313,8 @@ async def get_children(
             .where(
                 and_(
                     Child.parent_id == parent_uuid,
-                    Child.is_deleted == False,
-                    Child.parental_consent == True,  # COPPA compliance
+                    ~Child.is_deleted,
+                    Child.parental_consent,
                 )
             )
             .options(
@@ -320,15 +324,16 @@ async def get_children(
                 selectinload(Child.safety_reports),
             )
             .order_by(Child.created_at.desc())
+            .limit(limit)
+            .offset(offset)
         )
-
         result = await db.execute(stmt)
-        children_db = result.scalars().all()
+        children = result.scalars().all()
 
-        logger.info(f"Found {len(children_db)} children for parent {parent_uuid}")
+        logger.info(f"Found {len(children)} children for parent {parent_uuid}")
 
-        children = []
-        for child in children_db:
+        children_responses = []
+        for child in children:
             try:
                 # Calculate last active from all interactions across conversations
                 last_interaction = None
@@ -380,7 +385,7 @@ async def get_children(
                 if not age and child.birth_date:
                     age = (datetime.utcnow() - child.birth_date).days // 365
 
-                children.append(
+                children_responses.append(
                     ChildResponse(
                         id=str(child.id),
                         name=child.name,
@@ -396,7 +401,7 @@ async def get_children(
             except Exception as child_error:
                 logger.error(f"Error processing child {child.id}: {str(child_error)}")
                 # Include child with minimal data rather than skip
-                children.append(
+                children_responses.append(
                     ChildResponse(
                         id=str(child.id),
                         name=child.name,
@@ -409,24 +414,20 @@ async def get_children(
                     )
                 )
 
-        return children
+        return children_responses
 
     except ValidationError as e:
-        logger.warning(f"Validation error in get_children: {str(e)}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except AuthorizationError as e:
-        logger.warning(f"Authorization error in get_children: {str(e)}")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except SQLAlchemyError as e:
-        logger.error(f"Database error fetching children: {str(e)}")
-        await db.rollback()
+        # لا داعي للـ rollback في GET
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Database error occurred while fetching children",
         )
     except Exception as e:
-        logger.error(f"Unexpected error fetching children: {str(e)}", exc_info=True)
-        await db.rollback()
+        # لا داعي للـ rollback في GET
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while fetching children",
@@ -465,8 +466,8 @@ async def get_child_interactions(
                 and_(
                     Child.id == child_uuid,
                     Child.parent_id == parent_uuid,
-                    Child.is_deleted == False,
-                    Child.parental_consent == True,  # COPPA compliance check
+                    ~Child.is_deleted,
+                    Child.parental_consent,  # COPPA compliance check
                 )
             )
             .options(
@@ -499,8 +500,8 @@ async def get_child_interactions(
             .where(
                 and_(
                     Conversation.child_id == child_uuid,
-                    Conversation.is_deleted == False,
-                    Interaction.is_deleted == False,
+                    ~Conversation.is_deleted,
+                    ~Interaction.is_deleted,
                 )
             )
             .options(joinedload(Interaction.conversation))
@@ -569,14 +570,14 @@ async def get_child_interactions(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except SQLAlchemyError as e:
         logger.error(f"Database error fetching interactions: {str(e)}")
-        await db.rollback()
+        # لا داعي للـ rollback في GET
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Database error occurred while fetching interactions",
         )
     except Exception as e:
         logger.error(f"Unexpected error fetching interactions: {str(e)}", exc_info=True)
-        await db.rollback()
+        # لا داعي للـ rollback في GET
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while fetching interactions",
@@ -589,6 +590,8 @@ async def get_safety_alerts(
     severity: Optional[str] = Query(default=None),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
 ):
     """Get safety alerts for all parent's children with comprehensive business logic."""
     try:
@@ -611,8 +614,8 @@ async def get_safety_alerts(
                 and_(
                     User.id == parent_uuid,
                     User.role == "parent",
-                    User.is_active == True,
-                    User.is_deleted == False,
+                    User.is_active,
+                    ~User.is_deleted,
                 )
             )
             .options(selectinload(User.children))
@@ -645,9 +648,9 @@ async def get_safety_alerts(
             .where(
                 and_(
                     Child.parent_id == parent_uuid,
-                    Child.is_deleted == False,
-                    Child.parental_consent == True,
-                    SafetyReport.is_deleted == False,
+                    ~Child.is_deleted,
+                    Child.parental_consent,
+                    ~SafetyReport.is_deleted,
                     SafetyReport.child_id.in_(consented_child_ids),
                 )
             )
@@ -701,7 +704,8 @@ async def get_safety_alerts(
                 requires_immediate_attention = (
                     safety_report.severity in ["high", "critical"]
                     and not safety_report.resolved
-                    and (datetime.utcnow() - safety_report.timestamp).hours < 24
+                    and (datetime.utcnow() - safety_report.timestamp)
+                    < timedelta(hours=24)
                 )
 
                 alerts.append(
@@ -745,7 +749,7 @@ async def get_safety_alerts(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except SQLAlchemyError as e:
         logger.error(f"Database error fetching safety alerts: {str(e)}")
-        await db.rollback()
+        # لا داعي للـ rollback في GET
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Database error occurred while fetching safety alerts",
@@ -754,7 +758,7 @@ async def get_safety_alerts(
         logger.error(
             f"Unexpected error fetching safety alerts: {str(e)}", exc_info=True
         )
-        await db.rollback()
+        # لا داعي للـ rollback في GET
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while fetching safety alerts",
@@ -787,9 +791,9 @@ async def resolve_safety_alert(
                 and_(
                     SafetyReport.id == alert_uuid,
                     Child.parent_id == parent_uuid,
-                    Child.is_deleted == False,
-                    Child.parental_consent == True,  # COPPA compliance
-                    SafetyReport.is_deleted == False,
+                    ~Child.is_deleted,
+                    Child.parental_consent,  # COPPA compliance
+                    ~SafetyReport.is_deleted,
                 )
             )
             .options(joinedload(SafetyReport.child))
@@ -911,6 +915,9 @@ async def get_dashboard_stats(
     current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
     """Get comprehensive dashboard statistics with full business logic."""
+    # تحقق صريح من الدور
+    if current_user.get("role") != "parent":
+        raise AuthorizationError("Only parents can access this endpoint")
     try:
         # Validate parent_id
         try:
@@ -937,7 +944,7 @@ async def get_dashboard_stats(
 
         # Calculate stats using comprehensive SQLAlchemy ORM queries
         from src.infrastructure.database.models import Conversation, SafetyReport
-        from sqlalchemy import func, case
+        from sqlalchemy import func, case, join
 
         today_start = datetime.utcnow().replace(
             hour=0, minute=0, second=0, microsecond=0
@@ -957,7 +964,11 @@ async def get_dashboard_stats(
         # Active children today (had interactions through conversations)
         active_children_stmt = (
             select(func.count(func.distinct(Child.id)))
-            .select_from(Child.join(Conversation).join(Interaction))
+            .select_from(
+                join(Child, Conversation, Child.id == Conversation.child_id).join(
+                    Interaction, Conversation.id == Interaction.conversation_id
+                )
+            )
             .where(
                 and_(
                     Child.parent_id == parent_uuid,
@@ -975,7 +986,13 @@ async def get_dashboard_stats(
         # Total interactions today (through proper conversation relationships)
         interactions_today_stmt = (
             select(func.count(Interaction.id))
-            .select_from(Interaction.join(Conversation).join(Child))
+            .select_from(
+                join(
+                    Interaction,
+                    Conversation,
+                    Interaction.conversation_id == Conversation.id,
+                ).join(Child, Conversation.child_id == Child.id)
+            )
             .where(
                 and_(
                     Child.parent_id == parent_uuid,
@@ -990,10 +1007,10 @@ async def get_dashboard_stats(
         interactions_today_result = await db.execute(interactions_today_stmt)
         interactions_today = interactions_today_result.scalar() or 0
 
-        # BUSINESS LOGIC: Count unresolved safety reports (not just alerts)
+        # Count unresolved safety reports (not just alerts)
         unresolved_alerts_stmt = (
             select(func.count(SafetyReport.id))
-            .select_from(SafetyReport.join(Child))
+            .select_from(join(SafetyReport, Child, SafetyReport.child_id == Child.id))
             .where(
                 and_(
                     Child.parent_id == parent_uuid,
@@ -1001,9 +1018,7 @@ async def get_dashboard_stats(
                     Child.parental_consent == True,
                     SafetyReport.is_deleted == False,
                     SafetyReport.resolved == False,
-                    SafetyReport.severity.in_(
-                        ["medium", "high", "critical"]
-                    ),  # Only significant alerts
+                    SafetyReport.severity.in_(["medium", "high", "critical"]),
                 )
             )
         )
@@ -1027,7 +1042,13 @@ async def get_dashboard_stats(
                     100.0,  # Default to 100 if no interactions
                 )
             )
-            .select_from(Interaction.join(Conversation).join(Child))
+            .select_from(
+                join(
+                    Interaction,
+                    Conversation,
+                    Interaction.conversation_id == Conversation.id,
+                ).join(Child, Conversation.child_id == Child.id)
+            )
             .where(
                 and_(
                     Child.parent_id == parent_uuid,
@@ -1035,9 +1056,7 @@ async def get_dashboard_stats(
                     Child.parental_consent == True,
                     Conversation.is_deleted == False,
                     Interaction.is_deleted == False,
-                    Interaction.timestamp
-                    >= today_start
-                    - timedelta(days=7),  # Last 7 days for better average
+                    Interaction.timestamp >= today_start - timedelta(days=7),
                 )
             )
         )
@@ -1095,10 +1114,17 @@ async def get_dashboard_stats(
         )
 
 
+# Request model for safety report creation
+class CreateSafetyReportRequest(BaseModel):
+    alert_type: str = Field(..., min_length=3, max_length=100)
+    severity: str = Field(..., regex="^(low|medium|high|critical)$")
+    message: str = Field(..., min_length=3, max_length=1000)
+
+
 @router.post("/children/{child_id}/safety/report")
 async def create_safety_report(
     child_id: str,
-    report_data: dict,
+    report_data: CreateSafetyReportRequest,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -1108,27 +1134,18 @@ async def create_safety_report(
         parent = await validate_parent_authorization(db, current_user["id"])
         child = await validate_child_ownership(db, child_id, current_user["id"])
 
-        # Validate report data
-        required_fields = ["alert_type", "severity", "message"]
-        for field in required_fields:
-            if field not in report_data:
-                raise ValidationError(f"Missing required field: {field}")
-
-        if report_data["severity"] not in ["low", "medium", "high", "critical"]:
-            raise ValidationError(f"Invalid severity level: {report_data['severity']}")
-
         # Create safety report with business logic
         safety_report = SafetyReport(
             child_id=uuid.UUID(child_id),
-            alert_type=report_data["alert_type"],
-            severity=report_data["severity"],
-            message=report_data["message"],
+            alert_type=report_data.alert_type,
+            severity=report_data.severity,
+            message=report_data.message,
             resolved=False,
             created_by=parent.id,
             metadata_json={
                 "created_via": "parent_dashboard",
                 "parent_reported": True,
-                "child_safety_level": child.safety_level.value,
+                "child_safety_level": getattr(child.safety_level, "value", "safe"),
             },
         )
 
@@ -1140,8 +1157,8 @@ async def create_safety_report(
             f"Safety report created by parent {parent.id} for child {child_id}",
             extra={
                 "report_id": str(safety_report.id),
-                "severity": report_data["severity"],
-                "alert_type": report_data["alert_type"],
+                "severity": report_data.severity,
+                "alert_type": report_data.alert_type,
             },
         )
 
@@ -1310,6 +1327,14 @@ async def update_child(
     db: AsyncSession = Depends(get_db),
 ):
     """Update child information with full validation and audit logging."""
+
+    # Explicit role check for defense-in-depth
+    if current_user.get("role") != "parent":
+        logger.warning(
+            f"Unauthorized update attempt on child {child_id} by user {current_user.get('id')}, role={current_user.get('role')}"
+        )
+        raise AuthorizationError("Only parents can update child profiles")
+
     try:
         # Validate parent authorization
         parent = await validate_parent_authorization(db, current_user["id"])
