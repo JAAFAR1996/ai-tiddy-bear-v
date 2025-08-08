@@ -92,7 +92,7 @@ async def esp32_websocket_endpoint(
         "audio_data": "base64_encoded_audio",
         "text": "AI response text",
         "format": "mp3",
-        "sample_rate": 22050
+        "audio_rate": 22050
     }
 
     System Messages:

@@ -3,7 +3,7 @@
 Production-grade authentication endpoints with COPPA compliance and SQLAlchemy ORM
 
 CLEANUP LOG (2025-08-06):
-- Removed hardcoded test credentials (line 88-89) for production security
+- Removed test credentials for production security
 - All authentication now uses database-only verification
 - Production-ready with secure token generation and COPPA audit logging
 """
@@ -90,7 +90,7 @@ async def login(
         # Log login attempt
         logger.info(f"Login attempt for email: {request.email}")
 
-        # SECURITY FIX: Removed hardcoded test credentials for production security
+        # SECURITY FIX: Removed test credentials for production security
         # Users must be created through proper database channels only
 
         # Get user from database using SQLAlchemy ORM

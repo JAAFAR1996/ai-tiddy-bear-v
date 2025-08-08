@@ -214,8 +214,8 @@ class EducationalContent:
         
         if not content_files:
             logger.warning("No educational content files found")
-            # Create a sample file for demonstration
-            self._create_sample_content()
+            # Create default content file for demonstration
+            self._create_default_content()
             return
         
         new_contents = {}
@@ -442,9 +442,9 @@ class EducationalContent:
         index_time = time.time() - start_time
         logger.info(f"Search index rebuilt: {indexed_count} items indexed in {index_time:.2f}s")
     
-    def _create_sample_content(self):
-        """Create sample educational content for demonstration."""
-        sample_content = [
+    def _create_default_content(self):
+        """Create default educational content for demonstration."""
+        default_content = [
             {
                 "topic": "colors",
                 "title": "Learning Colors",
@@ -469,18 +469,18 @@ class EducationalContent:
             }
         ]
         
-        sample_file = os.path.join(self.templates_dir, "sample_educational_content.json")
+        default_file = os.path.join(self.templates_dir, "default_educational_content.json")
         try:
-            with open(sample_file, 'w', encoding='utf-8') as f:
-                json.dump(sample_content, f, indent=2, ensure_ascii=False)
+            with open(default_file, 'w', encoding='utf-8') as f:
+                json.dump(default_content, f, indent=2, ensure_ascii=False)
             
-            logger.info(f"Created sample content file: {sample_file}")
+            logger.info(f"Created default content file: {default_file}")
             
-            # Load the sample content
+            # Load the default content
             self._load_all_contents()
             
         except Exception as e:
-            logger.error(f"Failed to create sample content: {e}")
+            logger.error(f"Failed to create default content: {e}")
     
     def get_content(self, topic: str) -> Optional[Dict[str, Any]]:
         """
