@@ -23,7 +23,6 @@ from .structured_logger import (
     LoggingContextManager,
     set_log_context,
     get_log_context,
-    with_log_context,
     # Pre-configured loggers
     http_logger,
     database_logger,

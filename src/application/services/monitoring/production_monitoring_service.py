@@ -18,7 +18,8 @@ import uuid
 from src.application.services.notification.notification_service import (
     get_notification_service,
 )
-from src.infrastructure.config.production_config import get_config
+
+# get_config import removed; config must be passed explicitly
 
 
 class MonitoringLevel(str, Enum):
@@ -99,8 +100,8 @@ class ProductionMonitoringService:
     - Integration with external monitoring tools
     """
 
-    def __init__(self):
-        self.config = get_config()
+    def __init__(self, config):
+        self.config = config
         self.logger = logging.getLogger(__name__)
         self._health_checks: Dict[str, HealthCheck] = {}
         self._alerts: Dict[str, MonitoringAlert] = {}
@@ -109,6 +110,11 @@ class ProductionMonitoringService:
         self._monitoring_tasks = []
         self._alert_handlers = []
         self._initialize_service()
+
+
+# Explicit factory
+def create_production_monitoring_service(config) -> ProductionMonitoringService:
+    return ProductionMonitoringService(config)
 
     def _initialize_service(self):
         """Initialize the monitoring service."""

@@ -43,7 +43,7 @@ from src.infrastructure.security.auth import get_current_user
 from src.infrastructure.security.input_validator import advanced_input_validator
 from src.infrastructure.security.rate_limiter_advanced import advanced_rate_limiter
 
-router = APIRouter(prefix="/api/v1/core", tags=["Core API"])
+router = APIRouter(tags=["Core API"])
 logger = logging.getLogger(__name__)
 
 
@@ -1039,5 +1039,3 @@ async def get_security_status():
 
 # SECURITY FIX: Removed test-guardrails endpoint - production should not expose security testing endpoints
 # Security testing is restricted to development or staging environments
-
-

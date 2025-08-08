@@ -22,7 +22,7 @@ from src.infrastructure.websocket.production_websocket_adapter import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/ws", tags=["WebSocket"])
+router = APIRouter(tags=["WebSocket"])
 
 
 @router.websocket("/parent/notifications/{parent_id}")

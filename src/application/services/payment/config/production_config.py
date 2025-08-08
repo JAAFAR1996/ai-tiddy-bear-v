@@ -134,8 +134,8 @@ class DatabaseConfig:
     host: str = "localhost"
     port: int = 5432
     database: str = "aiteddy_payments"
-    username: str = ""
-    password: str = ""
+    username: str = ""  # Must be set from environment
+    password: str = ""  # Must be set from environment
 
     # Pool Settings
     pool_size: int = 20
@@ -167,7 +167,7 @@ class RedisConfig:
     host: str = "localhost"
     port: int = 6379
     database: int = 0
-    password: str = ""
+    password: str = ""  # Optional for Redis
 
     # Pool Settings
     max_connections: int = 50
@@ -256,14 +256,21 @@ class ProductionPaymentConfig:
             allowed_ip_ranges=getattr(config, "ALLOWED_IP_RANGES", []),
         )
 
+    def _raise_config_error(self, key: str) -> None:
+        """Raise error for missing critical configuration."""
+        raise ValueError(
+            f"CRITICAL: {key} environment variable is required for production. "
+            f"Cannot start payment service without proper database credentials."
+        )
+    
     def _init_database_config(self) -> DatabaseConfig:
         """Initialize database configuration."""
         return DatabaseConfig(
             host=os.getenv("DB_HOST", "localhost"),
             port=int(os.getenv("DB_PORT", "5432")),
             database=os.getenv("DB_NAME", "aiteddy_payments"),
-            username=os.getenv("DB_USER", ""),
-            password=os.getenv("DB_PASSWORD", ""),
+            username=os.getenv("DB_USER") or self._raise_config_error("DB_USER"),
+            password=os.getenv("DB_PASSWORD") or self._raise_config_error("DB_PASSWORD"),
             pool_size=int(os.getenv("DB_POOL_SIZE", "20")),
             ssl_mode=os.getenv("DB_SSL_MODE", "require"),
         )
@@ -273,7 +280,7 @@ class ProductionPaymentConfig:
         return RedisConfig(
             host=os.getenv("REDIS_HOST", "localhost"),
             port=int(os.getenv("REDIS_PORT", "6379")),
-            password=os.getenv("REDIS_PASSWORD", ""),
+            password=os.getenv("REDIS_PASSWORD", ""),  # Optional for Redis
             max_connections=int(os.getenv("REDIS_MAX_CONNECTIONS", "50")),
         )
 

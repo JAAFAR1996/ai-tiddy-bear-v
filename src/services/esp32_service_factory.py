@@ -112,13 +112,18 @@ class ESP32ServiceFactory:
         """Create and initialize AI service."""
         try:
             if not ai_provider:
-                self.logger.warning("No AI provider provided, creating mock service")
-                return MockAIService()
+                raise ValueError("AI provider is required for production - cannot create AI service without provider")
 
             self.logger.info("Initializing ConsolidatedAIService")
 
-            # Create safety monitor (mock for now)
-            safety_monitor = MockSafetyMonitor()
+            # Create production safety monitor
+            from src.application.services.child_safety_service import ChildSafetyService
+            safety_monitor = ChildSafetyService(config={
+                'enable_real_time_monitoring': True,
+                'auto_report_threshold': 0.7,
+                'parent_notification_threshold': 0.8,
+                'emergency_alert_threshold': 0.9,
+            })
 
             # Create logger
             logger = logging.getLogger("ai_service")
@@ -138,141 +143,31 @@ class ESP32ServiceFactory:
 
         except Exception as e:
             self.logger.error(f"Failed to create AI service: {e}", exc_info=True)
-            # Return mock service as fallback
-            return MockAIService()
+            raise
 
     async def _create_safety_service(self):
         """Create and initialize child safety service."""
         try:
-            self.logger.info("Initializing ChildSafetyService")
+            self.logger.info("Initializing production ChildSafetyService")
 
-            # Try to create the full ChildSafetyService
-            try:
-                safety_config = {
-                    'enable_real_time_monitoring': True,
-                    'auto_report_threshold': 0.7,
-                    'parent_notification_threshold': 0.8,
-                    'emergency_alert_threshold': 0.9,
-                }
-                safety_service = ChildSafetyService(config=safety_config)
-                self.logger.info("ChildSafetyService initialized successfully")
-                return safety_service
-            except Exception as e:
-                self.logger.warning(f"Failed to create full ChildSafetyService: {e}")
-                # Fall back to simplified safety service
-                return FallbackSafetyService()
+            safety_config = {
+                'enable_real_time_monitoring': True,
+                'auto_report_threshold': 0.7,
+                'parent_notification_threshold': 0.8,
+                'emergency_alert_threshold': 0.9,
+            }
+            safety_service = ChildSafetyService(config=safety_config)
+            self.logger.info("Production ChildSafetyService initialized successfully")
+            return safety_service
 
         except Exception as e:
-            self.logger.error(f"Failed to create safety service: {e}", exc_info=True)
-            # Return basic fallback safety service
-            return BasicSafetyService()
+            self.logger.error(f"Failed to create production safety service: {e}", exc_info=True)
+            raise
 
 
-# Mock services for development/fallback
-class MockAIService:
-    """Mock AI service for development when real AI provider is not available."""
-
-    async def generate_safe_response(self, child_id, user_input, child_age, **kwargs):
-        """Generate a simple mock response."""
-        age_appropriate_responses = {
-            (3, 5): [
-                "That's so cool! Tell me more!",
-                "Wow! I love hearing about that!",
-                "You're so smart! What else do you like?",
-                "That sounds fun! Can you tell me another story?",
-                "I like that too! What's your favorite color?",
-            ],
-            (6, 9): [
-                "That's really interesting! Tell me more about it!",
-                "Wow, that sounds amazing! What else do you enjoy?",
-                "I love learning new things! Can you teach me something?",
-                "That's so cool! What's your favorite thing to do?",
-                "You're really creative! What would you like to talk about next?",
-            ],
-            (10, 13): [
-                "That's fascinating! I'd love to hear more details!",
-                "That sounds really cool! What got you interested in that?",
-                "I'm impressed! Can you tell me more about your experience?",
-                "That's awesome! What's the most exciting part about it?",
-                "You have great ideas! What else are you curious about?",
-            ],
-        }
-
-        # Get age-appropriate responses
-        if 3 <= child_age <= 5:
-            responses = age_appropriate_responses[(3, 5)]
-        elif 6 <= child_age <= 9:
-            responses = age_appropriate_responses[(6, 9)]
-        elif 10 <= child_age <= 13:
-            responses = age_appropriate_responses[(10, 13)]
-        else:
-            responses = age_appropriate_responses[(6, 9)]  # Default
-
-        return AIResponse(
-            content=random.choice(responses),
-            confidence=0.8,
-            safe=True,
-            metadata={"source": "mock_ai_service", "child_age": child_age},
-        )
+# Production services only - no mock services in production environment
 
 
-class MockSafetyMonitor:
-    """Mock safety monitor for development."""
-
-    async def check_content(self, content: str):
-        """Basic safety check."""
-        inappropriate_words = [
-            "bad", "hate", "stupid", "kill", "hurt", "violence", "weapon",
-            "drug", "alcohol", "sex", "adult", "scary", "death", "blood"
-        ]
-        content_lower = content.lower()
-        return not any(word in content_lower for word in inappropriate_words)
-
-
-class FallbackSafetyService:
-    """Fallback safety service when ChildSafetyService fails to initialize."""
-
-    async def check_content(self, content: str, child_age: int) -> bool:
-        """Check if content is safe for the child."""
-        if not content or not content.strip():
-            return False
-
-        # Basic inappropriate content check
-        inappropriate_words = [
-            "bad", "hate", "stupid", "kill", "hurt", "violence", "weapon",
-            "drug", "alcohol", "sex", "adult", "scary", "death", "blood",
-            "fight", "angry", "monster", "ghost", "devil", "hell"
-        ]
-
-        content_lower = content.lower()
-        for word in inappropriate_words:
-            if word in content_lower:
-                return False
-
-        # Age-specific checks
-        if child_age < 6:
-            # More restrictive for younger children
-            restricted_words = ["sad", "cry", "afraid", "dark", "nightmare"]
-            for word in restricted_words:
-                if word in content_lower:
-                    return False
-
-        return True
-
-
-class BasicSafetyService:
-    """Basic safety service as final fallback."""
-
-    async def check_content(self, content: str, child_age: int) -> bool:
-        """Basic content safety check."""
-        if not content:
-            return False
-        
-        # Very basic safety check
-        dangerous_words = ["kill", "hurt", "violence", "weapon", "drug", "sex"]
-        content_lower = content.lower()
-        
-        return not any(word in content_lower for word in dangerous_words)
 
 
 # Global factory instance

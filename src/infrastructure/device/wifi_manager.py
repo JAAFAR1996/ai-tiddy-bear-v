@@ -469,37 +469,18 @@ class ESP32WiFiManager:
         """Scan networks on ESP32 (mock implementation)."""
         # This would interface with ESP32 WiFi API
         logger.info("Performing ESP32 network scan...")
-        await asyncio.sleep(2)  # Simulate scan time
-        return self._generate_mock_networks()
+        raise NotImplementedError(
+            "CRITICAL: ESP32 WiFi scanning not implemented. "
+            "Production deployment requires real hardware interface implementation. "
+            "Cannot return mock network data in production environment."
+        )
 
     def _generate_mock_networks(self) -> List[WiFiNetworkInfo]:
-        """Generate sample network data for testing."""
-        return [
-            WiFiNetworkInfo(
-                ssid="TeddyBear_WiFi",
-                bssid="00:11:22:33:44:55",
-                frequency=2412,
-                signal_strength=-45,
-                security=WiFiSecurity.WPA2_PSK,
-                channel=1,
-            ),
-            WiFiNetworkInfo(
-                ssid="Home_Network",
-                bssid="AA:BB:CC:DD:EE:FF",
-                frequency=5180,
-                signal_strength=-65,
-                security=WiFiSecurity.WPA3_PSK,
-                channel=36,
-            ),
-            WiFiNetworkInfo(
-                ssid="Guest_WiFi",
-                bssid="11:22:33:44:55:66",
-                frequency=2437,
-                signal_strength=-70,
-                security=WiFiSecurity.OPEN,
-                channel=6,
-            ),
-        ]
+        """DEPRECATED: Mock network generation removed for production safety."""
+        raise ValueError(
+            "CRITICAL: Mock WiFi network generation is not allowed in production. "
+            "Use real ESP32 hardware interface implementation instead."
+        )
 
     def _parse_iwlist_output(self, output: str) -> List[WiFiNetworkInfo]:
         """Parse iwlist scan output."""
@@ -758,10 +739,12 @@ class ESP32WiFiManager:
         self, ssid: str, password: Optional[str], timeout: int
     ) -> bool:
         """Connect to WiFi on ESP32."""
-        # This would interface with ESP32 WiFi API
-        logger.info(f"ESP32 connecting to {ssid}...")
-        await asyncio.sleep(3)  # Simulate connection time
-        return True  # Mock successful connection
+        # Real ESP32 WiFi connection implementation required
+        logger.error("ESP32 WiFi connection not implemented - hardware interface required")
+        raise NotImplementedError(
+            "ESP32 WiFi connection requires real hardware interface implementation. "
+            "This method must be implemented with actual ESP32 WiFi API calls."
+        )
 
     async def _update_connection_info(self, ssid: str):
         """Update current connection information."""
@@ -1032,13 +1015,45 @@ class ESP32WiFiManager:
 
     async def _get_signal_strength_windows(self) -> Optional[int]:
         """Get signal strength on Windows."""
-        # Implementation for Windows
-        return -50  # Mock value
+        try:
+            # Use netsh command to get real WiFi signal strength
+            process = await asyncio.create_subprocess_exec(
+                "netsh", "wlan", "show", "interfaces",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await process.communicate()
+            
+            if process.returncode != 0:
+                logger.warning(f"Failed to get Windows WiFi signal strength: {stderr.decode()}")
+                return None
+                
+            output = stdout.decode()
+            # Parse signal strength from netsh output
+            for line in output.split('\n'):
+                if 'Signal' in line and '%' in line:
+                    try:
+                        # Extract percentage and convert to dBm approximation
+                        percent = int(line.split(':')[1].strip().replace('%', ''))
+                        # Convert percentage to dBm (rough approximation)
+                        dbm = int(-100 + (percent * 0.7))  # Rough conversion
+                        return dbm
+                    except (ValueError, IndexError):
+                        continue
+                        
+            return None
+        except Exception as e:
+            logger.error(f"Error getting Windows WiFi signal strength: {e}")
+            return None
 
     async def _get_signal_strength_esp32(self) -> Optional[int]:
         """Get signal strength on ESP32."""
-        # Implementation for ESP32
-        return -45  # Mock value
+        # Real ESP32 WiFi signal strength implementation required
+        logger.error("ESP32 WiFi signal strength not implemented - hardware interface required")
+        raise NotImplementedError(
+            "ESP32 WiFi signal strength requires real hardware interface implementation. "
+            "This method must be implemented with actual ESP32 WiFi API calls."
+        )
 
     async def get_connection_quality(self) -> Dict[str, Any]:
         """Get comprehensive connection quality metrics."""

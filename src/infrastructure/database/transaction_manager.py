@@ -861,69 +861,11 @@ class DistributedTransaction(Transaction):
                 )
 
 
-# Global transaction manager instance (initialized later)
-transaction_manager: Optional[TransactionManager] = None
-
-
 def get_transaction_manager() -> TransactionManager:
-    """Get or create transaction manager instance."""
-    global transaction_manager
-    if transaction_manager is None:
-        transaction_manager = TransactionManager()
-    return transaction_manager
+    config_manager = get_config_manager()
+    return TransactionManager(config_manager)
 
 
-# Convenience decorators and functions
-def transactional(
-    isolation_level: IsolationLevel = IsolationLevel.READ_COMMITTED,
-    timeout: float = 300.0,
-    retry_attempts: int = 3,
-):
-    """Decorator to make function transactional."""
-
-    def decorator(func):
-        async def wrapper(*args, **kwargs):
-            config = TransactionConfig(
-                isolation_level=isolation_level,
-                timeout=timeout,
-                retry_attempts=retry_attempts,
-            )
-
-            manager = get_transaction_manager()
-            async with manager.transaction(config) as tx:
-                return await func(tx, *args, **kwargs)
-
-        return wrapper
-
-    return decorator
-
-
-def child_safe_transactional(child_id: str, parent_consent: bool = False):
-    """Decorator for child-safe transactions."""
-
-    def decorator(func):
-        async def wrapper(*args, **kwargs):
-            config = TransactionConfig(child_data_protection=True)
-
-            manager = get_transaction_manager()
-            async with manager.transaction(
-                config, TransactionType.CHILD_SAFE, child_id, parent_consent
-            ) as tx:
-                return await func(tx, *args, **kwargs)
-
-        return wrapper
-
-    return decorator
-
-
-# Transaction initialization and cleanup
-async def initialize_transaction_manager():
-    """Initialize transaction manager."""
-    manager = get_transaction_manager()
-    await manager.start()
-
-
-async def close_transaction_manager():
-    """Close transaction manager."""
-    manager = get_transaction_manager()
-    await manager.stop()
+def create_transaction_manager(config_manager) -> TransactionManager:
+    """Explicit factory for TransactionManager. Always pass config_manager explicitly."""
+    return TransactionManager(config_manager)

@@ -13,8 +13,7 @@ from datetime import datetime, timedelta
 
 import asyncpg
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.pool import QueuePool
-from sqlalchemy import event
+from sqlalchemy import event, text  # Ensure text is imported for SQL string safety
 
 from src.core.exceptions import DatabaseError, ConfigurationError
 
@@ -84,7 +83,6 @@ class ConnectionPoolManager:
             # Create engine with advanced pool configuration
             self.engine = create_async_engine(
                 self.database_url,
-                poolclass=QueuePool,
                 pool_size=self.min_size,
                 max_overflow=self.max_overflow,
                 pool_timeout=self.pool_timeout,
@@ -117,18 +115,18 @@ class ConnectionPoolManager:
             # Test connection
             await self._test_connection()
 
-            self.logger.info(
-                f"Database connection pool initialized - "
-                f"min_size: {self.min_size}, max_size: {self.max_size}, "
-                f"max_overflow: {self.max_overflow}"
-            )
+            log_data = {
+                "min_size": self.min_size,
+                "max_size": self.max_size,
+                "max_overflow": self.max_overflow,
+            }
+            self.logger.info("Database connection pool initialized", extra=log_data)
 
         except Exception as e:
             self.logger.critical(f"Failed to initialize connection pool: {e}")
             raise DatabaseError(
                 "Connection pool initialization failed",
-                operation="initialize",
-                context={"error": str(e)},
+                context={"operation": "initialize", "error": str(e)},
             )
 
     def _setup_monitoring(self) -> None:
@@ -169,14 +167,13 @@ class ConnectionPoolManager:
         """Test database connectivity."""
         try:
             async with self.get_session() as session:
-                result = await session.execute("SELECT 1")
+                result = await session.execute(text("SELECT 1"))
                 if not result.scalar():
                     raise DatabaseError("Connection test failed")
         except Exception as e:
             raise DatabaseError(
                 "Database connection test failed",
-                operation="test_connection",
-                context={"error": str(e)},
+                context={"operation": "test_connection", "error": str(e)},
             )
 
     @asynccontextmanager
@@ -187,7 +184,7 @@ class ConnectionPoolManager:
         Usage:
             async with pool_manager.get_session() as session:
                 # Use session for database operations
-                result = await session.execute(query)
+                result = await session.execute(text(query) if isinstance(query, str) else query)
         """
         if not self.session_factory:
             raise DatabaseError("Connection pool not initialized")
@@ -224,8 +221,7 @@ class ConnectionPoolManager:
             # Re-raise original exception
             raise DatabaseError(
                 "Database session error",
-                operation="session_management",
-                context={"error": str(e)},
+                context={"operation": "session_management", "error": str(e)},
             )
 
         finally:

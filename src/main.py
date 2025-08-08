@@ -1,62 +1,12 @@
-# --- Unified, production-grade configuration initialization ---
-async def initialize_configuration():
-    """Initialize and validate configuration at startup with secure error handling."""
-    correlation_id = secrets.token_hex(8)
-
-    try:
-        config = load_config()
-        validation_results = await validate_and_report(config)
-        if validation_results["valid"]:
-            logger.info("✅ Configuration validation successful")
-            for category in [
-                "security_checks",
-                "connectivity_checks",
-                "performance_checks",
-            ]:
-                status = validation_results.get(category, {})
-                logger.info("%s: %s", category, status)
-        else:
-            logger.critical("❌ Configuration validation failed")
-            for category in [
-                "security_checks",
-                "connectivity_checks",
-                "performance_checks",
-            ]:
-                status = validation_results.get(category, {})
-                logger.critical("%s: %s", category, status)
-            if getattr(config, "ENVIRONMENT", None) == "production":
-                logger.critical(
-                    "🚨 ABORTING: Cannot start with invalid production configuration (ID: %s)",
-                    correlation_id,
-                )
-                sys.exit(1)
-            else:
-                logger.warning(
-                    "⚠️ Continuing with development mode despite validation warnings (ID: %s)",
-                    correlation_id,
-                )
-        return config
-    except ImportError as e:
-        logger.critical(
-            "🚨 CRITICAL: Configuration module import failed (ID: %s) - Module: %s",
-            correlation_id,
-            e.name if hasattr(e, "name") else "unknown",
-        )
-        sys.exit(1)
-    except Exception as e:
-        logger.critical(
-            "🚨 CRITICAL: Configuration initialization failed (ID: %s) - Error: %s",
-            correlation_id,
-            str(e),
-        )
-        sys.exit(1)
-
-
 """
 AI Teddy Bear - Production-Hardened FastAPI Application
 Enterprise-grade security with child protection and COPPA compliance
 """
 
+from src.infrastructure.config.production_config import load_config
+
+load_config()
+from src.infrastructure.security.auth import get_current_user
 import sys
 import secrets
 import os
@@ -64,7 +14,6 @@ import time
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-
 import uvicorn
 import redis.asyncio as redis
 from fastapi import FastAPI, Request, HTTPException, Depends
@@ -109,7 +58,6 @@ try:
 
     # Import core services - database initialization only
     from src.adapters.database_production import initialize_production_database
-    from src.infrastructure.security.auth import get_current_user
     from src.core.security_service import create_security_service
     from src.infrastructure.rate_limiting.rate_limiter import (
         create_rate_limiting_service,
@@ -391,7 +339,6 @@ async def lifespan(app: FastAPI):
 
             config_manager = get_config_manager()
             rate_limiting_service = create_rate_limiting_service(
-                config_manager=config_manager,
                 redis_url=config.REDIS_URL,
                 use_redis=config.ENABLE_REDIS,
             )
@@ -484,18 +431,19 @@ app = FastAPI(
             "url": "https://staging-api.aiteddybear.com",
             "description": "Staging server",
         },
-    ]
-    + (
-        [{"url": "http://localhost:8000", "description": "Development server"}]
-        if os.environ.get("ENVIRONMENT") != "production"
-        else []
-    ),
+    ],
 )
-
-# Apply custom OpenAPI schema with enhanced documentation
-app.openapi = lambda: custom_openapi_schema(app)
-
-# ================================
+# Removed fallback router registration
+# uvicorn.run(
+#     "src.main:app",
+#     host=host,
+#     port=port,
+#     reload=environment != "production",  # No reload in production
+#     log_level="info",
+#     access_log=True,
+#     ssl_keyfile=os.getenv("SSL_KEYFILE"),
+#     ssl_certfile=os.getenv("SSL_CERTFILE"),
+# )
 # ERROR HANDLING SETUP - FIRST PRIORITY
 # ================================
 setup_error_handlers(app, debug=(os.environ.get("ENVIRONMENT") != "production"))
@@ -547,52 +495,9 @@ def _fallback_router_registration():
     """Fallback router registration method (original implementation)."""
     logger.info("🔄 Using fallback router registration...")
 
-    # Authentication routes
-    try:
-        from src.adapters.auth_routes import router as auth_router
-
-        app.include_router(auth_router, tags=["Authentication"])
-        logger.info("✅ Authentication endpoints loaded (fallback)")
-    except ImportError as e:
-        logger.error("❌ Failed to load auth routes: %s", e)
-
-    # Dashboard routes
-    try:
-        from src.adapters.dashboard_routes import router as dashboard_router
-
-        app.include_router(dashboard_router, tags=["Dashboard"])
-        logger.info("✅ Dashboard endpoints loaded (fallback)")
-    except ImportError as e:
-        logger.error("❌ Failed to load dashboard routes: %s", e)
-
-    # Core API routes
-    try:
-        from src.adapters.api_routes import router as main_api_router
-
-        app.include_router(main_api_router, prefix="/api/v1/core", tags=["Core API"])
-        logger.info("✅ Core API endpoints loaded (fallback)")
-    except ImportError as e:
-        logger.error("❌ Failed to load core API routes: %s", e)
-
-    # ESP32 routes
-    try:
-        from src.adapters.esp32_router import router as esp32_router
-
-        app.include_router(esp32_router, prefix="/api/v1/esp32", tags=["ESP32"])
-        logger.info("✅ ESP32 endpoints loaded (fallback)")
-    except ImportError as e:
-        logger.error("❌ Failed to load ESP32 routes: %s", e)
-
-    # Web interface routes
-    try:
-        from src.adapters.web import router as web_router
-
-        app.include_router(web_router, prefix="/web", tags=["Web Interface"])
-        logger.info("✅ Web interface endpoints loaded (fallback)")
-    except ImportError as e:
-        logger.error("❌ Failed to load web routes: %s", e)
-
-    logger.info("✅ Fallback router registration completed")
+    logger.critical(
+        "❌ Fallback router registration is DISABLED in production mode. All routers must be registered via RouteManager only."
+    )
 
 
 def setup_production_static_routes():
@@ -966,3 +871,57 @@ if __name__ == "__main__":
         ssl_keyfile=os.getenv("SSL_KEYFILE"),
         ssl_certfile=os.getenv("SSL_CERTFILE"),
     )
+
+
+# --- Unified, production-grade configuration initialization ---
+async def initialize_configuration():
+    """Initialize and validate configuration at startup with secure error handling."""
+    correlation_id = secrets.token_hex(8)
+
+    try:
+        config = load_config()
+        validation_results = await validate_and_report(config)
+        if validation_results["valid"]:
+            logger.info("✅ Configuration validation successful")
+            for category in [
+                "security_checks",
+                "connectivity_checks",
+                "performance_checks",
+            ]:
+                status = validation_results.get(category, {})
+                logger.info("%s: %s", category, status)
+        else:
+            logger.critical("❌ Configuration validation failed")
+            for category in [
+                "security_checks",
+                "connectivity_checks",
+                "performance_checks",
+            ]:
+                status = validation_results.get(category, {})
+                logger.critical("%s: %s", category, status)
+            if getattr(config, "ENVIRONMENT", None) == "production":
+                logger.critical(
+                    "🚨 ABORTING: Cannot start with invalid production configuration (ID: %s)",
+                    correlation_id,
+                )
+                sys.exit(1)
+            else:
+                logger.warning(
+                    "⚠️ Continuing with development mode despite validation warnings (ID: %s)",
+                    correlation_id,
+                )
+        return config
+    except ImportError as e:
+        logger.critical(
+            "🚨 CRITICAL: Configuration module import failed (ID: %s) - Module: %s",
+            correlation_id,
+            e.name if hasattr(e, "name") else "unknown",
+        )
+        sys.exit(1)
+    except Exception as e:
+        logger.critical(
+            "🚨 CRITICAL: Configuration initialization failed (ID: %s) - Error: %s",
+            correlation_id,
+            str(e),
+        )
+        sys.exit(1)

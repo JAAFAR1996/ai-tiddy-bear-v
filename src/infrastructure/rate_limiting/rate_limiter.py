@@ -31,6 +31,7 @@ from src.infrastructure.database.repository import ChildRepository
 
 try:
     import redis.asyncio as redis
+
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
@@ -42,8 +43,10 @@ logger = logging.getLogger(__name__)
 
 # DATA MODELS AND TYPES
 
+
 class RateLimitAlgorithm(str, Enum):
     """Rate limiting algorithm types."""
+
     SLIDING_WINDOW = "sliding_window"
     TOKEN_BUCKET = "token_bucket"
     FIXED_WINDOW = "fixed_window"
@@ -51,6 +54,7 @@ class RateLimitAlgorithm(str, Enum):
 
 class OperationType(str, Enum):
     """Types of operations for rate limiting."""
+
     AI_REQUEST = "ai_request"
     AUDIO_GENERATION = "audio_generation"
     CONVERSATION_MESSAGE = "conversation_message"
@@ -68,6 +72,7 @@ class OperationType(str, Enum):
 @dataclass
 class RateLimitResult:
     """Result of rate limiting check."""
+
     allowed: bool
     remaining: int = 0
     reset_time: Optional[datetime] = None
@@ -88,6 +93,7 @@ class RateLimitResult:
 @dataclass
 class RateLimitConfig:
     """Configuration for rate limiting rules."""
+
     operation_type: OperationType
     max_requests: int
     window_seconds: int
@@ -102,6 +108,7 @@ class RateLimitConfig:
 @dataclass
 class ChildAgeLimits:
     """Age-based rate limiting configuration."""
+
     age_group: str
     min_age: int
     max_age: int
@@ -129,59 +136,109 @@ class ChildAgeLimits:
 
 CHILD_AGE_LIMITS = {
     "toddler": ChildAgeLimits(
-        age_group="toddler", min_age=3, max_age=4,
-        ai_requests_per_hour=20, audio_generation_per_hour=10, 
-        conversation_messages_per_hour=50, api_calls_per_hour=100, session_duration_minutes=10,
+        age_group="toddler",
+        min_age=3,
+        max_age=4,
+        ai_requests_per_hour=20,
+        audio_generation_per_hour=10,
+        conversation_messages_per_hour=50,
+        api_calls_per_hour=100,
+        session_duration_minutes=10,
         # Conversation-specific limits for toddlers (most restrictive)
-        conversations_per_hour=2, conversations_per_day=5,
-        messages_per_minute=5, messages_per_day=200,
-        max_concurrent_conversations=1, max_conversation_duration_minutes=30,
-        safety_incident_cooldown_minutes=60, max_safety_incidents_per_day=1,
-        burst_window_seconds=30, burst_limit=10
+        conversations_per_hour=2,
+        conversations_per_day=5,
+        messages_per_minute=5,
+        messages_per_day=200,
+        max_concurrent_conversations=1,
+        max_conversation_duration_minutes=30,
+        safety_incident_cooldown_minutes=60,
+        max_safety_incidents_per_day=1,
+        burst_window_seconds=30,
+        burst_limit=10,
     ),
     "preschool": ChildAgeLimits(
-        age_group="preschool", min_age=5, max_age=6,
-        ai_requests_per_hour=30, audio_generation_per_hour=15,
-        conversation_messages_per_hour=75, api_calls_per_hour=150, session_duration_minutes=15,
+        age_group="preschool",
+        min_age=5,
+        max_age=6,
+        ai_requests_per_hour=30,
+        audio_generation_per_hour=15,
+        conversation_messages_per_hour=75,
+        api_calls_per_hour=150,
+        session_duration_minutes=15,
         # Conversation limits for preschoolers
-        conversations_per_hour=3, conversations_per_day=8,
-        messages_per_minute=8, messages_per_day=400,
-        max_concurrent_conversations=2, max_conversation_duration_minutes=45,
-        safety_incident_cooldown_minutes=30, max_safety_incidents_per_day=2,
-        burst_window_seconds=30, burst_limit=15
+        conversations_per_hour=3,
+        conversations_per_day=8,
+        messages_per_minute=8,
+        messages_per_day=400,
+        max_concurrent_conversations=2,
+        max_conversation_duration_minutes=45,
+        safety_incident_cooldown_minutes=30,
+        max_safety_incidents_per_day=2,
+        burst_window_seconds=30,
+        burst_limit=15,
     ),
     "early_child": ChildAgeLimits(
-        age_group="early_child", min_age=7, max_age=8,
-        ai_requests_per_hour=40, audio_generation_per_hour=18,
-        conversation_messages_per_hour=90, api_calls_per_hour=180, session_duration_minutes=25,
+        age_group="early_child",
+        min_age=7,
+        max_age=8,
+        ai_requests_per_hour=40,
+        audio_generation_per_hour=18,
+        conversation_messages_per_hour=90,
+        api_calls_per_hour=180,
+        session_duration_minutes=25,
         # Conversation limits for early children
-        conversations_per_hour=5, conversations_per_day=15,
-        messages_per_minute=12, messages_per_day=800,
-        max_concurrent_conversations=3, max_conversation_duration_minutes=60,
-        safety_incident_cooldown_minutes=20, max_safety_incidents_per_day=3,
-        burst_window_seconds=30, burst_limit=20
+        conversations_per_hour=5,
+        conversations_per_day=15,
+        messages_per_minute=12,
+        messages_per_day=800,
+        max_concurrent_conversations=3,
+        max_conversation_duration_minutes=60,
+        safety_incident_cooldown_minutes=20,
+        max_safety_incidents_per_day=3,
+        burst_window_seconds=30,
+        burst_limit=20,
     ),
     "middle_child": ChildAgeLimits(
-        age_group="middle_child", min_age=9, max_age=10,
-        ai_requests_per_hour=45, audio_generation_per_hour=20,
-        conversation_messages_per_hour=95, api_calls_per_hour=200, session_duration_minutes=35,
+        age_group="middle_child",
+        min_age=9,
+        max_age=10,
+        ai_requests_per_hour=45,
+        audio_generation_per_hour=20,
+        conversation_messages_per_hour=95,
+        api_calls_per_hour=200,
+        session_duration_minutes=35,
         # Conversation limits for middle children
-        conversations_per_hour=6, conversations_per_day=20,
-        messages_per_minute=15, messages_per_day=1200,
-        max_concurrent_conversations=4, max_conversation_duration_minutes=90,
-        safety_incident_cooldown_minutes=15, max_safety_incidents_per_day=4,
-        burst_window_seconds=30, burst_limit=25
+        conversations_per_hour=6,
+        conversations_per_day=20,
+        messages_per_minute=15,
+        messages_per_day=1200,
+        max_concurrent_conversations=4,
+        max_conversation_duration_minutes=90,
+        safety_incident_cooldown_minutes=15,
+        max_safety_incidents_per_day=4,
+        burst_window_seconds=30,
+        burst_limit=25,
     ),
     "preteen": ChildAgeLimits(
-        age_group="preteen", min_age=11, max_age=13,
-        ai_requests_per_hour=50, audio_generation_per_hour=20,
-        conversation_messages_per_hour=100, api_calls_per_hour=200, session_duration_minutes=45,
+        age_group="preteen",
+        min_age=11,
+        max_age=13,
+        ai_requests_per_hour=50,
+        audio_generation_per_hour=20,
+        conversation_messages_per_hour=100,
+        api_calls_per_hour=200,
+        session_duration_minutes=45,
         # Conversation limits for preteens (most permissive)
-        conversations_per_hour=8, conversations_per_day=25,
-        messages_per_minute=20, messages_per_day=1500,
-        max_concurrent_conversations=5, max_conversation_duration_minutes=120,
-        safety_incident_cooldown_minutes=15, max_safety_incidents_per_day=5,
-        burst_window_seconds=30, burst_limit=30
+        conversations_per_hour=8,
+        conversations_per_day=25,
+        messages_per_minute=20,
+        messages_per_day=1500,
+        max_concurrent_conversations=5,
+        max_conversation_duration_minutes=120,
+        safety_incident_cooldown_minutes=15,
+        max_safety_incidents_per_day=5,
+        burst_window_seconds=30,
+        burst_limit=30,
     ),
 }
 
@@ -192,7 +249,7 @@ DEFAULT_RATE_LIMITS = {
         window_seconds=3600,  # 1 hour
         algorithm=RateLimitAlgorithm.SLIDING_WINDOW,
         child_safe_mode=True,
-        age_based_scaling=True
+        age_based_scaling=True,
     ),
     OperationType.AUDIO_GENERATION: RateLimitConfig(
         operation_type=OperationType.AUDIO_GENERATION,
@@ -202,7 +259,7 @@ DEFAULT_RATE_LIMITS = {
         burst_capacity=5,
         refill_rate=0.33,  # ~20 per hour
         child_safe_mode=True,
-        age_based_scaling=True
+        age_based_scaling=True,
     ),
     OperationType.CONVERSATION_MESSAGE: RateLimitConfig(
         operation_type=OperationType.CONVERSATION_MESSAGE,
@@ -210,7 +267,7 @@ DEFAULT_RATE_LIMITS = {
         window_seconds=3600,  # 1 hour
         algorithm=RateLimitAlgorithm.SLIDING_WINDOW,
         child_safe_mode=True,
-        age_based_scaling=True
+        age_based_scaling=True,
     ),
     OperationType.API_CALL: RateLimitConfig(
         operation_type=OperationType.API_CALL,
@@ -219,7 +276,7 @@ DEFAULT_RATE_LIMITS = {
         algorithm=RateLimitAlgorithm.FIXED_WINDOW,
         burst_capacity=10,
         child_safe_mode=True,
-        age_based_scaling=True
+        age_based_scaling=True,
     ),
     OperationType.AUTHENTICATION: RateLimitConfig(
         operation_type=OperationType.AUTHENTICATION,
@@ -228,7 +285,7 @@ DEFAULT_RATE_LIMITS = {
         algorithm=RateLimitAlgorithm.FIXED_WINDOW,
         block_duration_seconds=3600,  # 1 hour
         child_safe_mode=True,
-        age_based_scaling=False
+        age_based_scaling=False,
     ),
     # New conversation-specific rate limits
     OperationType.CONVERSATION_START: RateLimitConfig(
@@ -237,7 +294,7 @@ DEFAULT_RATE_LIMITS = {
         window_seconds=3600,  # 1 hour
         algorithm=RateLimitAlgorithm.SLIDING_WINDOW,
         child_safe_mode=True,
-        age_based_scaling=True
+        age_based_scaling=True,
     ),
     OperationType.MESSAGE_BURST: RateLimitConfig(
         operation_type=OperationType.MESSAGE_BURST,
@@ -245,7 +302,7 @@ DEFAULT_RATE_LIMITS = {
         window_seconds=30,  # 30 seconds burst window
         algorithm=RateLimitAlgorithm.SLIDING_WINDOW,
         child_safe_mode=True,
-        age_based_scaling=True
+        age_based_scaling=True,
     ),
     OperationType.DAILY_USAGE: RateLimitConfig(
         operation_type=OperationType.DAILY_USAGE,
@@ -253,7 +310,7 @@ DEFAULT_RATE_LIMITS = {
         window_seconds=86400,  # 24 hours
         algorithm=RateLimitAlgorithm.FIXED_WINDOW,
         child_safe_mode=True,
-        age_based_scaling=True
+        age_based_scaling=True,
     ),
     OperationType.CONCURRENT_CONVERSATIONS: RateLimitConfig(
         operation_type=OperationType.CONCURRENT_CONVERSATIONS,
@@ -261,7 +318,7 @@ DEFAULT_RATE_LIMITS = {
         window_seconds=7200,  # 2 hours
         algorithm=RateLimitAlgorithm.FIXED_WINDOW,
         child_safe_mode=True,
-        age_based_scaling=True
+        age_based_scaling=True,
     ),
     OperationType.SAFETY_INCIDENT: RateLimitConfig(
         operation_type=OperationType.SAFETY_INCIDENT,
@@ -270,7 +327,7 @@ DEFAULT_RATE_LIMITS = {
         algorithm=RateLimitAlgorithm.FIXED_WINDOW,
         block_duration_seconds=1800,  # 30 minutes cooldown
         child_safe_mode=True,
-        age_based_scaling=True
+        age_based_scaling=True,
     ),
 }
 
@@ -278,6 +335,7 @@ DEFAULT_RATE_LIMITS = {
 # ================================
 # STORAGE BACKENDS
 # ================================
+
 
 class RateLimitStorage(ABC):
     """Abstract storage backend for rate limiting data."""
@@ -287,7 +345,9 @@ class RateLimitStorage(ABC):
         """Get request timestamps within the time window."""
 
     @abstractmethod
-    async def add_request(self, key: str, timestamp: float, window_seconds: int) -> None:
+    async def add_request(
+        self, key: str, timestamp: float, window_seconds: int
+    ) -> None:
         """Add a new request timestamp."""
 
     @abstractmethod
@@ -295,7 +355,9 @@ class RateLimitStorage(ABC):
         """Get token bucket state (tokens, last_refill)."""
 
     @abstractmethod
-    async def update_token_bucket(self, key: str, tokens: float, last_refill: float) -> None:
+    async def update_token_bucket(
+        self, key: str, tokens: float, last_refill: float
+    ) -> None:
         """Update token bucket state."""
 
     @abstractmethod
@@ -306,7 +368,11 @@ class RateLimitStorage(ABC):
 class RedisRateLimitStorage(RateLimitStorage):
     """Redis-based storage backend for production use."""
 
-    def __init__(self, redis_client: Optional[Any] = None, redis_url: str = "redis://localhost:6379"):
+    def __init__(
+        self,
+        redis_client: Optional[Any] = None,
+        redis_url: str = "redis://localhost:6379",
+    ):
         """Initialize Redis storage backend."""
         if redis_client:
             self.redis = redis_client
@@ -325,19 +391,25 @@ class RedisRateLimitStorage(RateLimitStorage):
 
             # Remove expired entries and get current ones
             await self.redis.zremrangebyscore(f"rate_limit:{key}", 0, min_time)
-            timestamps = await self.redis.zrangebyscore(f"rate_limit:{key}", min_time, now)
+            timestamps = await self.redis.zrangebyscore(
+                f"rate_limit:{key}", min_time, now
+            )
 
             return [float(ts) for ts in timestamps]
         except Exception as e:
             logger.error(f"Redis get_requests error: {e}")
             return []
 
-    async def add_request(self, key: str, timestamp: float, window_seconds: int) -> None:
+    async def add_request(
+        self, key: str, timestamp: float, window_seconds: int
+    ) -> None:
         """Add a new request timestamp."""
         try:
             pipe = self.redis.pipeline()
             pipe.zadd(f"rate_limit:{key}", {str(timestamp): timestamp})
-            pipe.expire(f"rate_limit:{key}", window_seconds * 2)  # Keep extra time for cleanup
+            pipe.expire(
+                f"rate_limit:{key}", window_seconds * 2
+            )  # Keep extra time for cleanup
             await pipe.execute()
         except Exception as e:
             logger.error(f"Redis add_request error: {e}")
@@ -349,20 +421,22 @@ class RedisRateLimitStorage(RateLimitStorage):
             if data:
                 return {
                     "tokens": float(data.get("tokens", 0)),
-                    "last_refill": float(data.get("last_refill", time.time()))
+                    "last_refill": float(data.get("last_refill", time.time())),
                 }
             return {"tokens": 0.0, "last_refill": time.time()}
         except Exception as e:
             logger.error(f"Redis get_token_bucket error: {e}")
             return {"tokens": 0.0, "last_refill": time.time()}
 
-    async def update_token_bucket(self, key: str, tokens: float, last_refill: float) -> None:
+    async def update_token_bucket(
+        self, key: str, tokens: float, last_refill: float
+    ) -> None:
         """Update token bucket state."""
         try:
-            await self.redis.hset(f"token_bucket:{key}", mapping={
-                "tokens": str(tokens),
-                "last_refill": str(last_refill)
-            })
+            await self.redis.hset(
+                f"token_bucket:{key}",
+                mapping={"tokens": str(tokens), "last_refill": str(last_refill)},
+            )
             await self.redis.expire(f"token_bucket:{key}", 3600)  # 1 hour expiry
         except Exception as e:
             logger.error(f"Redis update_token_bucket error: {e}")
@@ -408,7 +482,9 @@ class MemoryRateLimitStorage(RateLimitStorage):
 
         return valid_requests
 
-    async def add_request(self, key: str, timestamp: float, window_seconds: int) -> None:
+    async def add_request(
+        self, key: str, timestamp: float, window_seconds: int
+    ) -> None:
         """Add a new request timestamp."""
         if key not in self.requests_data:
             self.requests_data[key] = []
@@ -426,12 +502,11 @@ class MemoryRateLimitStorage(RateLimitStorage):
             return {"tokens": 0.0, "last_refill": time.time()}
         return self.token_buckets[key].copy()
 
-    async def update_token_bucket(self, key: str, tokens: float, last_refill: float) -> None:
+    async def update_token_bucket(
+        self, key: str, tokens: float, last_refill: float
+    ) -> None:
         """Update token bucket state."""
-        self.token_buckets[key] = {
-            "tokens": tokens,
-            "last_refill": last_refill
-        }
+        self.token_buckets[key] = {"tokens": tokens, "last_refill": last_refill}
 
     async def cleanup_expired(self, max_age_seconds: int) -> int:
         """Clean up expired entries."""
@@ -441,14 +516,17 @@ class MemoryRateLimitStorage(RateLimitStorage):
         count = 0
         for key in list(self.requests_data.keys()):
             original_count = len(self.requests_data[key])
-            self.requests_data[key] = [ts for ts in self.requests_data[key] if ts >= cutoff_time]
+            self.requests_data[key] = [
+                ts for ts in self.requests_data[key] if ts >= cutoff_time
+            ]
             if not self.requests_data[key]:
                 del self.requests_data[key]
             count += original_count - len(self.requests_data.get(key, []))
 
         # Clean up expired token buckets
         expired_buckets = [
-            key for key, data in self.token_buckets.items()
+            key
+            for key, data in self.token_buckets.items()
             if data["last_refill"] < cutoff_time
         ]
         for key in expired_buckets:
@@ -462,14 +540,13 @@ class MemoryRateLimitStorage(RateLimitStorage):
 # RATE LIMITING ALGORITHMS
 # ================================
 
+
 class RateLimitAlgorithmImpl:
     """Rate limiting algorithm implementations."""
 
     @staticmethod
     async def sliding_window(
-        storage: RateLimitStorage,
-        key: str,
-        config: RateLimitConfig
+        storage: RateLimitStorage, key: str, config: RateLimitConfig
     ) -> RateLimitResult:
         """Sliding window rate limiting algorithm."""
         current_requests = await storage.get_requests(key, config.window_seconds)
@@ -480,7 +557,9 @@ class RateLimitAlgorithmImpl:
             reset_time = None
             if current_requests:
                 oldest_request = min(current_requests)
-                reset_time = datetime.fromtimestamp(oldest_request + config.window_seconds)
+                reset_time = datetime.fromtimestamp(
+                    oldest_request + config.window_seconds
+                )
 
             return RateLimitResult(
                 allowed=False,
@@ -488,7 +567,10 @@ class RateLimitAlgorithmImpl:
                 reset_time=reset_time,
                 retry_after_seconds=config.window_seconds,
                 reason="rate_limit_exceeded",
-                usage_stats={"current_requests": request_count, "max_requests": config.max_requests}
+                usage_stats={
+                    "current_requests": request_count,
+                    "max_requests": config.max_requests,
+                },
             )
 
         # Add current request
@@ -498,14 +580,15 @@ class RateLimitAlgorithmImpl:
             allowed=True,
             remaining=config.max_requests - request_count - 1,
             reset_time=datetime.fromtimestamp(time.time() + config.window_seconds),
-            usage_stats={"current_requests": request_count + 1, "max_requests": config.max_requests}
+            usage_stats={
+                "current_requests": request_count + 1,
+                "max_requests": config.max_requests,
+            },
         )
 
     @staticmethod
     async def token_bucket(
-        storage: RateLimitStorage,
-        key: str,
-        config: RateLimitConfig
+        storage: RateLimitStorage, key: str, config: RateLimitConfig
     ) -> RateLimitResult:
         """Token bucket rate limiting algorithm."""
         bucket_data = await storage.get_token_bucket(key)
@@ -518,7 +601,9 @@ class RateLimitAlgorithmImpl:
         if config.refill_rate and last_refill:
             time_passed = now - last_refill
             new_tokens = time_passed * config.refill_rate
-            tokens = min(config.burst_capacity or config.max_requests, tokens + new_tokens)
+            tokens = min(
+                config.burst_capacity or config.max_requests, tokens + new_tokens
+            )
         else:
             # Fallback: simple refill based on window
             if tokens <= 0:
@@ -530,7 +615,10 @@ class RateLimitAlgorithmImpl:
                 remaining=0,
                 retry_after_seconds=int(1 / (config.refill_rate or 1)),
                 reason="no_tokens_available",
-                usage_stats={"tokens": tokens, "capacity": config.burst_capacity or config.max_requests}
+                usage_stats={
+                    "tokens": tokens,
+                    "capacity": config.burst_capacity or config.max_requests,
+                },
             )
 
         # Consume one token
@@ -540,14 +628,15 @@ class RateLimitAlgorithmImpl:
         return RateLimitResult(
             allowed=True,
             remaining=int(tokens),
-            usage_stats={"tokens": tokens, "capacity": config.burst_capacity or config.max_requests}
+            usage_stats={
+                "tokens": tokens,
+                "capacity": config.burst_capacity or config.max_requests,
+            },
         )
 
     @staticmethod
     async def fixed_window(
-        storage: RateLimitStorage,
-        key: str,
-        config: RateLimitConfig
+        storage: RateLimitStorage, key: str, config: RateLimitConfig
     ) -> RateLimitResult:
         """Fixed window rate limiting algorithm."""
         now = time.time()
@@ -567,7 +656,10 @@ class RateLimitAlgorithmImpl:
                 reset_time=reset_time,
                 retry_after_seconds=int(next_window - now),
                 reason="fixed_window_exceeded",
-                usage_stats={"current_requests": request_count, "max_requests": config.max_requests}
+                usage_stats={
+                    "current_requests": request_count,
+                    "max_requests": config.max_requests,
+                },
             )
 
         # Add current request
@@ -577,13 +669,17 @@ class RateLimitAlgorithmImpl:
             allowed=True,
             remaining=config.max_requests - request_count - 1,
             reset_time=datetime.fromtimestamp(window_start + config.window_seconds),
-            usage_stats={"current_requests": request_count + 1, "max_requests": config.max_requests}
+            usage_stats={
+                "current_requests": request_count + 1,
+                "max_requests": config.max_requests,
+            },
         )
 
 
 # ================================
 # UNIFIED RATE LIMITING SERVICE
 # ================================
+
 
 class RateLimitingService:
     """
@@ -603,7 +699,7 @@ class RateLimitingService:
         redis_client: Optional[Any] = None,
         redis_url: str = "redis://localhost:6379",
         use_redis: bool = True,
-        enable_cleanup: bool = True
+        enable_cleanup: bool = True,
     ):
         """
         Initialize the unified rate limiting service.
@@ -620,7 +716,9 @@ class RateLimitingService:
                 self.storage = RedisRateLimitStorage(redis_client, redis_url)
                 self.backend_type = "redis"
             except Exception as e:
-                logger.warning(f"Redis initialization failed, falling back to memory: {e}")
+                logger.warning(
+                    f"Redis initialization failed, falling back to memory: {e}"
+                )
                 self.storage = MemoryRateLimitStorage()
                 self.backend_type = "memory"
         else:
@@ -640,21 +738,40 @@ class RateLimitingService:
         self.enable_cleanup = enable_cleanup
         self._cleanup_task = None
         self._started = False
-        
-        # Initialize database repository
-        self.child_repo = ChildRepository()
 
+        # Defer repository initialization to async context
+        self.child_repo = None
         logger.info(f"RateLimitingService initialized with {self.backend_type} backend")
+
+    async def async_init(self):
+        """Async initialization for repositories and other async dependencies."""
+        from src.infrastructure.config.config_integration import get_config_manager
+
+        config_manager = get_config_manager()
+        # Ensure config_manager is loaded (if it has load_config, call it)
+        if hasattr(config_manager, "load_config") and callable(
+            getattr(config_manager, "load_config")
+        ):
+            maybe_coro = config_manager.load_config()
+            if hasattr(maybe_coro, "__await__"):
+                await maybe_coro
+        from src.infrastructure.database.repository import ChildRepository
+
+        self.child_repo = await ChildRepository.create(config_manager)
 
     async def start(self):
         """Start the rate limiting service - must be called from async context."""
         if self._started:
             return
-        
+
+        # Ensure async initialization of repositories
+        if self.child_repo is None:
+            await self.async_init()
+
         if self.enable_cleanup:
             self._cleanup_task = asyncio.create_task(self._cleanup_loop())
             logger.info("Rate limiting cleanup task started")
-        
+
         self._started = True
 
     async def _ensure_cleanup_task(self):
@@ -671,7 +788,7 @@ class RateLimitingService:
         child_id: str,
         operation: OperationType,
         child_age: Optional[int] = None,
-        additional_context: Optional[Dict[str, Any]] = None
+        additional_context: Optional[Dict[str, Any]] = None,
     ) -> RateLimitResult:
         """
         Check if operation is within rate limits for a child.
@@ -725,14 +842,16 @@ class RateLimitingService:
             return result
 
         except Exception as e:
-            logger.error(f"Rate limiting error for child {child_id}, operation {operation.value}: {e}")
+            logger.error(
+                f"Rate limiting error for child {child_id}, operation {operation.value}: {e}"
+            )
             # Fail open - allow request if there's an error
             return RateLimitResult(
                 allowed=True,
                 remaining=0,
                 reason="rate_limit_error",
                 operation_type=operation.value,
-                child_id=child_id
+                child_id=child_id,
             )
 
     async def record_request(
@@ -740,7 +859,7 @@ class RateLimitingService:
         child_id: str,
         operation: OperationType,
         success: bool = True,
-        additional_metadata: Optional[Dict[str, Any]] = None
+        additional_metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Record a completed request for usage tracking.
@@ -761,7 +880,7 @@ class RateLimitingService:
                 "timestamp": timestamp,
                 "success": success,
                 "operation": operation.value,
-                "child_id": child_id
+                "child_id": child_id,
             }
 
             if additional_metadata:
@@ -792,14 +911,17 @@ class RateLimitingService:
                 config = self._get_config_for_operation(operation)
 
                 # Get current usage for each operation
-                current_requests = await self.storage.get_requests(key, config.window_seconds)
+                current_requests = await self.storage.get_requests(
+                    key, config.window_seconds
+                )
 
                 stats[operation.value] = {
                     "current_requests": len(current_requests),
                     "max_requests": config.max_requests,
                     "remaining": max(0, config.max_requests - len(current_requests)),
                     "window_seconds": config.window_seconds,
-                    "usage_percentage": (len(current_requests) / config.max_requests) * 100
+                    "usage_percentage": (len(current_requests) / config.max_requests)
+                    * 100,
                 }
 
             # Add child-specific information
@@ -810,7 +932,7 @@ class RateLimitingService:
                     "ai_requests_per_hour": age_group.ai_requests_per_hour,
                     "audio_generation_per_hour": age_group.audio_generation_per_hour,
                     "conversation_messages_per_hour": age_group.conversation_messages_per_hour,
-                    "session_duration_minutes": age_group.session_duration_minutes
+                    "session_duration_minutes": age_group.session_duration_minutes,
                 }
 
             return stats
@@ -820,9 +942,7 @@ class RateLimitingService:
             return {}
 
     async def reset_limits(
-        self,
-        child_id: str,
-        operation: Optional[OperationType] = None
+        self, child_id: str, operation: Optional[OperationType] = None
     ) -> None:
         """
         Reset rate limits for a child (admin function).
@@ -838,7 +958,9 @@ class RateLimitingService:
                 key = f"child:{child_id}:op:{op.value}"
 
                 # For sliding window and fixed window, we can clear the requests
-                if hasattr(self.storage, 'requests_data') and isinstance(self.storage, MemoryRateLimitStorage):
+                if hasattr(self.storage, "requests_data") and isinstance(
+                    self.storage, MemoryRateLimitStorage
+                ):
                     # Memory storage
                     if key in self.storage.requests_data:
                         del self.storage.requests_data[key]
@@ -847,15 +969,15 @@ class RateLimitingService:
                     await self.storage.redis.delete(f"rate_limit:{key}")
                     await self.storage.redis.delete(f"token_bucket:{key}")
 
-            logger.info(f"Reset limits for child {child_id}, operations: {operations_to_reset}")
+            logger.info(
+                f"Reset limits for child {child_id}, operations: {operations_to_reset}"
+            )
 
         except Exception as e:
             logger.error(f"Error resetting limits for child {child_id}: {e}")
 
     def _get_config_for_operation(
-        self,
-        operation: OperationType,
-        child_age: Optional[int] = None
+        self, operation: OperationType, child_age: Optional[int] = None
     ) -> RateLimitConfig:
         """Get rate limiting configuration for an operation."""
         base_config = self.configs.get(operation, DEFAULT_RATE_LIMITS[operation])
@@ -870,11 +992,15 @@ class RateLimitingService:
                     max_requests=int(base_config.max_requests * scaling_factor),
                     window_seconds=base_config.window_seconds,
                     algorithm=base_config.algorithm,
-                    burst_capacity=int(base_config.burst_capacity * scaling_factor) if base_config.burst_capacity else None,
+                    burst_capacity=(
+                        int(base_config.burst_capacity * scaling_factor)
+                        if base_config.burst_capacity
+                        else None
+                    ),
                     refill_rate=base_config.refill_rate,
                     block_duration_seconds=base_config.block_duration_seconds,
                     child_safe_mode=base_config.child_safe_mode,
-                    age_based_scaling=base_config.age_based_scaling
+                    age_based_scaling=base_config.age_based_scaling,
                 )
                 return scaled_config
 
@@ -893,17 +1019,21 @@ class RateLimitingService:
             # Get child from database
             import asyncio
             import uuid
-            
+
             # Create async context if needed
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 # Already in async context
-                child = asyncio.create_task(self.child_repo.get_by_id(uuid.UUID(child_id))).result()
+                child = asyncio.create_task(
+                    self.child_repo.get_by_id(uuid.UUID(child_id))
+                ).result()
             else:
                 # Sync context - run async method
-                child = loop.run_until_complete(self.child_repo.get_by_id(uuid.UUID(child_id)))
-            
-            if child and hasattr(child, 'age'):
+                child = loop.run_until_complete(
+                    self.child_repo.get_by_id(uuid.UUID(child_id))
+                )
+
+            if child and hasattr(child, "age"):
                 age = child.age
                 if age <= 5:
                     return self.child_age_limits["young_child"]
@@ -913,11 +1043,13 @@ class RateLimitingService:
                     return self.child_age_limits["older_child"]
         except Exception as e:
             logger.warning(f"Failed to get child age from database: {e}")
-        
+
         # Default to middle child limits if lookup fails
         return self.child_age_limits["middle_child"]
 
-    def _get_scaling_factor(self, operation: OperationType, age_group: ChildAgeLimits) -> float:
+    def _get_scaling_factor(
+        self, operation: OperationType, age_group: ChildAgeLimits
+    ) -> float:
         """Get scaling factor for rate limits based on age group."""
         # Map operation types to age group limits
         if operation == OperationType.AI_REQUEST:
@@ -942,17 +1074,23 @@ class RateLimitingService:
         else:
             return 1.0  # No scaling for other operations
 
-    async def _apply_algorithm(self, key: str, config: RateLimitConfig) -> RateLimitResult:
+    async def _apply_algorithm(
+        self, key: str, config: RateLimitConfig
+    ) -> RateLimitResult:
         """Apply the configured rate limiting algorithm."""
         if config.algorithm == RateLimitAlgorithm.SLIDING_WINDOW:
-            return await RateLimitAlgorithmImpl.sliding_window(self.storage, key, config)
+            return await RateLimitAlgorithmImpl.sliding_window(
+                self.storage, key, config
+            )
         elif config.algorithm == RateLimitAlgorithm.TOKEN_BUCKET:
             return await RateLimitAlgorithmImpl.token_bucket(self.storage, key, config)
         elif config.algorithm == RateLimitAlgorithm.FIXED_WINDOW:
             return await RateLimitAlgorithmImpl.fixed_window(self.storage, key, config)
         else:
             # Default to sliding window
-            return await RateLimitAlgorithmImpl.sliding_window(self.storage, key, config)
+            return await RateLimitAlgorithmImpl.sliding_window(
+                self.storage, key, config
+            )
 
     # ================================
     # CONVERSATION-SPECIFIC METHODS
@@ -963,24 +1101,24 @@ class RateLimitingService:
         child_id: str,
         child_age: int,
         conversation_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> RateLimitResult:
         """Check if child can start a new conversation."""
         # Get age group for more specific limits
         age_group = self._get_age_group_by_age(child_age)
-        
+
         # Check multiple limits for conversation start
         results = []
-        
+
         # 1. Check hourly conversation limit
         hourly_result = await self.check_rate_limit(
             child_id=child_id,
             operation=OperationType.CONVERSATION_START,
             child_age=child_age,
-            additional_context={"conversation_id": conversation_id}
+            additional_context={"conversation_id": conversation_id},
         )
         results.append(hourly_result)
-        
+
         # 2. Check daily conversation limit
         daily_key = f"child:{child_id}:daily_conversations"
         daily_config = RateLimitConfig(
@@ -988,37 +1126,43 @@ class RateLimitingService:
             max_requests=int(age_group.conversations_per_day),
             window_seconds=86400,  # 24 hours
             algorithm=RateLimitAlgorithm.FIXED_WINDOW,
-            child_safe_mode=True
+            child_safe_mode=True,
         )
         daily_result = await self._apply_algorithm(daily_key, daily_config)
         daily_result.operation_type = OperationType.CONVERSATION_START.value
         daily_result.child_id = child_id
         results.append(daily_result)
-        
+
         # 3. Check concurrent conversation limit
-        concurrent_result = await self._check_concurrent_conversations(child_id, age_group)
+        concurrent_result = await self._check_concurrent_conversations(
+            child_id, age_group
+        )
         results.append(concurrent_result)
-        
+
         # 4. Check safety incident cooldown
         safety_result = await self._check_safety_cooldown(child_id, age_group)
         if not safety_result.allowed:
             results.append(safety_result)
-        
+
         # Return the most restrictive result
         for result in results:
             if not result.allowed:
                 result.conversation_id = conversation_id
-                result.concurrent_conversations = await self._get_concurrent_conversation_count(child_id)
+                result.concurrent_conversations = (
+                    await self._get_concurrent_conversation_count(child_id)
+                )
                 result.safety_cooldown_active = not safety_result.allowed
                 return result
-        
+
         # If all passed, increment concurrent counter
         await self._increment_concurrent_conversations(child_id)
-        
+
         # Return success result
         success_result = hourly_result
         success_result.conversation_id = conversation_id
-        success_result.concurrent_conversations = await self._get_concurrent_conversation_count(child_id)
+        success_result.concurrent_conversations = (
+            await self._get_concurrent_conversation_count(child_id)
+        )
         return success_result
 
     async def check_message_limit(
@@ -1026,14 +1170,14 @@ class RateLimitingService:
         child_id: str,
         child_age: int,
         conversation_id: str,
-        message_type: str = "user_input"
+        message_type: str = "user_input",
     ) -> RateLimitResult:
         """Check if child can send a message."""
         age_group = self._get_age_group_by_age(child_age)
-        
+
         # Check multiple message limits
         results = []
-        
+
         # 1. Check per-minute burst protection
         burst_key = f"child:{child_id}:message_burst"
         burst_config = RateLimitConfig(
@@ -1041,7 +1185,7 @@ class RateLimitingService:
             max_requests=int(age_group.burst_limit),
             window_seconds=age_group.burst_window_seconds,
             algorithm=RateLimitAlgorithm.SLIDING_WINDOW,
-            child_safe_mode=True
+            child_safe_mode=True,
         )
         burst_result = await self._apply_algorithm(burst_key, burst_config)
         burst_result.operation_type = OperationType.MESSAGE_BURST.value
@@ -1050,16 +1194,19 @@ class RateLimitingService:
         if not burst_result.allowed:
             burst_result.burst_protection_triggered = True
             return burst_result
-        
+
         # 2. Check hourly message limit
         hourly_result = await self.check_rate_limit(
             child_id=child_id,
             operation=OperationType.CONVERSATION_MESSAGE,
             child_age=child_age,
-            additional_context={"conversation_id": conversation_id, "message_type": message_type}
+            additional_context={
+                "conversation_id": conversation_id,
+                "message_type": message_type,
+            },
         )
         results.append(hourly_result)
-        
+
         # 3. Check daily message limit
         daily_key = f"child:{child_id}:daily_messages"
         daily_config = RateLimitConfig(
@@ -1067,7 +1214,7 @@ class RateLimitingService:
             max_requests=int(age_group.messages_per_day),
             window_seconds=86400,  # 24 hours
             algorithm=RateLimitAlgorithm.FIXED_WINDOW,
-            child_safe_mode=True
+            child_safe_mode=True,
         )
         daily_result = await self._apply_algorithm(daily_key, daily_config)
         daily_result.operation_type = OperationType.DAILY_USAGE.value
@@ -1076,7 +1223,7 @@ class RateLimitingService:
         if not daily_result.allowed:
             daily_result.daily_limit_reached = True
             return daily_result
-        
+
         # Return success result with additional context
         success_result = hourly_result
         success_result.conversation_id = conversation_id
@@ -1091,11 +1238,11 @@ class RateLimitingService:
         incident_type: str,
         severity: str,
         conversation_id: str,
-        cooldown_minutes: Optional[int] = None
+        cooldown_minutes: Optional[int] = None,
     ) -> RateLimitResult:
         """Report safety incident and apply cooldown."""
         age_group = self._get_age_group_by_age(child_age)
-        
+
         # Check daily safety incident limit
         incident_result = await self.check_rate_limit(
             child_id=child_id,
@@ -1104,10 +1251,10 @@ class RateLimitingService:
             additional_context={
                 "incident_type": incident_type,
                 "severity": severity,
-                "conversation_id": conversation_id
-            }
+                "conversation_id": conversation_id,
+            },
         )
-        
+
         # Apply cooldown based on severity
         if cooldown_minutes is None:
             if severity == "critical":
@@ -1116,54 +1263,67 @@ class RateLimitingService:
                 cooldown_minutes = age_group.safety_incident_cooldown_minutes
             else:
                 cooldown_minutes = age_group.safety_incident_cooldown_minutes // 2
-        
+
         # Set safety cooldown
         cooldown_key = f"child:{child_id}:safety_cooldown"
         cooldown_expiry = int(time.time()) + (cooldown_minutes * 60)
         await self.storage.set_value(
             cooldown_key,
-            json.dumps({
-                "incident_type": incident_type,
-                "severity": severity,
-                "conversation_id": conversation_id,
-                "expires_at": cooldown_expiry
-            }),
-            expire_seconds=cooldown_minutes * 60
+            json.dumps(
+                {
+                    "incident_type": incident_type,
+                    "severity": severity,
+                    "conversation_id": conversation_id,
+                    "expires_at": cooldown_expiry,
+                }
+            ),
+            expire_seconds=cooldown_minutes * 60,
         )
-        
+
         incident_result.safety_cooldown_active = True
         incident_result.conversation_id = conversation_id
         incident_result.retry_after_seconds = cooldown_minutes * 60
-        
+
         return incident_result
 
     async def conversation_ended(self, child_id: str, conversation_id: str):
         """Mark conversation as ended for concurrent tracking."""
         await self._decrement_concurrent_conversations(child_id)
 
-    async def get_conversation_usage_stats(self, child_id: str, child_age: int) -> Dict[str, Any]:
+    async def get_conversation_usage_stats(
+        self, child_id: str, child_age: int
+    ) -> Dict[str, Any]:
         """Get comprehensive conversation usage statistics."""
         age_group = self._get_age_group_by_age(child_age)
-        
+
         # Get current counts from various keys
         current_time = int(time.time())
         hour_start = current_time - (current_time % 3600)
         day_start = current_time - (current_time % 86400)
-        
+
         stats = {
             # Conversation stats
-            "conversations_this_hour": await self._get_usage_count(f"child:{child_id}:op:conversation_start", hour_start),
-            "conversations_today": await self._get_usage_count(f"child:{child_id}:daily_conversations", day_start),
-            "concurrent_conversations": await self._get_concurrent_conversation_count(child_id),
-            
+            "conversations_this_hour": await self._get_usage_count(
+                f"child:{child_id}:op:conversation_start", hour_start
+            ),
+            "conversations_today": await self._get_usage_count(
+                f"child:{child_id}:daily_conversations", day_start
+            ),
+            "concurrent_conversations": await self._get_concurrent_conversation_count(
+                child_id
+            ),
             # Message stats
-            "messages_this_hour": await self._get_usage_count(f"child:{child_id}:op:conversation_message", hour_start),
-            "messages_today": await self._get_usage_count(f"child:{child_id}:daily_messages", day_start),
-            
+            "messages_this_hour": await self._get_usage_count(
+                f"child:{child_id}:op:conversation_message", hour_start
+            ),
+            "messages_today": await self._get_usage_count(
+                f"child:{child_id}:daily_messages", day_start
+            ),
             # Safety stats
-            "safety_incidents_today": await self._get_usage_count(f"child:{child_id}:op:safety_incident", day_start),
+            "safety_incidents_today": await self._get_usage_count(
+                f"child:{child_id}:op:safety_incident", day_start
+            ),
             "in_safety_cooldown": await self._is_in_safety_cooldown(child_id),
-            
             # Limits
             "limits": {
                 "conversations_per_hour": age_group.conversations_per_hour,
@@ -1172,13 +1332,13 @@ class RateLimitingService:
                 "messages_per_day": age_group.messages_per_day,
                 "max_concurrent": age_group.max_concurrent_conversations,
                 "burst_limit": age_group.burst_limit,
-            }
+            },
         }
-        
+
         return stats
 
     # Helper methods for conversation-specific operations
-    
+
     def _get_age_group_by_age(self, age: int) -> ChildAgeLimits:
         """Get age group configuration by age."""
         for age_group in self.child_age_limits.values():
@@ -1187,10 +1347,12 @@ class RateLimitingService:
         # Default to middle_child if age not found
         return self.child_age_limits["middle_child"]
 
-    async def _check_concurrent_conversations(self, child_id: str, age_group: ChildAgeLimits) -> RateLimitResult:
+    async def _check_concurrent_conversations(
+        self, child_id: str, age_group: ChildAgeLimits
+    ) -> RateLimitResult:
         """Check concurrent conversation limit."""
         current_count = await self._get_concurrent_conversation_count(child_id)
-        
+
         if current_count >= age_group.max_concurrent_conversations:
             return RateLimitResult(
                 allowed=False,
@@ -1199,27 +1361,29 @@ class RateLimitingService:
                 reason=f"Maximum concurrent conversations reached ({current_count}/{age_group.max_concurrent_conversations})",
                 operation_type=OperationType.CONCURRENT_CONVERSATIONS.value,
                 child_id=child_id,
-                concurrent_conversations=current_count
+                concurrent_conversations=current_count,
             )
-        
+
         return RateLimitResult(
             allowed=True,
             remaining=age_group.max_concurrent_conversations - current_count,
             operation_type=OperationType.CONCURRENT_CONVERSATIONS.value,
             child_id=child_id,
-            concurrent_conversations=current_count
+            concurrent_conversations=current_count,
         )
 
-    async def _check_safety_cooldown(self, child_id: str, age_group: ChildAgeLimits) -> RateLimitResult:
+    async def _check_safety_cooldown(
+        self, child_id: str, age_group: ChildAgeLimits
+    ) -> RateLimitResult:
         """Check if child is in safety cooldown."""
         cooldown_key = f"child:{child_id}:safety_cooldown"
         cooldown_data = await self.storage.get_value(cooldown_key)
-        
+
         if cooldown_data:
             try:
                 cooldown_info = json.loads(cooldown_data)
                 expires_at = cooldown_info.get("expires_at", 0)
-                
+
                 if time.time() < expires_at:
                     return RateLimitResult(
                         allowed=False,
@@ -1228,17 +1392,17 @@ class RateLimitingService:
                         reason=f"Safety incident cooldown active ({cooldown_info.get('severity', 'unknown')} severity)",
                         operation_type=OperationType.SAFETY_INCIDENT.value,
                         child_id=child_id,
-                        safety_cooldown_active=True
+                        safety_cooldown_active=True,
                     )
             except json.JSONDecodeError:
                 pass
-        
+
         return RateLimitResult(
             allowed=True,
             remaining=1,
             operation_type=OperationType.SAFETY_INCIDENT.value,
             child_id=child_id,
-            safety_cooldown_active=False
+            safety_cooldown_active=False,
         )
 
     async def _get_concurrent_conversation_count(self, child_id: str) -> int:
@@ -1251,30 +1415,36 @@ class RateLimitingService:
         """Increment concurrent conversation count."""
         key = f"child:{child_id}:concurrent_conversations"
         current_count = await self._get_concurrent_conversation_count(child_id)
-        await self.storage.set_value(key, str(current_count + 1), expire_seconds=7200)  # 2 hours
+        await self.storage.set_value(
+            key, str(current_count + 1), expire_seconds=7200
+        )  # 2 hours
 
     async def _decrement_concurrent_conversations(self, child_id: str):
         """Decrement concurrent conversation count."""
         key = f"child:{child_id}:concurrent_conversations"
         current_count = await self._get_concurrent_conversation_count(child_id)
         if current_count > 0:
-            await self.storage.set_value(key, str(current_count - 1), expire_seconds=7200)
+            await self.storage.set_value(
+                key, str(current_count - 1), expire_seconds=7200
+            )
 
     async def _get_usage_count(self, key: str, since_timestamp: int) -> int:
         """Get usage count since timestamp."""
         # Get all requests for the key
-        requests = await self.storage.get_requests(key, window_seconds=86400)  # 24 hours
-        
+        requests = await self.storage.get_requests(
+            key, window_seconds=86400
+        )  # 24 hours
+
         # Count requests since the given timestamp
         count = sum(1 for req_time in requests if req_time >= since_timestamp)
-        
+
         return count
 
     async def _is_in_safety_cooldown(self, child_id: str) -> bool:
         """Check if child is currently in safety cooldown."""
         cooldown_key = f"child:{child_id}:safety_cooldown"
         cooldown_data = await self.storage.get_value(cooldown_key)
-        
+
         if cooldown_data:
             try:
                 cooldown_info = json.loads(cooldown_data)
@@ -1282,7 +1452,7 @@ class RateLimitingService:
                 return time.time() < expires_at
             except json.JSONDecodeError:
                 pass
-        
+
         return False
 
     async def _cleanup_loop(self):
@@ -1290,7 +1460,9 @@ class RateLimitingService:
         while True:
             try:
                 await asyncio.sleep(300)  # Run every 5 minutes
-                cleaned = await self.storage.cleanup_expired(3600)  # Clean entries older than 1 hour
+                cleaned = await self.storage.cleanup_expired(
+                    3600
+                )  # Clean entries older than 1 hour
                 if cleaned > 0:
                     logger.debug(f"Cleaned up {cleaned} expired rate limit entries")
             except Exception as e:
@@ -1306,10 +1478,13 @@ class RateLimitingService:
                 "total_requests": self.request_count,
                 "blocked_requests": self.blocked_count,
                 "block_rate": self.blocked_count / max(1, self.request_count),
-                "avg_processing_time_ms": (self.total_processing_time / max(1, self.request_count)) * 1000,
+                "avg_processing_time_ms": (
+                    self.total_processing_time / max(1, self.request_count)
+                )
+                * 1000,
                 "supported_operations": [op.value for op in OperationType],
                 "supported_algorithms": [alg.value for alg in RateLimitAlgorithm],
-                "child_age_groups": list(self.child_age_limits.keys())
+                "child_age_groups": list(self.child_age_limits.keys()),
             }
         except Exception as e:
             logger.error(f"Health check error: {e}")
@@ -1318,14 +1493,15 @@ class RateLimitingService:
 
 # FACTORY FUNCTIONS
 
+
 def create_rate_limiting_service(
     redis_url: str = "redis://localhost:6379",
     use_redis: bool = True,
-    redis_client: Optional[Any] = None
+    redis_client: Optional[Any] = None,
 ) -> RateLimitingService:
     """
     Create a production rate limiting service.
-    
+
     Note: Call await service.start() from async context to enable cleanup.
 
     Args:
@@ -1340,16 +1516,13 @@ def create_rate_limiting_service(
         redis_client=redis_client,
         redis_url=redis_url,
         use_redis=use_redis,
-        enable_cleanup=True
+        enable_cleanup=True,
     )
 
 
 def create_memory_rate_limiting_service() -> RateLimitingService:
     """Create a memory-only rate limiting service for testing."""
-    return RateLimitingService(
-        use_redis=False,
-        enable_cleanup=True
-    )
+    return RateLimitingService(use_redis=False, enable_cleanup=True)
 
 
 # ================================
@@ -1366,5 +1539,5 @@ __all__ = [
     "create_rate_limiting_service",
     "create_memory_rate_limiting_service",
     "CHILD_AGE_LIMITS",
-    "DEFAULT_RATE_LIMITS"
+    "DEFAULT_RATE_LIMITS",
 ]

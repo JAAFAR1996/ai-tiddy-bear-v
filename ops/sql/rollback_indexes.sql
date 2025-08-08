@@ -1,0 +1,3 @@
+-- Rollback script for critical indexes (emergency use only)
+-- Example:
+-- DROP INDEX CONCURRENTLY IF EXISTS idx_example;

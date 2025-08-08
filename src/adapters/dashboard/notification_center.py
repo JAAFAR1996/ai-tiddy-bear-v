@@ -1,6 +1,6 @@
 """
 NotificationCenter: Handles parent notifications and event updates.
-- Fetches real notifications/events from the system (not dummy).
+- Fetches real notifications/events from the production system.
 - Exposes notification data for dashboard display.
 """
 class NotificationCenter:

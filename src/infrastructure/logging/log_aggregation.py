@@ -636,7 +636,9 @@ class LogAggregationManager:
             try:
                 log_data = await self.log_queue.get()
                 remaining_logs.append(log_data)
-            except Exception as e:\n                self.logger.error(f\"Exception retrieving log data from queue during shutdown: {e}\", exc_info=True)\n                # Break to avoid infinite loop if queue is corrupted
+            except Exception as e:
+                self.logger.error(f"Exception retrieving log data from queue during shutdown: {e}", exc_info=True)
+                # Break to avoid infinite loop if queue is corrupted
                 break
         
         if remaining_logs:

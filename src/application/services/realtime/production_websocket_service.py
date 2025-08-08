@@ -21,7 +21,8 @@ from src.application.services.notification.notification_service import (
     NotificationTemplate,
     NotificationChannel,
 )
-from src.infrastructure.config.production_config import get_config
+
+# get_config import removed; config must be passed explicitly
 
 
 class ConnectionStatus(str, Enum):
@@ -74,9 +75,11 @@ class ProductionRealTimeNotificationService:
     - Auto-reconnection and failover
     """
 
-    def __init__(self):
-        self.config = get_config()
-        self.logger = logging.getLogger(__name__)
+    def __init__(self, config, notification_service, websocket_adapter, logger=None):
+        self.config = config
+        self.notification_service = notification_service
+        self.websocket_adapter = websocket_adapter
+        self.logger = logger or logging.getLogger("ai_teddy.websocket")
         self._connections: Dict[str, WebSocketConnection] = {}
         self._user_connections: Dict[str, Set[str]] = {}
         self._message_queue: Dict[str, List[RealTimeMessage]] = {}
@@ -84,7 +87,21 @@ class ProductionRealTimeNotificationService:
         self._running = False
         self._heartbeat_task = None
         self._cleanup_task = None
+        self._max_connections_per_user = 5
+        self._heartbeat_interval = 30  # seconds
+        self._message_ttl = 3600  # 1 hour
+        self._message_rate_limit_per_minute = 60
+        self._user_message_timestamps: Dict[str, list] = {}
         self._initialize_service()
+
+
+# Explicit factory (خارج الكلاس فقط)
+def create_production_realtime_notification_service(
+    config, notification_service, websocket_adapter, logger=None
+) -> ProductionRealTimeNotificationService:
+    return ProductionRealTimeNotificationService(
+        config, notification_service, websocket_adapter, logger
+    )
 
     def _initialize_service(self):
         """Initialize the real-time service."""
@@ -100,6 +117,11 @@ class ProductionRealTimeNotificationService:
 
     async def _start_background_tasks(self):
         """Start background maintenance tasks."""
+        self._running = True
+        self._heartbeat_task = asyncio.create_task(self._heartbeat_monitor())
+        self._cleanup_task = asyncio.create_task(self._cleanup_expired_messages())
+
+    async def start(self):
         self._running = True
         self._heartbeat_task = asyncio.create_task(self._heartbeat_monitor())
         self._cleanup_task = asyncio.create_task(self._cleanup_expired_messages())
@@ -515,15 +537,14 @@ class ProductionRealTimeNotificationService:
     ) -> None:
         """Send message to specific WebSocket connection."""
         try:
-            # Get the actual WebSocket connection from our adapter
-            from src.infrastructure.websocket.production_websocket_adapter import ProductionWebSocketAdapter
-            
-            # Get connection from adapter (we need to integrate with the adapter)
+            # Get connection from our internal state
             connection = self._connections.get(connection_id)
             if not connection:
-                self.logger.warning(f"Connection {connection_id} not found for message sending")
+                self.logger.warning(
+                    f"Connection {connection_id} not found for message sending"
+                )
                 return
-            
+
             # Create WebSocket message format
             websocket_message_data = {
                 "type": "realtime_notification",
@@ -533,18 +554,19 @@ class ProductionRealTimeNotificationService:
                 "data": message.data,
                 "timestamp": message.timestamp.isoformat(),
             }
-            
+
             # Get WebSocket from connection metadata
             websocket = connection.metadata.get("websocket")
             if not websocket:
                 self.logger.error(f"No WebSocket found for connection {connection_id}")
                 return
-            
+
             # Send message via WebSocket
             import json
+
             message_json = json.dumps(websocket_message_data)
             await websocket.send_text(message_json)
-            
+
             self.logger.info(
                 f"Message sent successfully to connection {connection_id}",
                 extra={
@@ -553,7 +575,7 @@ class ProductionRealTimeNotificationService:
                     "message_type": message.message_type,
                 },
             )
-            
+
         except Exception as e:
             self.logger.error(
                 f"Failed to send message to connection {connection_id}: {e}",
@@ -565,6 +587,27 @@ class ProductionRealTimeNotificationService:
                 exc_info=True,
             )
             raise
+
+    async def _send_fallback_notification(self, message: RealTimeMessage) -> None:
+        """Send notification via fallback channels for high priority messages."""
+        try:
+            request = NotificationRequest(
+                notification_type=NotificationType(message.message_type),
+                priority=message.priority,
+                recipient=NotificationRecipient(
+                    user_id=message.recipient_user_id,
+                    email="user@example.com",  # Would get from user profile
+                    phone="+1234567890",  # Would get from user profile
+                ),
+                template=NotificationTemplate(
+                    title=message.data.get("title", "Notification"),
+                    body=message.data.get("body", "You have a new notification"),
+                ),
+                channels=[NotificationChannel.EMAIL, NotificationChannel.SMS],
+            )
+            await self.notification_service.send_notification(request)
+        except Exception as e:
+            self.logger.error(f"Failed to send fallback notification: {str(e)}")
 
     async def _queue_message_for_later(self, message: RealTimeMessage) -> None:
         """Queue message for delivery when user connects."""
@@ -674,15 +717,3 @@ class ProductionRealTimeNotificationService:
             await self.disconnect_user(connection_id)
 
         self.logger.info("Real-time notification service shutdown complete")
-
-
-# Service Factory
-_realtime_service_instance = None
-
-
-async def get_realtime_notification_service() -> ProductionRealTimeNotificationService:
-    """Get singleton real-time notification service instance."""
-    global _realtime_service_instance
-    if _realtime_service_instance is None:
-        _realtime_service_instance = ProductionRealTimeNotificationService()
-    return _realtime_service_instance

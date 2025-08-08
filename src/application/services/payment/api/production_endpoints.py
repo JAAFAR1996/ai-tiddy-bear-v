@@ -5,7 +5,7 @@ FastAPI endpoints with comprehensive error handling, rate limiting,
 authentication, and Arabic response messages.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Request, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, Request, BackgroundTasks, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any, Optional
@@ -31,7 +31,7 @@ from ..production_payment_service import ProductionPaymentService
 from ..repositories.payment_repository import PaymentRepository
 
 # Initialize router and dependencies
-router = APIRouter(prefix="/api/v1/payments", tags=["payments"])
+router = APIRouter(tags=["payments"])
 security = HTTPBearer()
 logger = logging.getLogger(__name__)
 
@@ -638,6 +638,19 @@ async def get_transaction_history(
     except Exception as e:
         logger.error(f"Failed to get transaction history: {str(e)}")
         raise HTTPException(status_code=500, detail=get_error_message("SYSTEM_001"))
+
+
+# Dummy status endpoint for maintenance mode
+@router.get("/status", tags=["Maintenance"])
+async def service_unavailable():
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "detail": "هذه الخدمة غير متوفرة حالياً - سيتم تفعيلها قريباً.",
+            "service": "payment_system",
+            "status": "maintenance",
+        },
+    )
 
 
 # Export router for use in main application

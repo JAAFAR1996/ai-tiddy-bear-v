@@ -24,14 +24,12 @@ from .database_manager import (
 )
 
 from .transaction_manager import (
-    transaction_manager,
-    initialize_transaction_manager,
-    close_transaction_manager,
+    TransactionManager,
+    get_transaction_manager,
+    create_transaction_manager,
     TransactionType,
     IsolationLevel,
     TransactionConfig,
-    transactional,
-    child_safe_transactional,
 )
 
 from .models import (
@@ -54,10 +52,6 @@ from .models import (
 )
 
 from .repository import (
-    get_repository_manager,
-    get_user_repository,
-    get_child_repository,
-    get_conversation_repository,
     BaseRepository,
     UserRepository,
     ChildRepository,
@@ -98,14 +92,9 @@ __all__ = [
     "DatabaseConnectionState",
     "DatabaseRole",
     # Transaction Manager
-    "transaction_manager",
-    "initialize_transaction_manager",
-    "close_transaction_manager",
     "TransactionType",
     "IsolationLevel",
     "TransactionConfig",
-    "transactional",
-    "child_safe_transactional",
     # Models
     "Base",
     "BaseModel",
@@ -125,9 +114,6 @@ __all__ = [
     "schedule_child_data_cleanup",
     # Repository
     "repository_manager",
-    "get_user_repository",
-    "get_child_repository",
-    "get_conversation_repository",
     "BaseRepository",
     "UserRepository",
     "ChildRepository",
@@ -158,9 +144,6 @@ async def initialize_database_infrastructure():
     logger.info("Initializing database infrastructure")
 
     try:
-        # Initialize transaction manager
-        await initialize_transaction_manager()
-        logger.info("Transaction manager initialized")
 
         # Initialize database connections
         await initialize_database()
@@ -190,9 +173,6 @@ async def shutdown_database_infrastructure():
     logger.info("Shutting down database infrastructure")
 
     try:
-        # Close transaction manager
-        await close_transaction_manager()
-        logger.info("Transaction manager closed")
 
         # Close database connections
         await close_database()
@@ -214,5 +194,5 @@ def get_database_metrics():
     """Get database performance metrics."""
     return {
         "database_metrics": database_manager.get_all_metrics(),
-        "transaction_metrics": transaction_manager.get_transaction_metrics(),
+        # "transaction_metrics": ...  # Transaction metrics DI only, not global
     }

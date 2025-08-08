@@ -19,7 +19,8 @@ from src.core.entities.subscription import (
     SubscriptionTier,
     SubscriptionStatus,
 )
-from src.infrastructure.config.production_config import get_config
+
+# get_config import removed; config must be passed explicitly
 from src.infrastructure.database.subscription_repository import SubscriptionRepository
 
 
@@ -58,15 +59,21 @@ class ProductionPremiumSubscriptionService:
     - Subscription lifecycle automation
     """
 
-    def __init__(self):
-        self.config = get_config()
+    def __init__(self, config):
+        self.config = config
         self.logger = logging.getLogger(__name__)
         self._initialize_stripe()
         self._subscription_cache = {}
         self._feature_cache = {}
-        
         # Initialize production database repository
         self._subscription_repo = SubscriptionRepository()
+
+
+# Explicit factory
+def create_production_premium_subscription_service(
+    config,
+) -> ProductionPremiumSubscriptionService:
+    return ProductionPremiumSubscriptionService(config)
 
     def _initialize_stripe(self):
         """Initialize Stripe payment processor."""
@@ -551,12 +558,11 @@ class ProductionPremiumSubscriptionService:
         """Create subscription in Stripe."""
         try:
             if not self.stripe:
-                # Return sample data if Stripe not available
-                return {
-                    "customer_id": f"cus_mock_{user_id}",
-                    "subscription_id": f"sub_mock_{uuid.uuid4()}",
-                    "payment_intent_id": f"pi_mock_{uuid.uuid4()}",
-                }
+                raise ValueError(
+                    "CRITICAL: Stripe payment service not configured. "
+                    "Production subscription service requires real payment integration. "
+                    "Cannot create subscription without valid payment provider."
+                )
 
             # Create customer
             customer = self.stripe.Customer.create(
@@ -588,12 +594,11 @@ class ProductionPremiumSubscriptionService:
 
         except Exception as e:
             self.logger.error(f"Stripe subscription creation failed: {str(e)}")
-            # Return sample data for development
-            return {
-                "customer_id": f"cus_mock_{user_id}",
-                "subscription_id": f"sub_mock_{uuid.uuid4()}",
-                "payment_intent_id": f"pi_mock_{uuid.uuid4()}",
-            }
+            raise ValueError(
+                f"CRITICAL: Stripe subscription creation failed: {str(e)}. "
+                "Production system cannot proceed with failed payment integration. "
+                "All payment operations must succeed or fail explicitly."
+            )
 
     def _get_stripe_price_id(self, tier: SubscriptionTier) -> str:
         """Get Stripe price ID for subscription tier."""
@@ -637,7 +642,7 @@ class ProductionPremiumSubscriptionService:
                 return subscription
         except Exception as e:
             self.logger.error(f"Failed to get subscription from database: {e}")
-        
+
         return None
 
     async def _store_subscription(self, subscription: Subscription) -> None:
@@ -661,7 +666,10 @@ class ProductionPremiumSubscriptionService:
             await self._subscription_repo.create_subscription(subscription_data)
             self.logger.info(
                 f"Stored subscription {subscription.id} in database",
-                extra={"subscription_id": subscription.id, "user_id": subscription.user_id},
+                extra={
+                    "subscription_id": subscription.id,
+                    "user_id": subscription.user_id,
+                },
             )
         except Exception as e:
             self.logger.error(f"Failed to store subscription: {e}")

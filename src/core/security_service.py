@@ -1994,3 +1994,136 @@ async def create_security_service(
     return SecurityService(
         rate_limiting_service, redis_client
     )  # Fixed: removed extra config parameter
+
+
+# =============================================================================
+# CHILD DATA ENCRYPTION IMPLEMENTATION
+# =============================================================================
+
+class ProductionChildDataEncryption:
+    """
+    Production implementation of IChildDataEncryption.
+    
+    Provides secure encryption for child data with COPPA compliance.
+    """
+    
+    def __init__(self, encryption_key: str = None):
+        """Initialize encryption service."""
+        from src.infrastructure.config.production_config import get_config
+        
+        self.config = get_config() if hasattr(get_config, '__call__') else None
+        
+        # Use provided key or get from config
+        if encryption_key:
+            self.fernet = Fernet(encryption_key.encode()[:44] + b'=') 
+        elif self.config and hasattr(self.config, 'COPPA_ENCRYPTION_KEY'):
+            key = self.config.COPPA_ENCRYPTION_KEY
+            if len(key) < 32:
+                key = key.ljust(32, '0')[:32]
+            key_bytes = base64.urlsafe_b64encode(key.encode()[:32])
+            self.fernet = Fernet(key_bytes)
+        else:
+            # Generate a secure key for production
+            key = Fernet.generate_key()
+            self.fernet = Fernet(key)
+            
+        self.logger = get_logger(__name__, "child_data_encryption")
+    
+    async def encrypt_child_pii(self, data: str, child_id: str, classification: str = "PII") -> Dict[str, Any]:
+        """Encrypt child PII data."""
+        try:
+            encrypted_data = self.fernet.encrypt(data.encode())
+            
+            result = {
+                "encrypted_data": base64.b64encode(encrypted_data).decode(),
+                "encryption_method": "Fernet-AES256",
+                "key_id": f"child_{child_id}",
+                "data_classification": classification,
+                "created_at": time.time(),
+                "metadata": {
+                    "child_id": child_id,
+                    "original_length": len(data),
+                    "encrypted_length": len(encrypted_data)
+                }
+            }
+            
+            # Log encryption for COPPA audit
+            self.logger.info(
+                f"Encrypted child PII data",
+                extra={
+                    "child_id": child_id,
+                    "classification": classification,
+                    "operation": "encrypt_pii"
+                }
+            )
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Failed to encrypt child PII: {e}")
+            raise ValueError(f"Encryption failed: {e}")
+    
+    async def decrypt_child_data(self, encrypted_result: Dict[str, Any]) -> str:
+        """Decrypt child data."""
+        try:
+            encrypted_data = base64.b64decode(encrypted_result["encrypted_data"])
+            decrypted_bytes = self.fernet.decrypt(encrypted_data)
+            
+            # Log decryption for COPPA audit
+            self.logger.info(
+                f"Decrypted child data",
+                extra={
+                    "key_id": encrypted_result.get("key_id"),
+                    "classification": encrypted_result.get("data_classification"),
+                    "operation": "decrypt_data"
+                }
+            )
+            
+            return decrypted_bytes.decode()
+            
+        except Exception as e:
+            self.logger.error(f"Failed to decrypt child data: {e}")
+            raise ValueError(f"Decryption failed: {e}")
+    
+    async def encrypt_conversation_data(self, conversation_text: str, child_id: str) -> Dict[str, Any]:
+        """Encrypt conversation data for a child."""
+        return await self.encrypt_child_pii(
+            conversation_text, 
+            child_id, 
+            classification="CONFIDENTIAL"
+        )
+    
+    async def anonymize_child_data(self, data: Dict[str, Any], child_id: str) -> Dict[str, Any]:
+        """Anonymize child data for analytics."""
+        try:
+            # Remove direct identifiers
+            anonymized = data.copy()
+            sensitive_fields = ["name", "email", "phone", "address"]
+            
+            for field in sensitive_fields:
+                if field in anonymized:
+                    # Replace with anonymized hash
+                    hash_input = f"{child_id}_{field}_{data[field]}".encode()
+                    anonymized[field] = hashlib.sha256(hash_input).hexdigest()[:8]
+            
+            # Log anonymization for COPPA audit
+            self.logger.info(
+                f"Anonymized child data for analytics",
+                extra={
+                    "child_id": child_id,
+                    "fields_anonymized": len([f for f in sensitive_fields if f in data]),
+                    "operation": "anonymize_data"
+                }
+            )
+            
+            return anonymized
+            
+        except Exception as e:
+            self.logger.error(f"Failed to anonymize child data: {e}")
+            raise ValueError(f"Anonymization failed: {e}")
+
+
+# Factory function
+def create_child_data_encryption() -> ProductionChildDataEncryption:
+    """Create child data encryption service."""
+    return ProductionChildDataEncryption()

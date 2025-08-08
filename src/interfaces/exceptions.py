@@ -8,48 +8,35 @@ Interfaces provide:
 - Type safety for exception handling
 - Decoupling between architectural layers
 """
+
 from typing import Optional, Any, Dict
 
 
-class IDatabaseError(Exception):
-    """
-    Interface for database-related errors.
-    
-    Provides structure for:
-    - Connection failures
-    - Query execution errors
-    - Transaction management issues
-    - Data integrity violations
-    
-    Args:
-        message: Human-readable error description
-        operation: Database operation that failed (SELECT, INSERT, etc.)
-        details: Additional error context and metadata
-    """
-    
-    def __init__(self, message: str, operation: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
-        super().__init__(message)
-        self.operation = operation
-        self.details = details or {}
+# IDatabaseError is now an alias for DatabaseError for unified exception handling
+from src.infrastructure.exceptions import DatabaseError
+
+IDatabaseError = DatabaseError
 
 
 class IValidationError(Exception):
     """
     Interface for validation errors.
-    
+
     Handles:
     - Input format validation
     - Business rule violations
     - Data type mismatches
     - Required field validation
-    
+
     Args:
         message: Validation error description
         field: Name of the field that failed validation
         value: The invalid value that caused the error
     """
-    
-    def __init__(self, message: str, field: Optional[str] = None, value: Optional[Any] = None):
+
+    def __init__(
+        self, message: str, field: Optional[str] = None, value: Optional[Any] = None
+    ):
         super().__init__(message)
         self.field = field
         self.value = value
@@ -57,7 +44,7 @@ class IValidationError(Exception):
 
 class IAuthenticationError(Exception):
     """Interface for authentication errors."""
-    
+
     def __init__(self, message: str, reason: Optional[str] = None):
         super().__init__(message)
         self.reason = reason
@@ -65,8 +52,10 @@ class IAuthenticationError(Exception):
 
 class IAuthorizationError(Exception):
     """Interface for authorization errors."""
-    
-    def __init__(self, message: str, resource: Optional[str] = None, action: Optional[str] = None):
+
+    def __init__(
+        self, message: str, resource: Optional[str] = None, action: Optional[str] = None
+    ):
         super().__init__(message)
         self.resource = resource
         self.action = action
@@ -75,20 +64,25 @@ class IAuthorizationError(Exception):
 class IServiceError(Exception):
     """
     Interface for service-level errors.
-    
+
     Covers:
     - External service failures
     - Internal service communication errors
     - Service unavailability
     - API integration issues
-    
+
     Args:
         message: Service error description
         service_name: Name of the failing service
         error_code: Service-specific error code
     """
-    
-    def __init__(self, message: str, service_name: Optional[str] = None, error_code: Optional[str] = None):
+
+    def __init__(
+        self,
+        message: str,
+        service_name: Optional[str] = None,
+        error_code: Optional[str] = None,
+    ):
         super().__init__(message)
         self.service_name = service_name
         self.error_code = error_code
@@ -96,7 +90,7 @@ class IServiceError(Exception):
 
 class IConfigurationError(Exception):
     """Interface for configuration errors."""
-    
+
     def __init__(self, message: str, key: Optional[str] = None):
         super().__init__(message)
         self.key = key

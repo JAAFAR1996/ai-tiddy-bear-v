@@ -12,8 +12,6 @@ Enterprise repository implementation with:
 - Data validation and sanitization
 """
 
-import asyncio
-import threading
 from abc import ABC, abstractmethod
 from typing import (
     Generic,
@@ -22,19 +20,16 @@ from typing import (
     Optional,
     Dict,
     Any,
-    Union,
-    Callable,
     Type,
     Tuple,
 )
-from datetime import datetime, timedelta
+from datetime import datetime
 import uuid
 import json
 
-from sqlalchemy import select, update, delete, func, and_, or_
-from sqlalchemy.orm import selectinload, joinedload
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy import func
+
+from sqlalchemy.exc import IntegrityError
 
 # Import from both development and production models
 try:
@@ -51,6 +46,7 @@ try:
         Interaction,
         Subscription,
     )
+
     MODELS_IMPORTED = True
 except ImportError:
     # Fallback to production models if development models not available
@@ -61,19 +57,23 @@ except ImportError:
         MessageModel as Message,
         AuditLogModel as AuditLog,
     )
+
     # Define missing types for compatibility
     BaseModel = object
     SafetyReport = object
     Interaction = object
     Subscription = object
+
     class UserRole:
-        PARENT = 'parent'
-        ADMIN = 'admin'
-        SUPPORT = 'support'
+        PARENT = "parent"
+        ADMIN = "admin"
+        SUPPORT = "support"
+
     class SafetyLevel:
         LOW = 0.3
         MEDIUM = 0.6
         HIGH = 0.8
+
     MODELS_IMPORTED = False
 # Import managers - these should be injected, not imported as globals
 try:
@@ -120,19 +120,24 @@ class NotFoundError(RepositoryError):
 class BaseRepository(Generic[T], ABC):
     """Base repository with common CRUD operations."""
 
-    def __init__(self, model_class: Type[T], config_manager, database_manager=None, transaction_manager=None, cache_manager=None):
+    def __init__(
+        self,
+        model_class: Type[T],
+        config_manager,
+        database_manager,
+        transaction_manager,
+        cache_manager,
+    ):
         if config_manager is None:
             raise ValueError("config_manager is required and cannot be None")
-        
+
         self.model_class = model_class
         self.logger = get_logger(f"repository_{model_class.__name__.lower()}")
         self.config_manager = config_manager
-        
-        # Inject dependencies or get defaults with proper error handling
-        self.database_manager = database_manager or self._get_database_manager()
-        self.transaction_manager = transaction_manager or self._get_transaction_manager()
-        self.cache_manager = cache_manager or self._get_cache_manager()
-        
+        self.database_manager = database_manager
+        self.transaction_manager = transaction_manager
+        self.cache_manager = cache_manager
+
         # Validate critical dependencies (Fail Fast approach)
         self._validate_critical_dependencies()
 
@@ -151,21 +156,54 @@ class BaseRepository(Generic[T], ABC):
         self.child_data_protection = self.config_manager.get_bool(
             "CHILD_DATA_PROTECTION", True
         )
-    
-    def _get_database_manager(self):
-        """Get database manager with proper error handling."""
-        global database_manager
+
+    @classmethod
+    async def create(
+        cls,
+        model_class: Type[T],
+        config_manager,
+        database_manager=None,
+        transaction_manager=None,
+        cache_manager=None,
+    ):
         if database_manager is None:
-            try:
-                # Try to import and initialize
-                from .database_manager import get_database_manager
-                return get_database_manager()
-            except ImportError as e:
-                raise RuntimeError(
-                    "database_manager is not available. Ensure database system is initialized."
-                ) from e
-        return database_manager
-    
+            from src.infrastructure.database.database_manager import (
+                get_enterprise_database_manager,
+            )
+
+            database_manager = await get_enterprise_database_manager()
+        if transaction_manager is None:
+            transaction_manager = cls._get_transaction_manager_static()
+        if cache_manager is None:
+            cache_manager = cls._get_cache_manager_static()
+        return cls(
+            model_class,
+            config_manager,
+            database_manager,
+            transaction_manager,
+            cache_manager,
+        )
+
+    @staticmethod
+    def _get_transaction_manager_static():
+        try:
+            from .transaction_manager import get_transaction_manager
+
+            return get_transaction_manager()
+        except ImportError:
+            return None
+
+    @staticmethod
+    def _get_cache_manager_static():
+        try:
+            from ..caching import get_cache_manager
+
+            return get_cache_manager()
+        except Exception:
+            return None
+
+    # حذف الدالة _get_database_manager بالكامل لأنها لم تعد مطلوبة
+
     def _get_transaction_manager(self):
         """Get transaction manager with proper error handling."""
         global transaction_manager
@@ -173,13 +211,16 @@ class BaseRepository(Generic[T], ABC):
             try:
                 # Try to import and initialize
                 from .transaction_manager import get_transaction_manager
+
                 return get_transaction_manager()
-            except ImportError as e:
+            except ImportError:
                 # Transaction manager is optional, log warning and continue
-                self.logger.warning("transaction_manager not available, operations will not use transactions")
+                self.logger.warning(
+                    "transaction_manager not available, operations will not use transactions"
+                )
                 return None
         return transaction_manager
-    
+
     def _get_cache_manager(self):
         """Get cache manager with proper error handling."""
         try:
@@ -188,45 +229,48 @@ class BaseRepository(Generic[T], ABC):
             # Cache manager is optional, log warning and continue
             self.logger.warning(f"cache_manager not available: {str(e)}")
             return None
-    
+
     def _validate_critical_dependencies(self):
         """Validate critical dependencies using Fail Fast approach."""
         errors = []
-        
+
         # Database manager is absolutely critical
         if not self.database_manager:
             errors.append("database_manager is required but not available")
-        
+
         # Config manager must have essential settings
         try:
             essential_settings = [
                 "REPOSITORY_QUERY_TIMEOUT",
-                "REPOSITORY_CACHE_TTL", 
-                "CHILD_DATA_PROTECTION"
+                "REPOSITORY_CACHE_TTL",
+                "CHILD_DATA_PROTECTION",
             ]
-            
+
             for setting in essential_settings:
                 value = self.config_manager.get(setting)
                 if value is None:
                     errors.append(f"Essential config setting '{setting}' is missing")
-                    
+
         except Exception as e:
             errors.append(f"config_manager validation failed: {str(e)}")
-        
+
         # If we have errors, fail fast
         if errors:
-            error_msg = f"Repository initialization failed for {self.model_class.__name__}: " + "; ".join(errors)
+            error_msg = (
+                f"Repository initialization failed for {self.model_class.__name__}: "
+                + "; ".join(errors)
+            )
             self.logger.error(error_msg)
             raise RuntimeError(error_msg)
-        
+
         self.logger.debug(
             f"Repository dependencies validated successfully for {self.model_class.__name__}",
             extra={
                 "has_database_manager": bool(self.database_manager),
                 "has_transaction_manager": bool(self.transaction_manager),
                 "has_cache_manager": bool(self.cache_manager),
-                "cache_enabled": self.enable_caching
-            }
+                "cache_enabled": self.enable_caching,
+            },
         )
 
     async def create(
@@ -313,7 +357,7 @@ class BaseRepository(Generic[T], ABC):
             # Query database
             if not self.database_manager:
                 raise RuntimeError("Database manager not available for read operation")
-                
+
             result = await self.database_manager.execute_read(
                 self._select_by_id, entity_id, include_deleted
             )
@@ -539,7 +583,7 @@ class BaseRepository(Generic[T], ABC):
             # Execute query
             if not self.database_manager:
                 raise RuntimeError("Database manager not available for list operation")
-                
+
             results, total_count = await self.database_manager.execute_read(
                 self._select_list, filters, offset, limit, order_by, include_deleted
             )
@@ -612,21 +656,7 @@ class BaseRepository(Generic[T], ABC):
     async def _validate_child_data_operation(
         self, data: Dict[str, Any], operation: str, user_id: Optional[uuid.UUID]
     ):
-        """Validate child data operation for COPPA compliance."""
-        if not self.child_data_protection:
-            return
-
-        # Log child data access
-        security_logger.info(
-            f"Child data {operation} operation attempted",
-            extra={
-                "operation": operation,
-                "user_id": str(user_id) if user_id else None,
-                "model": self.model_class.__name__,
-                "timestamp": datetime.utcnow().isoformat(),
-            },
-        )
-
+        """Validate child data operation and permissions."""
         # Additional validation for child data operations
         if "child_id" in data and user_id:
             # Verify user has permission to access this child's data
@@ -644,18 +674,20 @@ class BaseRepository(Generic[T], ABC):
             # Check if user is admin
             if await self._is_admin_access_check(user_id):
                 return True
-            
+
             # Check if user is the child's parent
             result = await database_manager.execute_read(
                 self._check_parent_child_relationship, user_id, child_id
             )
             return bool(result)
-            
+
         except Exception as e:
             self.logger.error(f"Child data access check failed: {str(e)}")
             return False
-            
-    async def _check_parent_child_relationship(self, conn, user_id: uuid.UUID, child_id: uuid.UUID):
+
+    async def _check_parent_child_relationship(
+        self, conn, user_id: uuid.UUID, child_id: uuid.UUID
+    ):
         """Query to verify parent-child relationship."""
         query = """
             SELECT 1 FROM children c
@@ -666,7 +698,7 @@ class BaseRepository(Generic[T], ABC):
             LIMIT 1
         """
         return await conn.fetchrow(query, str(child_id), str(user_id))
-        
+
     async def _is_admin_access_check(self, user_id: uuid.UUID) -> bool:
         """Check if user has admin privileges for data access."""
         try:
@@ -677,7 +709,7 @@ class BaseRepository(Generic[T], ABC):
         except Exception as e:
             self.logger.error(f"Admin privileges check failed: {str(e)}")
             return False
-            
+
     async def _check_admin_privileges(self, conn, user_id: uuid.UUID):
         """Query to check admin privileges."""
         query = """
@@ -777,17 +809,17 @@ class BaseRepository(Generic[T], ABC):
             table_name = self._get_table_name()
             columns = self._get_entity_columns(entity)
             values = self._get_entity_values(entity)
-            placeholders = ', '.join([f'${i+1}' for i in range(len(values))])
-            
+            placeholders = ", ".join([f"${i+1}" for i in range(len(values))])
+
             query = f"""
                 INSERT INTO {table_name} ({', '.join(columns)})
                 VALUES ({placeholders})
                 RETURNING *
             """
-            
+
             result = await conn.fetchrow(query, *values)
             return result
-            
+
         except Exception as e:
             self.logger.error(f"Database insert failed: {str(e)}")
             raise
@@ -797,14 +829,14 @@ class BaseRepository(Generic[T], ABC):
         try:
             table_name = self._get_table_name()
             where_clause = "WHERE id = $1"
-            
+
             if not include_deleted and self._has_soft_delete():
                 where_clause += " AND (is_deleted = FALSE OR is_deleted IS NULL)"
-            
+
             query = f"SELECT * FROM {table_name} {where_clause}"
             result = await conn.fetchrow(query, str(entity_id))
             return result
-            
+
         except Exception as e:
             self.logger.error(f"Database select failed: {str(e)}")
             raise
@@ -813,30 +845,30 @@ class BaseRepository(Generic[T], ABC):
         """Update entity in PostgreSQL database."""
         try:
             table_name = self._get_table_name()
-            
+
             # Build SET clause
             set_clauses = []
             values = []
             param_index = 1
-            
+
             for key, value in data.items():
                 set_clauses.append(f"{key} = ${param_index}")
                 values.append(value)
                 param_index += 1
-            
+
             # Add entity_id as last parameter
             values.append(str(entity_id))
-            
+
             query = f"""
                 UPDATE {table_name} 
                 SET {', '.join(set_clauses)}
                 WHERE id = ${param_index}
                 RETURNING *
             """
-            
+
             result = await conn.fetchrow(query, *values)
             return result
-            
+
         except Exception as e:
             self.logger.error(f"Database update failed: {str(e)}")
             raise
@@ -848,7 +880,7 @@ class BaseRepository(Generic[T], ABC):
             query = f"DELETE FROM {table_name} WHERE id = $1 RETURNING id"
             result = await conn.fetchrow(query, str(entity_id))
             return result is not None
-            
+
         except Exception as e:
             self.logger.error(f"Database delete failed: {str(e)}")
             raise
@@ -865,42 +897,46 @@ class BaseRepository(Generic[T], ABC):
         """Select list of entities from PostgreSQL database with filters."""
         try:
             table_name = self._get_table_name()
-            
+
             # Build WHERE clause
             where_clauses = []
             values = []
             param_index = 1
-            
+
             # Add soft delete filter
             if not include_deleted and self._has_soft_delete():
                 where_clauses.append("(is_deleted = FALSE OR is_deleted IS NULL)")
-            
+
             # Add custom filters
             for key, value in filters.items():
                 if value is not None:
                     where_clauses.append(f"{key} = ${param_index}")
                     values.append(value)
                     param_index += 1
-            
-            where_clause = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
-            
+
+            where_clause = (
+                "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+            )
+
             # Build ORDER BY clause
             order_clause = ""
             if order_by:
                 # Sanitize order_by to prevent SQL injection
-                safe_order_by = order_by.replace(';', '').replace('--', '')
+                safe_order_by = order_by.replace(";", "").replace("--", "")
                 order_clause = f"ORDER BY {safe_order_by}"
             else:
                 order_clause = "ORDER BY created_at DESC"
-            
+
             # Build LIMIT and OFFSET
             limit_clause = f"LIMIT ${param_index} OFFSET ${param_index + 1}"
             values.extend([limit, offset])
-            
+
             # Count query
             count_query = f"SELECT COUNT(*) FROM {table_name} {where_clause}"
-            total_count = await conn.fetchval(count_query, *values[:-2])  # Exclude limit/offset
-            
+            total_count = await conn.fetchval(
+                count_query, *values[:-2]
+            )  # Exclude limit/offset
+
             # Main query
             query = f"""
                 SELECT * FROM {table_name} 
@@ -908,10 +944,10 @@ class BaseRepository(Generic[T], ABC):
                 {order_clause}
                 {limit_clause}
             """
-            
+
             results = await conn.fetch(query, *values)
             return results, total_count
-            
+
         except Exception as e:
             self.logger.error(f"Database list query failed: {str(e)}")
             raise
@@ -921,91 +957,98 @@ class BaseRepository(Generic[T], ABC):
         try:
             if not result:
                 return None
-                
+
             # Convert asyncpg record to dict
             data = dict(result)
-            
+
             # Handle UUID conversion
-            if 'id' in data and isinstance(data['id'], str):
-                data['id'] = uuid.UUID(data['id'])
-                
+            if "id" in data and isinstance(data["id"], str):
+                data["id"] = uuid.UUID(data["id"])
+
             # Handle other UUID fields
-            uuid_fields = ['parent_id', 'child_id', 'user_id', 'conversation_id']
+            uuid_fields = ["parent_id", "child_id", "user_id", "conversation_id"]
             for field in uuid_fields:
                 if field in data and data[field] and isinstance(data[field], str):
                     data[field] = uuid.UUID(data[field])
-            
+
             # Handle datetime fields
-            datetime_fields = ['created_at', 'updated_at', 'deleted_at', 'last_login']
+            datetime_fields = ["created_at", "updated_at", "deleted_at", "last_login"]
             for field in datetime_fields:
                 if field in data and data[field]:
                     if isinstance(data[field], str):
-                        data[field] = datetime.fromisoformat(data[field].replace('Z', '+00:00'))
-            
+                        data[field] = datetime.fromisoformat(
+                            data[field].replace("Z", "+00:00")
+                        )
+
             # Handle JSON fields
-            json_fields = ['preferences', 'safety_settings', 'conversation_metadata', 'message_metadata']
+            json_fields = [
+                "preferences",
+                "safety_settings",
+                "conversation_metadata",
+                "message_metadata",
+            ]
             for field in json_fields:
                 if field in data and isinstance(data[field], str):
                     try:
                         data[field] = json.loads(data[field])
                     except (json.JSONDecodeError, TypeError):
                         pass
-            
+
             # Create entity instance
             return self.model_class(**data)
-            
+
         except Exception as e:
             self.logger.error(f"Entity mapping failed: {str(e)}")
             raise
-    
+
     def _get_table_name(self) -> str:
         """Get database table name for the model."""
-        if hasattr(self.model_class, '__tablename__'):
+        if hasattr(self.model_class, "__tablename__"):
             return self.model_class.__tablename__
         else:
             # Map model classes to actual table names used in production_models.py
             model_to_table = {
-                'UserModel': 'users',
-                'ChildModel': 'children', 
-                'ConversationModel': 'conversations',
-                'MessageModel': 'messages',
-                'AuditLogModel': 'audit_logs',
-                'ConsentModel': 'parental_consents',
-                'SessionModel': 'sessions',
-                'User': 'users',
-                'Child': 'children',
-                'Conversation': 'conversations', 
-                'Message': 'messages',
-                'AuditLog': 'audit_logs',
-                'Notification': 'notifications',
-                'DeliveryRecord': 'delivery_records',
-                'SafetyReport': 'safety_reports',
-                'Interaction': 'interactions',
-                'Subscription': 'subscriptions',
-                'PaymentTransaction': 'payment_transactions',
+                "UserModel": "users",
+                "ChildModel": "children",
+                "ConversationModel": "conversations",
+                "MessageModel": "messages",
+                "AuditLogModel": "audit_logs",
+                "ConsentModel": "parental_consents",
+                "SessionModel": "sessions",
+                "User": "users",
+                "Child": "children",
+                "Conversation": "conversations",
+                "Message": "messages",
+                "AuditLog": "audit_logs",
+                "Notification": "notifications",
+                "DeliveryRecord": "delivery_records",
+                "SafetyReport": "safety_reports",
+                "Interaction": "interactions",
+                "Subscription": "subscriptions",
+                "PaymentTransaction": "payment_transactions",
             }
             class_name = self.model_class.__name__
             return model_to_table.get(class_name, f"{class_name.lower()}s")
-    
+
     def _has_soft_delete(self) -> bool:
         """Check if model supports soft delete."""
-        return hasattr(self.model_class, 'is_deleted')
-    
+        return hasattr(self.model_class, "is_deleted")
+
     def _get_entity_columns(self, entity: T) -> List[str]:
         """Get column names for entity insertion."""
         columns = []
         for attr_name in dir(entity):
-            if not attr_name.startswith('_') and hasattr(entity, attr_name):
+            if not attr_name.startswith("_") and hasattr(entity, attr_name):
                 attr_value = getattr(entity, attr_name)
                 if not callable(attr_value):
                     columns.append(attr_name)
         return columns
-    
+
     def _get_entity_values(self, entity: T) -> List[Any]:
         """Get values for entity insertion."""
         values = []
         for attr_name in dir(entity):
-            if not attr_name.startswith('_') and hasattr(entity, attr_name):
+            if not attr_name.startswith("_") and hasattr(entity, attr_name):
                 attr_value = getattr(entity, attr_name)
                 if not callable(attr_value):
                     # Convert UUID to string for PostgreSQL
@@ -1037,8 +1080,16 @@ class BaseRepository(Generic[T], ABC):
 class UserRepository(BaseRepository[User]):
     """Repository for User entities."""
 
-    def __init__(self, config_manager, database_manager=None, transaction_manager=None, cache_manager=None):
-        super().__init__(User, config_manager, database_manager, transaction_manager, cache_manager)
+    def __init__(
+        self,
+        config_manager,
+        database_manager=None,
+        transaction_manager=None,
+        cache_manager=None,
+    ):
+        super().__init__(
+            User, config_manager, database_manager, transaction_manager, cache_manager
+        )
 
     async def _validate_create_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Validate user creation data."""
@@ -1109,7 +1160,7 @@ class UserRepository(BaseRepository[User]):
         if not self.database_manager:
             self.logger.error("Database manager not available for username check")
             return False
-            
+
         try:
             result = await self.database_manager.execute_read(
                 self._check_username_exists, username
@@ -1118,7 +1169,7 @@ class UserRepository(BaseRepository[User]):
         except Exception as e:
             self.logger.error(f"Username check failed: {str(e)}")
             return False
-    
+
     async def _check_username_exists(self, conn, username: str):
         """Query to check username existence."""
         query = "SELECT 1 FROM users WHERE email = $1 LIMIT 1"
@@ -1134,7 +1185,7 @@ class UserRepository(BaseRepository[User]):
         except Exception as e:
             self.logger.error(f"Email check failed: {str(e)}")
             return False
-            
+
     async def _check_email_exists(self, conn, email: str):
         """Query to check email existence."""
         query = "SELECT 1 FROM users WHERE email = $1 LIMIT 1"
@@ -1150,7 +1201,7 @@ class UserRepository(BaseRepository[User]):
         except Exception as e:
             self.logger.error(f"Admin check failed: {str(e)}")
             return False
-            
+
     async def _check_admin_role(self, conn, user_id: uuid.UUID):
         """Query to check if user has admin role."""
         query = "SELECT 1 FROM users WHERE id = $1 AND role = 'admin' LIMIT 1"
@@ -1168,7 +1219,7 @@ class UserRepository(BaseRepository[User]):
         except Exception as e:
             self.logger.error(f"Get by username failed: {str(e)}")
             return None
-            
+
     async def _select_by_username(self, conn, username: str):
         """Query to select user by username."""
         query = "SELECT * FROM users WHERE email = $1 AND (is_deleted = FALSE OR is_deleted IS NULL) LIMIT 1"
@@ -1182,14 +1233,14 @@ class UserRepository(BaseRepository[User]):
             )
             children = []
             for result in results:
-                child = self._map_result_to_entity(result) 
+                child = self._map_result_to_entity(result)
                 if child:
                     children.append(child)
             return children
         except Exception as e:
             self.logger.error(f"Get children failed: {str(e)}")
             return []
-            
+
     async def _select_children_by_parent(self, conn, parent_id: uuid.UUID):
         """Query to select children by parent ID."""
         query = """
@@ -1204,8 +1255,16 @@ class UserRepository(BaseRepository[User]):
 class ChildRepository(BaseRepository[Child]):
     """Repository for Child entities with enhanced COPPA compliance."""
 
-    def __init__(self, config_manager, database_manager=None, transaction_manager=None, cache_manager=None):
-        super().__init__(Child, config_manager, database_manager, transaction_manager, cache_manager)
+    def __init__(
+        self,
+        config_manager,
+        database_manager=None,
+        transaction_manager=None,
+        cache_manager=None,
+    ):
+        super().__init__(
+            Child, config_manager, database_manager, transaction_manager, cache_manager
+        )
 
     async def _validate_create_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Validate child creation data with COPPA compliance."""
@@ -1232,7 +1291,7 @@ class ChildRepository(BaseRepository[Child]):
         """Validate child update data."""
         # Log all child data updates for audit
         security_logger.info(
-            f"Child data update attempted",
+            "Child data update attempted",
             extra={
                 "child_hash": existing_entity.hashed_identifier,
                 "fields_updated": list(data.keys()),
@@ -1282,7 +1341,7 @@ class ChildRepository(BaseRepository[Child]):
         except Exception as e:
             self.logger.error(f"Parent check failed: {str(e)}")
             return False
-            
+
     async def _check_parent_exists(self, conn, parent_id: uuid.UUID):
         """Query to check if parent exists."""
         query = "SELECT 1 FROM users WHERE id = $1 AND role = 'parent' AND is_active = TRUE LIMIT 1"
@@ -1298,10 +1357,12 @@ class ChildRepository(BaseRepository[Child]):
         except Exception as e:
             self.logger.error(f"Admin check failed: {str(e)}")
             return False
-            
+
     async def _check_admin_role_child(self, conn, user_id: uuid.UUID):
         """Query to check if user has admin role."""
-        query = "SELECT 1 FROM users WHERE id = $1 AND role IN ('admin', 'support') LIMIT 1"
+        query = (
+            "SELECT 1 FROM users WHERE id = $1 AND role IN ('admin', 'support') LIMIT 1"
+        )
         return await conn.fetchrow(query, str(user_id))
 
     async def get_by_parent(self, parent_id: uuid.UUID) -> List[Child]:
@@ -1319,7 +1380,7 @@ class ChildRepository(BaseRepository[Child]):
         except Exception as e:
             self.logger.error(f"Get children by parent failed: {str(e)}")
             return []
-            
+
     async def _select_children_by_parent_secure(self, conn, parent_id: uuid.UUID):
         """Secure query to select children by parent ID."""
         query = """
@@ -1347,7 +1408,7 @@ class ChildRepository(BaseRepository[Child]):
         except Exception as e:
             self.logger.error(f"Get expiring data failed: {str(e)}")
             return []
-            
+
     async def _select_expiring_data(self, conn, days_ahead: int):
         """Query to find children with data expiring soon."""
         query = """
@@ -1363,8 +1424,20 @@ class ChildRepository(BaseRepository[Child]):
 class ConversationRepository(BaseRepository[Conversation]):
     """Repository for Conversation entities with child safety features."""
 
-    def __init__(self, config_manager, database_manager=None, transaction_manager=None, cache_manager=None):
-        super().__init__(Conversation, config_manager, database_manager, transaction_manager, cache_manager)
+    def __init__(
+        self,
+        config_manager,
+        database_manager=None,
+        transaction_manager=None,
+        cache_manager=None,
+    ):
+        super().__init__(
+            Conversation,
+            config_manager,
+            database_manager,
+            transaction_manager,
+            cache_manager,
+        )
 
     async def _validate_create_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Validate conversation creation data."""
@@ -1388,7 +1461,7 @@ class ConversationRepository(BaseRepository[Conversation]):
         # Log child conversation updates
         if existing_entity.child_id:
             security_logger.info(
-                f"Child conversation update",
+                "Child conversation update",
                 extra={
                     "conversation_id": str(existing_entity.id),
                     "child_id": str(existing_entity.child_id),
@@ -1444,7 +1517,7 @@ class ConversationRepository(BaseRepository[Conversation]):
         except Exception as e:
             self.logger.error(f"Get child failed: {str(e)}")
             return None
-            
+
     async def _select_child_by_id(self, conn, child_id: uuid.UUID):
         """Query to select child by ID."""
         query = "SELECT * FROM children WHERE id = $1 AND (is_deleted = FALSE OR is_deleted IS NULL) LIMIT 1"
@@ -1460,7 +1533,7 @@ class ConversationRepository(BaseRepository[Conversation]):
         except Exception as e:
             self.logger.error(f"Admin check failed: {str(e)}")
             return False
-            
+
     async def _check_admin_role_conv(self, conn, user_id: uuid.UUID):
         """Query to check if user has admin role."""
         query = "SELECT 1 FROM users WHERE id = $1 AND role IN ('admin', 'support') AND is_active = TRUE LIMIT 1"
@@ -1475,15 +1548,15 @@ class ConversationRepository(BaseRepository[Conversation]):
             child = await self._get_child(child_id)
             if not child or child.parent_id != parent_id:
                 security_logger.warning(
-                    f"Unauthorized child conversation access attempt",
+                    "Unauthorized child conversation access attempt",
                     extra={
                         "parent_id": str(parent_id),
                         "child_id": str(child_id),
                         "timestamp": datetime.utcnow().isoformat(),
-                    }
+                    },
                 )
                 return []
-            
+
             results = await database_manager.execute_read(
                 self._select_child_conversations, child_id, limit
             )
@@ -1496,7 +1569,7 @@ class ConversationRepository(BaseRepository[Conversation]):
         except Exception as e:
             self.logger.error(f"Get child conversations failed: {str(e)}")
             return []
-            
+
     async def _select_child_conversations(self, conn, child_id: uuid.UUID, limit: int):
         """Query to select conversations for a child."""
         query = """
@@ -1514,14 +1587,14 @@ class ConversationRepository(BaseRepository[Conversation]):
             # Verify admin access
             if not await self._is_admin(user_id):
                 security_logger.warning(
-                    f"Unauthorized flagged conversations access attempt",
+                    "Unauthorized flagged conversations access attempt",
                     extra={
                         "user_id": str(user_id),
                         "timestamp": datetime.utcnow().isoformat(),
-                    }
+                    },
                 )
                 return []
-            
+
             results = await database_manager.execute_read(
                 self._select_flagged_conversations
             )
@@ -1534,7 +1607,7 @@ class ConversationRepository(BaseRepository[Conversation]):
         except Exception as e:
             self.logger.error(f"Get flagged conversations failed: {str(e)}")
             return []
-            
+
     async def _select_flagged_conversations(self, conn):
         """Query to select flagged conversations for safety review."""
         query = """
@@ -1554,26 +1627,26 @@ class RepositoryManager:
     def __init__(self, config_manager):
         if config_manager is None:
             raise ValueError("config_manager is required and cannot be None")
-        
+
         self.config_manager = config_manager
         self.logger = get_logger("repository_manager")
         self._repositories: Dict[str, BaseRepository] = {}
         self._initialized = False
-        
+
         # Validate config_manager has essential settings
         self._validate_config_manager()
-        
+
         # Initialize repositories with strict dependency injection
         self._initialize_repositories()
-    
+
     def _validate_config_manager(self):
         """Validate that config_manager has all required settings."""
         required_settings = [
             "DATABASE_URL",
             "REPOSITORY_QUERY_TIMEOUT",
-            "CHILD_DATA_PROTECTION"
+            "CHILD_DATA_PROTECTION",
         ]
-        
+
         missing_settings = []
         for setting in required_settings:
             try:
@@ -1582,12 +1655,12 @@ class RepositoryManager:
                     missing_settings.append(setting)
             except Exception as e:
                 missing_settings.append(f"{setting} (error: {str(e)})")
-        
+
         if missing_settings:
             raise ValueError(
                 f"config_manager is missing required settings: {', '.join(missing_settings)}"
             )
-    
+
     def _initialize_repositories(self):
         """Initialize all repositories with validated config and shared dependencies."""
         try:
@@ -1595,75 +1668,76 @@ class RepositoryManager:
             shared_database_manager = self._get_shared_database_manager()
             shared_transaction_manager = self._get_shared_transaction_manager()
             shared_cache_manager = self._get_shared_cache_manager()
-            
+
             # Initialize repositories with explicit dependency injection
             self._repositories["user"] = UserRepository(
                 self.config_manager,
                 database_manager=shared_database_manager,
                 transaction_manager=shared_transaction_manager,
-                cache_manager=shared_cache_manager
+                cache_manager=shared_cache_manager,
             )
             self._repositories["child"] = ChildRepository(
                 self.config_manager,
                 database_manager=shared_database_manager,
                 transaction_manager=shared_transaction_manager,
-                cache_manager=shared_cache_manager
+                cache_manager=shared_cache_manager,
             )
             self._repositories["conversation"] = ConversationRepository(
                 self.config_manager,
                 database_manager=shared_database_manager,
                 transaction_manager=shared_transaction_manager,
-                cache_manager=shared_cache_manager
+                cache_manager=shared_cache_manager,
             )
             self._initialized = True
-            
+
             self.logger.info(
                 "RepositoryManager initialized successfully",
                 extra={
                     "repositories_count": len(self._repositories),
-                    "config_validated": True
-                }
+                    "config_validated": True,
+                },
             )
         except Exception as e:
             self.logger.error(f"Failed to initialize repositories: {str(e)}")
             raise RuntimeError(f"Repository initialization failed: {str(e)}") from e
-    
+
     def _get_shared_database_manager(self):
         """Get shared database manager for all repositories."""
         try:
             # Try to get enterprise database manager first
             from .database_manager import get_enterprise_database_manager
+
             return get_enterprise_database_manager()
         except ImportError:
-            try:
-                # Fallback to regular database manager
-                from .database_manager import get_database_manager
-                return get_database_manager()
-            except ImportError as e:
-                raise RuntimeError("No database manager available") from e
-    
+            raise RuntimeError("No database manager available")
+
     def _get_shared_transaction_manager(self):
         """Get shared transaction manager for all repositories."""
         try:
             from .transaction_manager import get_transaction_manager
+
             return get_transaction_manager()
         except ImportError:
-            self.logger.warning("Transaction manager not available - operations will not use transactions")
+            self.logger.warning(
+                "Transaction manager not available - operations will not use transactions"
+            )
             return None
-    
+
     def _get_shared_cache_manager(self):
         """Get shared cache manager for all repositories."""
         try:
             return get_cache_manager()
         except ImportError:
-            self.logger.warning("Cache manager not available - caching will be disabled")
+            self.logger.warning(
+                "Cache manager not available - caching will be disabled"
+            )
             return None
 
     def get_repository(self, entity_type: str) -> BaseRepository:
         """Get repository for entity type with initialization check."""
         if not self._initialized:
             raise RuntimeError("RepositoryManager not properly initialized")
-        
+
         if entity_type not in self._repositories:
             raise ValueError(
                 f"No repository found for entity type: {entity_type}. "
@@ -1688,165 +1762,34 @@ class RepositoryManager:
         return self._repositories["conversation"]
 
 
-# Global repository manager with thread-safe initialization
-_repository_manager: Optional[RepositoryManager] = None
-_initialization_lock = threading.Lock()
+# Explicit factory functions (no global/singleton)
+def create_repository_manager(config_manager) -> RepositoryManager:
+    """Explicit factory for RepositoryManager. Always pass config_manager explicitly."""
+    return RepositoryManager(config_manager)
 
 
-def get_repository_manager(config_manager=None) -> RepositoryManager:
-    """Get the global repository manager instance with safe lazy initialization.
-    
-    Args:
-        config_manager: Optional config manager. If not provided, will get default.
-                       Should be provided on first call to ensure proper initialization.
-    
-    Returns:
-        RepositoryManager: Initialized repository manager
-        
-    Raises:
-        RuntimeError: If config_manager is not available or initialization fails
-    """
-    global _repository_manager
-    
-    # Fast path for already initialized manager
-    if _repository_manager is not None:
-        return _repository_manager
-    
-    # Thread-safe initialization
-    with _initialization_lock:
-        # Double-check pattern
-        if _repository_manager is not None:
-            return _repository_manager
-            
-        # Get config manager if not provided
-        if config_manager is None:
-            try:
-                config_manager = get_config_manager()
-            except Exception as e:
-                raise RuntimeError(
-                    "Cannot initialize RepositoryManager: config_manager not available. "
-                    "Ensure config_manager is initialized before using repositories."
-                ) from e
-        
-        if config_manager is None:
-            raise RuntimeError(
-                "config_manager is None. Repository system requires valid configuration."
-            )
-        
-        try:
-            _repository_manager = RepositoryManager(config_manager)
-            return _repository_manager
-        except Exception as e:
-            # Reset on failure to allow retry
-            _repository_manager = None
-            raise RuntimeError(f"Failed to create RepositoryManager: {str(e)}") from e
+def create_child_repository(
+    config_manager, database_manager=None, transaction_manager=None, cache_manager=None
+):
+    """Explicit factory for ChildRepository."""
+    return ChildRepository(
+        config_manager, database_manager, transaction_manager, cache_manager
+    )
 
 
-def reset_repository_manager():
-    """Reset repository manager (for testing or reconfiguration)."""
-    global _repository_manager
-    with _initialization_lock:
-        if _repository_manager is not None:
-            # Could add cleanup logic here if needed
-            _repository_manager = None
+def create_user_repository(
+    config_manager, database_manager=None, transaction_manager=None, cache_manager=None
+):
+    """Explicit factory for UserRepository."""
+    return UserRepository(
+        config_manager, database_manager, transaction_manager, cache_manager
+    )
 
 
-def is_repository_manager_initialized() -> bool:
-    """Check if repository manager is initialized."""
-    return _repository_manager is not None
-
-
-# Convenience functions with proper error handling
-async def get_user_repository(config_manager=None) -> UserRepository:
-    """Get user repository with proper initialization check.
-    
-    Args:
-        config_manager: Optional config manager for first-time initialization
-    
-    Returns:
-        UserRepository: Initialized user repository
-        
-    Raises:
-        RuntimeError: If repository system is not properly initialized
-    """
-    try:
-        manager = get_repository_manager(config_manager)
-        return manager.user
-    except Exception as e:
-        raise RuntimeError(f"Cannot get user repository: {str(e)}") from e
-
-
-async def get_child_repository(config_manager=None) -> ChildRepository:
-    """Get child repository with proper initialization check.
-    
-    Args:
-        config_manager: Optional config manager for first-time initialization
-    
-    Returns:
-        ChildRepository: Initialized child repository
-        
-    Raises:
-        RuntimeError: If repository system is not properly initialized
-    """
-    try:
-        manager = get_repository_manager(config_manager)
-        return manager.child
-    except Exception as e:
-        raise RuntimeError(f"Cannot get child repository: {str(e)}") from e
-
-
-async def get_conversation_repository(config_manager=None) -> ConversationRepository:
-    """Get conversation repository with proper initialization check.
-    
-    Args:
-        config_manager: Optional config manager for first-time initialization
-    
-    Returns:
-        ConversationRepository: Initialized conversation repository
-        
-    Raises:
-        RuntimeError: If repository system is not properly initialized
-    """
-    try:
-        manager = get_repository_manager(config_manager)
-        return manager.conversation
-    except Exception as e:
-        raise RuntimeError(f"Cannot get conversation repository: {str(e)}") from e
-
-
-# System validation functions
-def validate_repository_system(config_manager) -> bool:
-    """Validate that repository system can be properly initialized.
-    
-    Args:
-        config_manager: Configuration manager to validate
-    
-    Returns:
-        bool: True if system can be initialized, False otherwise
-    """
-    try:
-        # Try to create a temporary repository manager
-        temp_manager = RepositoryManager(config_manager)
-        return temp_manager._initialized
-    except Exception:
-        return False
-
-
-async def initialize_repository_system(config_manager) -> RepositoryManager:
-    """Initialize repository system with proper validation.
-    
-    Args:
-        config_manager: Configuration manager to use
-        
-    Returns:
-        RepositoryManager: Initialized repository manager
-        
-    Raises:
-        RuntimeError: If initialization fails
-    """
-    if not validate_repository_system(config_manager):
-        raise RuntimeError(
-            "Repository system validation failed. Check config_manager settings."
-        )
-    
-    return get_repository_manager(config_manager)
+def create_conversation_repository(
+    config_manager, database_manager=None, transaction_manager=None, cache_manager=None
+):
+    """Explicit factory for ConversationRepository."""
+    return ConversationRepository(
+        config_manager, database_manager, transaction_manager, cache_manager
+    )

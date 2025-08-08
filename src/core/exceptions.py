@@ -32,19 +32,18 @@ class AITeddyBearException(Exception):
 
     def __init__(
         self,
-        message: str = None,
+        message: str,
         *,
         context: Optional[Dict[str, Any]] = None,
         severity: str = None,
         correlation_id: str = None,
+        **kwargs,
     ):
-        super().__init__(message or self.__class__.__doc__)
+        super().__init__(message)
         self.context = context or {}
         self.severity = severity or self.default_severity
         self.correlation_id = correlation_id
         self.timestamp = datetime.utcnow().isoformat()
-
-        # Add stack trace for debugging (exclude in production API responses)
         self.stack_trace = (
             traceback.format_exc()
             if traceback.format_exc() != "NoneType: None\n"
@@ -104,13 +103,15 @@ class PermissionDeniedError(AuthorizationError):
 
     error_code = "permission_denied"
 
-    def __init__(self, permission: str, resource: str = None, **kwargs):
+    def __init__(
+        self, permission: str, resource: str = None, *, context: dict = None, **kwargs
+    ):
         message = f"Permission '{permission}' denied"
         if resource:
             message += f" for resource '{resource}'"
-        context = kwargs.get("context", {})
-        context.update({"permission": permission, "resource": resource})
-        super().__init__(message, context=context, **kwargs)
+        ctx = context or {}
+        ctx.update({"permission": permission, "resource": resource})
+        super().__init__(message, context=ctx, **kwargs)
 
 
 # ====================
@@ -134,14 +135,17 @@ class SafetyViolationError(AITeddyBearException):
     def __init__(
         self,
         message: str = None,
+        *,
         violations: Optional[List[str]] = None,
         confidence_score: float = None,
+        context: dict = None,
         **kwargs,
     ):
-        super().__init__(message or "Content violates child safety rules", **kwargs)
+        super().__init__(
+            message or "Content violates child safety rules", context=context, **kwargs
+        )
         self.violations = violations or []
         self.confidence_score = confidence_score
-
         if self.violations:
             self.context["violations"] = self.violations
         if self.confidence_score is not None:
@@ -154,19 +158,26 @@ class COPPAViolationError(AITeddyBearException):
     error_code = "coppa_violation"
     default_severity = "critical"
 
-    def __init__(self, child_age: int = None, required_action: str = None, **kwargs):
+    def __init__(
+        self,
+        child_age: int = None,
+        required_action: str = None,
+        *,
+        context: dict = None,
+        **kwargs,
+    ):
         message = "COPPA compliance violation detected"
         if child_age is not None:
             message += f" for child age {child_age}"
-        context = kwargs.get("context", {})
-        context.update(
+        ctx = context or {}
+        ctx.update(
             {
                 "child_age": child_age,
                 "required_action": required_action,
                 "compliance_rule": "COPPA",
             }
         )
-        super().__init__(message, context=context, **kwargs)
+        super().__init__(message, context=ctx, **kwargs)
 
 
 class ParentalConsentRequiredError(COPPAViolationError):
@@ -174,11 +185,11 @@ class ParentalConsentRequiredError(COPPAViolationError):
 
     error_code = "parental_consent_required"
 
-    def __init__(self, child_id: str = None, **kwargs):
+    def __init__(self, child_id: str = None, *, context: dict = None, **kwargs):
         message = "Parental consent required for this action"
-        context = kwargs.get("context", {})
-        context.update({"child_id": child_id})
-        super().__init__(message, context=context, **kwargs)
+        ctx = context or {}
+        ctx.update({"child_id": child_id})
+        super().__init__(context=ctx, **kwargs)
 
 
 # ====================
@@ -192,13 +203,20 @@ class ResourceNotFoundError(AITeddyBearException):
     error_code = "resource_not_found"
     default_severity = "low"
 
-    def __init__(self, resource_type: str, resource_id: str = None, **kwargs):
+    def __init__(
+        self,
+        resource_type: str,
+        resource_id: str = None,
+        *,
+        context: dict = None,
+        **kwargs,
+    ):
         message = f"{resource_type.title()} not found"
         if resource_id:
             message += f" (ID: {resource_id})"
-        context = kwargs.get("context", {})
-        context.update({"resource_type": resource_type, "resource_id": resource_id})
-        super().__init__(message, context=context, **kwargs)
+        ctx = context or {}
+        ctx.update({"resource_type": resource_type, "resource_id": resource_id})
+        super().__init__(message, context=ctx, **kwargs)
 
 
 class ConversationNotFoundError(ResourceNotFoundError):
@@ -236,10 +254,12 @@ class ValidationError(AITeddyBearException):
     def __init__(
         self,
         message: str = None,
+        *,
         field_errors: Optional[Dict[str, List[str]]] = None,
+        context: dict = None,
         **kwargs,
     ):
-        super().__init__(message or "Data validation failed", **kwargs)
+        super().__init__(message or "Data validation failed", context=context, **kwargs)
         self.field_errors = field_errors or {}
         if self.field_errors:
             self.context["field_errors"] = self.field_errors
@@ -259,24 +279,24 @@ class ExternalServiceError(AITeddyBearException):
     def __init__(
         self,
         service_name: str,
+        *,
         status_code: int = None,
         response_data: str = None,
+        context: dict = None,
         **kwargs,
     ):
         message = f"External service '{service_name}' failed"
         if status_code:
             message += f" (HTTP {status_code})"
-        context = kwargs.get("context", {})
-        context.update(
+        ctx = context or {}
+        ctx.update(
             {
                 "service_name": service_name,
                 "status_code": status_code,
-                "response_data": (
-                    response_data[:200] if response_data else None
-                ),  # Truncate for safety
+                "response_data": (response_data[:200] if response_data else None),
             }
         )
-        super().__init__(message, context=context, **kwargs)
+        super().__init__(message, context=ctx, **kwargs)
 
 
 class OpenAIServiceError(ExternalServiceError):
@@ -284,10 +304,10 @@ class OpenAIServiceError(ExternalServiceError):
 
     error_code = "openai_service_error"
 
-    def __init__(self, error_type: str = None, **kwargs):
-        context = kwargs.get("context", {})
-        context.update({"error_type": error_type})
-        super().__init__("OpenAI", context=context, **kwargs)
+    def __init__(self, error_type: str = None, *, context: dict = None, **kwargs):
+        ctx = context or {}
+        ctx.update({"error_type": error_type})
+        super().__init__("OpenAI", context=ctx, **kwargs)
 
 
 # ====================
@@ -301,21 +321,6 @@ class ConfigurationError(AITeddyBearException):
     error_code = "configuration_error"
     default_severity = "critical"
 
-    def __init__(
-        self,
-        *,
-        message: str = None,
-        config_key: str = None,
-        context: dict = None,
-        **kwargs,
-    ):
-        msg = message or "Configuration error"
-        if config_key:
-            msg += f" for key '{config_key}'"
-        ctx = context or {}
-        ctx.update({"config_key": config_key})
-        super().__init__(msg, context=ctx, **kwargs)
-
 
 class DatabaseError(AITeddyBearException):
     """Raised when database operations fail."""
@@ -323,15 +328,22 @@ class DatabaseError(AITeddyBearException):
     error_code = "database_error"
     default_severity = "high"
 
-    def __init__(self, operation: str = None, table: str = None, **kwargs):
+    def __init__(
+        self,
+        operation: str = None,
+        table: str = None,
+        *,
+        context: dict = None,
+        **kwargs,
+    ):
         message = "Database operation failed"
         if operation:
             message += f" ({operation})"
         if table:
             message += f" on table '{table}'"
-        context = kwargs.get("context", {})
-        context.update({"operation": operation, "table": table})
-        super().__init__(message, context=context, **kwargs)
+        ctx = context or {}
+        ctx.update({"operation": operation, "table": table})
+        super().__init__(message, context=ctx, **kwargs)
 
 
 class RateLimitExceeded(AITeddyBearException):
@@ -341,14 +353,20 @@ class RateLimitExceeded(AITeddyBearException):
     default_severity = "medium"
 
     def __init__(
-        self, limit: int = None, window: str = None, retry_after: int = None, **kwargs
+        self,
+        *,
+        limit: int = None,
+        window: str = None,
+        retry_after: int = None,
+        context: dict = None,
+        **kwargs,
     ):
         message = "Rate limit exceeded"
         if limit and window:
             message += f" ({limit} requests per {window})"
-        context = kwargs.get("context", {})
-        context.update({"limit": limit, "window": window, "retry_after": retry_after})
-        super().__init__(message, context=context, **kwargs)
+        ctx = context or {}
+        ctx.update({"limit": limit, "window": window, "retry_after": retry_after})
+        super().__init__(message, context=ctx, **kwargs)
 
 
 # ====================
@@ -362,13 +380,13 @@ class BusinessLogicError(AITeddyBearException):
     error_code = "business_logic_error"
     default_severity = "medium"
 
-    def __init__(self, rule: str = None, **kwargs):
+    def __init__(self, rule: str = None, *, context: dict = None, **kwargs):
         message = "Business logic constraint violated"
         if rule:
             message += f": {rule}"
-        context = kwargs.get("context", {})
-        context.update({"violated_rule": rule})
-        super().__init__(message, context=context, **kwargs)
+        ctx = context or {}
+        ctx.update({"violated_rule": rule})
+        super().__init__(message, context=ctx, **kwargs)
 
 
 class SubscriptionError(BusinessLogicError):
@@ -376,11 +394,13 @@ class SubscriptionError(BusinessLogicError):
 
     error_code = "subscription_error"
 
-    def __init__(self, subscription_status: str = None, **kwargs):
+    def __init__(
+        self, subscription_status: str = None, *, context: dict = None, **kwargs
+    ):
         message = "Subscription operation failed"
-        context = kwargs.get("context", {})
-        context.update({"subscription_status": subscription_status})
-        super().__init__(message, context=context, **kwargs)
+        ctx = context or {}
+        ctx.update({"subscription_status": subscription_status})
+        super().__init__(message, context=ctx, **kwargs)
 
 
 # =============================
@@ -476,14 +496,6 @@ class MonitoringError(AITeddyBearException):
     """
 
     error_code = "monitoring_error"
-
-
-class TestError(AITeddyBearException):
-    """
-    Raised when test operations fail.
-    """
-
-    error_code = "test_error"
 
 
 class OptimizationError(AITeddyBearException):

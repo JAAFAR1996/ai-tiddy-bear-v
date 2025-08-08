@@ -1121,35 +1121,7 @@ def create_parent_dashboard(
     )
 
 
-def create_test_dashboard(
-    mock_user_service=None,
-    mock_safety_service=None,
-    mock_ai_service=None,
-    mock_notification_service=None,
-) -> ProductionParentDashboard:
-    """
-    Create a dashboard instance for testing with mock services.
-
-    Args:
-        mock_user_service: Mock user service
-        mock_safety_service: Mock safety service
-        mock_ai_service: Mock AI service
-        mock_notification_service: Mock notification service
-
-    Returns:
-        Dashboard instance with mocked dependencies
-    """
-    service_provider = DashboardServiceProvider(
-        user_service=mock_user_service,
-        safety_service=mock_safety_service,
-        ai_service=mock_ai_service,
-        notification_service=mock_notification_service,
-    )
-
-    return ProductionParentDashboard(
-        service_provider=service_provider,
-        enable_caching=False,  # Disable caching for tests
-    )
+# Test dashboard creation removed for production - use create_dashboard() with real services only
 
 
 # Backward compatibility alias
@@ -1174,5 +1146,4 @@ __all__ = [
     "DashboardMetrics",
     "DashboardSection",
     "create_parent_dashboard",
-    "create_test_dashboard",
 ]

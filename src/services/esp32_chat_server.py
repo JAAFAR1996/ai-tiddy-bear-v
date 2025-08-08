@@ -186,12 +186,22 @@ class ESP32ChatServer:
     def inject_services(
         self, stt_provider, tts_service, ai_service, safety_service
     ) -> None:
-        """Inject production services."""
+        """Inject production services with validation."""
+        # Validate all required services are provided
+        if not stt_provider:
+            raise ValueError("STT provider is required for production deployment")
+        if not tts_service:
+            raise ValueError("TTS service is required for production deployment")
+        if not ai_service:
+            raise ValueError("AI service is required for production deployment")
+        if not safety_service:
+            raise ValueError("Safety service is required for production deployment")
+            
         self.stt_provider = stt_provider
         self.tts_service = tts_service
         self.ai_service = ai_service
         self.safety_service = safety_service
-        self.logger.info("Production services injected successfully")
+        self.logger.info("Production services injected and validated successfully")
 
     def _start_background_tasks(self) -> None:
         """Start background maintenance tasks."""

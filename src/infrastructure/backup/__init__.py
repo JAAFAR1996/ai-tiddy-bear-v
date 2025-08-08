@@ -15,7 +15,8 @@ from .database_backup import DatabaseBackupService
 from .file_backup import FileBackupService
 from .config_backup import ConfigBackupService
 from .restore_service import RestoreService
-from .testing_framework import BackupTestingFramework
+# Testing framework removed for production
+# from .testing_framework import BackupTestingFramework
 from .monitoring import BackupMonitoringService
 
 __all__ = [
@@ -24,6 +25,6 @@ __all__ = [
     'FileBackupService',
     'ConfigBackupService',
     'RestoreService',
-    'BackupTestingFramework',
+    # 'BackupTestingFramework',  # Removed for production
     'BackupMonitoringService'
 ]

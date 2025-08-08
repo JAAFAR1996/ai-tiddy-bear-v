@@ -291,8 +291,8 @@ class ServiceRegistry:
 
     async def _create_notification_service(self, **dependencies):
         """Create ProductionNotificationService instance (production)."""
-        from src.services.notification_service_production import (
-            ProductionNotificationService,
+        from src.application.services.notification.notification_service_main import (
+            NotificationService as ProductionNotificationService,
         )
 
         service = ProductionNotificationService()

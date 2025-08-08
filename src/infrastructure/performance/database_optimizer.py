@@ -3,35 +3,25 @@ Database Performance Optimization System
 Advanced connection pooling, query optimization, indexing, and child-safe data handling
 """
 
-import asyncio
-import time
-import logging
-import hashlib
-from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Dict, List, Optional, Any, Callable, Union, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
-import weakref
-
-import asyncpg
-import sqlalchemy as sa
+from typing import Dict, List, Optional, Any, Tuple
+import time
+import hashlib
+import logging
+from src.utils.date_utils import get_current_timestamp
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     create_async_engine,
     async_sessionmaker,
 )
-from sqlalchemy.pool import QueuePool, NullPool
-from sqlalchemy.dialects import postgresql
+from sqlalchemy.pool import QueuePool
 from sqlalchemy.sql import text
-from sqlalchemy import inspect, Index
-
-from src.core.exceptions import DatabaseError, ConfigurationError, ValidationError
-from src.core.utils.crypto_utils import hash_data, encrypt_sensitive_data
-from src.utils.date_utils import get_current_timestamp
-
+from src.core.exceptions import DatabaseError, configurationerror, ValidationError
+from src.core.utils.crypto_utils import encrypt_sensitive_data, hash_data
 
 logger = logging.getLogger(__name__)
 
@@ -422,7 +412,7 @@ class ConnectionPoolManager:
     async def get_session(self, pool_name: str = "main"):
         """Get database session from specified pool."""
         if pool_name not in self.session_makers:
-            raise DatabaseError(f"Pool '{pool_name}' not found")
+            raise DatabaseError("Pool not found", context={"pool_name": pool_name})
 
         session_maker = self.session_makers[pool_name]
 
@@ -450,7 +440,10 @@ class ConnectionPoolManager:
 
             self.pool_metrics[pool_name].checkout_errors += 1
             logger.error(f"Database session error in pool '{pool_name}': {e}")
-            raise DatabaseError(f"Database session error: {e}")
+            raise DatabaseError(
+                "Database session error",
+                context={"pool_name": pool_name, "error": str(e)},
+            )
 
         finally:
             if session:
@@ -513,7 +506,9 @@ class ConnectionPoolManager:
                 self.query_analyzer.query_metrics[sql_hash].error_count += 1
 
             logger.error(f"Query execution failed: {e}")
-            raise DatabaseError(f"Query execution failed: {e}")
+            raise DatabaseError(
+                "Query execution failed", context={"sql": sql, "error": str(e)}
+            )
 
     async def execute_child_safe_query(
         self, sql: str, params: Optional[Dict] = None, child_id: Optional[str] = None
@@ -557,11 +552,11 @@ class ConnectionPoolManager:
         encrypted_results = []
         for row in results:
             encrypted_row = row.copy()
-            for field in sensitive_fields:
-                if field in encrypted_row and encrypted_row[field]:
-                    encrypted_row[field] = encrypt_sensitive_data(
-                        str(encrypted_row[field])
-                    )
+        for sensitive_field in sensitive_fields:
+            if sensitive_field in encrypted_row and encrypted_row[sensitive_field]:
+                encrypted_row[sensitive_field] = encrypt_sensitive_data(
+                    str(encrypted_row[sensitive_field])
+                )
             encrypted_results.append(encrypted_row)
 
         return encrypted_results
@@ -598,7 +593,9 @@ class ConnectionPoolManager:
             except Exception as e:
                 await session.rollback()
                 logger.error(f"Bulk insert failed: {e}")
-                raise DatabaseError(f"Bulk insert failed: {e}")
+                raise DatabaseError(
+                    "Bulk insert failed", context={"table": table_name, "error": str(e)}
+                )
 
         return total_inserted
 
@@ -674,7 +671,7 @@ class ConnectionPoolManager:
 
         for table, condition in cleanup_queries:
             try:
-                result = await self.execute_query(
+                await self.execute_query(
                     f"DELETE FROM {table} WHERE {condition}",
                     {"cutoff_date": cutoff_date},
                     pool_name="child_data",
@@ -777,7 +774,8 @@ class ConnectionPoolManager:
             try:
                 async with engine.begin() as conn:
                     from sqlalchemy import select, literal
-                    test_query = select(literal(1).label('test'))
+
+                    test_query = select(literal(1).label("test"))
                     await conn.execute(test_query)
                 health_status["pools_healthy"] += 1
 

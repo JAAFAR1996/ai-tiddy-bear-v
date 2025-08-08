@@ -41,6 +41,7 @@ security = HTTPBearer()
 
 class AdminPermission(str, Enum):
     """Admin permission levels."""
+
     SUPER_ADMIN = "super_admin"
     SYSTEM_ADMIN = "system_admin"
     SECURITY_ADMIN = "security_admin"
@@ -53,15 +54,17 @@ class AdminPermission(str, Enum):
 
 class SecurityLevel(str, Enum):
     """Security levels for admin operations."""
-    LOW = "low"           # Basic admin auth required
-    MEDIUM = "medium"     # Admin auth + rate limiting
-    HIGH = "high"         # Admin auth + MFA + enhanced logging
-    CRITICAL = "critical" # Admin auth + MFA + approval workflow
+
+    LOW = "low"  # Basic admin auth required
+    MEDIUM = "medium"  # Admin auth + rate limiting
+    HIGH = "high"  # Admin auth + MFA + enhanced logging
+    CRITICAL = "critical"  # Admin auth + MFA + approval workflow
 
 
 @dataclass
 class AdminSecurityConfig:
     """Configuration for admin security."""
+
     require_mfa: bool = True
     max_failed_attempts: int = 3
     lockout_duration_minutes: int = 30
@@ -77,6 +80,7 @@ class AdminSecurityConfig:
 @dataclass
 class AdminSession:
     """Admin session tracking."""
+
     user_id: str
     email: str
     permissions: Set[AdminPermission]
@@ -93,6 +97,7 @@ class AdminSession:
 @dataclass
 class SecurityEvent:
     """Security event for audit logging."""
+
     event_type: str
     severity: str
     user_id: Optional[str]
@@ -106,7 +111,7 @@ class SecurityEvent:
 class AdminSecurityManager:
     """
     Comprehensive admin security manager.
-    
+
     Provides enterprise-grade security for all admin endpoints:
     - JWT + Certificate authentication
     - Multi-factor authentication
@@ -121,24 +126,30 @@ class AdminSecurityManager:
         self.config = config or AdminSecurityConfig()
         self.token_manager = get_token_manager()
         self.rate_limiter: Optional[RateLimitingService] = None
-        
+
         # Security tracking
         self.active_sessions: Dict[str, AdminSession] = {}
         self.failed_attempts: Dict[str, List[datetime]] = {}
         self.locked_accounts: Dict[str, datetime] = {}
         self.security_events: List[SecurityEvent] = []
-        
+
         # Admin permission mapping
         self.admin_permissions = {
             "super_admin": {AdminPermission.SUPER_ADMIN},
-            "system_admin": {AdminPermission.SYSTEM_ADMIN, AdminPermission.MONITORING_ADMIN},
-            "security_admin": {AdminPermission.SECURITY_ADMIN, AdminPermission.AUDIT_ADMIN},
+            "system_admin": {
+                AdminPermission.SYSTEM_ADMIN,
+                AdminPermission.MONITORING_ADMIN,
+            },
+            "security_admin": {
+                AdminPermission.SECURITY_ADMIN,
+                AdminPermission.AUDIT_ADMIN,
+            },
             "storage_admin": {AdminPermission.STORAGE_ADMIN},
             "monitoring_admin": {AdminPermission.MONITORING_ADMIN},
             "route_admin": {AdminPermission.ROUTE_ADMIN},
-            "read_only_admin": {AdminPermission.READ_ONLY_ADMIN}
+            "read_only_admin": {AdminPermission.READ_ONLY_ADMIN},
         }
-        
+
         logger.info("AdminSecurityManager initialized with enhanced security")
 
     async def initialize(self, rate_limiter: RateLimitingService):
@@ -151,20 +162,20 @@ class AdminSecurityManager:
         request: Request,
         credentials: HTTPAuthorizationCredentials,
         required_permission: AdminPermission = AdminPermission.READ_ONLY_ADMIN,
-        security_level: SecurityLevel = SecurityLevel.MEDIUM
+        security_level: SecurityLevel = SecurityLevel.MEDIUM,
     ) -> AdminSession:
         """
         Authenticate admin user with comprehensive security checks.
-        
+
         Args:
             request: FastAPI request object
             credentials: JWT credentials
             required_permission: Required admin permission
             security_level: Required security level
-            
+
         Returns:
             AdminSession if authentication successful
-            
+
         Raises:
             HTTPException: If authentication fails
         """
@@ -172,7 +183,7 @@ class AdminSecurityManager:
         ip_address = self._get_client_ip(request)
         user_agent = request.headers.get("user-agent", "unknown")
         endpoint = str(request.url.path)
-        
+
         try:
             # 1. Check if IP is locked due to brute force
             if self._is_ip_locked(ip_address):
@@ -183,11 +194,11 @@ class AdminSecurityManager:
                     ip_address,
                     endpoint,
                     False,
-                    {"reason": "ip_locked_brute_force"}
+                    {"reason": "ip_locked_brute_force"},
                 )
                 raise HTTPException(
                     status_code=429,
-                    detail="IP address temporarily locked due to security violations"
+                    detail="IP address temporarily locked due to security violations",
                 )
 
             # 2. Verify JWT token
@@ -202,12 +213,12 @@ class AdminSecurityManager:
                     ip_address,
                     endpoint,
                     False,
-                    {"error": str(e)}
+                    {"error": str(e)},
                 )
                 raise HTTPException(
                     status_code=401,
                     detail="Invalid authentication token",
-                    headers={"WWW-Authenticate": "Bearer"}
+                    headers={"WWW-Authenticate": "Bearer"},
                 )
 
             user_id = payload.get("sub")
@@ -223,12 +234,9 @@ class AdminSecurityManager:
                     ip_address,
                     endpoint,
                     False,
-                    {"role": role, "required": "admin"}
+                    {"role": role, "required": "admin"},
                 )
-                raise HTTPException(
-                    status_code=403,
-                    detail="Admin access required"
-                )
+                raise HTTPException(status_code=403, detail="Admin access required")
 
             # 4. Check if account is locked
             if self._is_account_locked(user_id):
@@ -239,18 +247,20 @@ class AdminSecurityManager:
                     ip_address,
                     endpoint,
                     False,
-                    {"reason": "account_locked"}
+                    {"reason": "account_locked"},
                 )
                 raise HTTPException(
-                    status_code=423,
-                    detail="Account temporarily locked"
+                    status_code=423, detail="Account temporarily locked"
                 )
 
             # 5. Get user permissions
             user_permissions = await self._get_user_permissions(user_id, email)
 
             # 6. Check required permission
-            if required_permission not in user_permissions and AdminPermission.SUPER_ADMIN not in user_permissions:
+            if (
+                required_permission not in user_permissions
+                and AdminPermission.SUPER_ADMIN not in user_permissions
+            ):
                 await self._log_security_event(
                     "admin_auth_insufficient_permissions",
                     "warning",
@@ -258,11 +268,14 @@ class AdminSecurityManager:
                     ip_address,
                     endpoint,
                     False,
-                    {"required_permission": required_permission.value, "user_permissions": [p.value for p in user_permissions]}
+                    {
+                        "required_permission": required_permission.value,
+                        "user_permissions": [p.value for p in user_permissions],
+                    },
                 )
                 raise HTTPException(
                     status_code=403,
-                    detail=f"Insufficient permissions: {required_permission.value} required"
+                    detail=f"Insufficient permissions: {required_permission.value} required",
                 )
 
             # 7. Rate limiting check
@@ -270,9 +283,9 @@ class AdminSecurityManager:
                 rate_result = await self.rate_limiter.check_rate_limit(
                     child_id=f"admin:{user_id}",
                     operation=OperationType.AUTHENTICATION,
-                    additional_context={"endpoint": endpoint, "ip": ip_address}
+                    additional_context={"endpoint": endpoint, "ip": ip_address},
                 )
-                
+
                 if not rate_result.allowed:
                     await self._log_security_event(
                         "admin_auth_rate_limited",
@@ -281,19 +294,22 @@ class AdminSecurityManager:
                         ip_address,
                         endpoint,
                         False,
-                        {"rate_limit_reason": rate_result.reason}
+                        {"rate_limit_reason": rate_result.reason},
                     )
                     raise HTTPException(
                         status_code=429,
                         detail="Rate limit exceeded",
-                        headers={"Retry-After": str(rate_result.retry_after_seconds)}
+                        headers={"Retry-After": str(rate_result.retry_after_seconds)},
                     )
 
             # 8. Certificate verification (if required)
             certificate_verified = True
             if self.config.require_certificate_auth:
                 certificate_verified = await self._verify_client_certificate(request)
-                if not certificate_verified and security_level in [SecurityLevel.HIGH, SecurityLevel.CRITICAL]:
+                if not certificate_verified and security_level in [
+                    SecurityLevel.HIGH,
+                    SecurityLevel.CRITICAL,
+                ]:
                     await self._log_security_event(
                         "admin_auth_failed_certificate",
                         "error",
@@ -301,16 +317,19 @@ class AdminSecurityManager:
                         ip_address,
                         endpoint,
                         False,
-                        {"security_level": security_level.value}
+                        {"security_level": security_level.value},
                     )
                     raise HTTPException(
                         status_code=401,
-                        detail="Client certificate verification required"
+                        detail="Client certificate verification required",
                     )
 
             # 9. MFA verification (if required for security level)
             mfa_verified = True
-            if self.config.require_mfa and security_level in [SecurityLevel.HIGH, SecurityLevel.CRITICAL]:
+            if self.config.require_mfa and security_level in [
+                SecurityLevel.HIGH,
+                SecurityLevel.CRITICAL,
+            ]:
                 mfa_verified = await self._verify_mfa(request, user_id)
                 if not mfa_verified:
                     await self._log_security_event(
@@ -320,11 +339,10 @@ class AdminSecurityManager:
                         ip_address,
                         endpoint,
                         False,
-                        {"security_level": security_level.value}
+                        {"security_level": security_level.value},
                     )
                     raise HTTPException(
-                        status_code=401,
-                        detail="Multi-factor authentication required"
+                        status_code=401, detail="Multi-factor authentication required"
                     )
 
             # 10. Create admin session
@@ -338,7 +356,7 @@ class AdminSecurityManager:
                 ip_address=ip_address,
                 user_agent=user_agent,
                 mfa_verified=mfa_verified,
-                certificate_verified=certificate_verified
+                certificate_verified=certificate_verified,
             )
 
             # Store session
@@ -362,8 +380,8 @@ class AdminSecurityManager:
                     "security_level": security_level.value,
                     "mfa_verified": mfa_verified,
                     "certificate_verified": certificate_verified,
-                    "processing_time_ms": round(processing_time * 1000, 2)
-                }
+                    "processing_time_ms": round(processing_time * 1000, 2),
+                },
             )
 
             return session
@@ -380,30 +398,27 @@ class AdminSecurityManager:
                 ip_address,
                 endpoint,
                 False,
-                {"error": str(e), "type": type(e).__name__}
+                {"error": str(e), "type": type(e).__name__},
             )
             logger.error(f"Admin authentication error: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail="Authentication service error"
-            )
+            raise HTTPException(status_code=500, detail="Authentication service error")
 
     async def check_resource_limits(
         self,
         session: AdminSession,
         operation: str,
         resource_type: str,
-        resource_size: Optional[int] = None
+        resource_size: Optional[int] = None,
     ) -> bool:
         """
         Check resource limits and abuse monitoring.
-        
+
         Args:
             session: Admin session
             operation: Operation being performed
             resource_type: Type of resource being accessed
             resource_size: Size of resource (bytes, items, etc.)
-            
+
         Returns:
             True if within limits, False otherwise
         """
@@ -418,11 +433,11 @@ class AdminSecurityManager:
                 "storage_upload": {"max_size_mb": 50, "max_per_hour": 20},
                 "database_query": {"max_per_minute": 100},
                 "log_access": {"max_per_hour": 200},
-                "system_command": {"max_per_hour": 10}
+                "system_command": {"max_per_hour": 10},
             }
 
             operation_limits = limits.get(operation, {})
-            
+
             # Check size limits
             if resource_size and "max_size_mb" in operation_limits:
                 max_size_bytes = operation_limits["max_size_mb"] * 1024 * 1024
@@ -437,8 +452,8 @@ class AdminSecurityManager:
                         {
                             "resource_type": resource_type,
                             "resource_size": resource_size,
-                            "max_size": max_size_bytes
-                        }
+                            "max_size": max_size_bytes,
+                        },
                     )
                     return False
 
@@ -449,10 +464,10 @@ class AdminSecurityManager:
                     operation=OperationType.API_CALL,
                     additional_context={
                         "operation": operation,
-                        "resource_type": resource_type
-                    }
+                        "resource_type": resource_type,
+                    },
                 )
-                
+
                 if not rate_result.allowed:
                     await self._log_security_event(
                         "admin_resource_abuse_rate",
@@ -463,8 +478,8 @@ class AdminSecurityManager:
                         False,
                         {
                             "resource_type": resource_type,
-                            "rate_limit_reason": rate_result.reason
-                        }
+                            "rate_limit_reason": rate_result.reason,
+                        },
                     )
                     return False
 
@@ -481,7 +496,7 @@ class AdminSecurityManager:
         operation: str,
         endpoint: str,
         success: bool,
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
     ):
         """Log admin operation for audit trail."""
         await self._log_security_event(
@@ -496,17 +511,19 @@ class AdminSecurityManager:
                 "session_id": session.session_id,
                 "permissions": [p.value for p in session.permissions],
                 "security_level": session.security_level.value,
-                **(details or {})
-            }
+                **(details or {}),
+            },
         )
 
     async def cleanup_expired_sessions(self):
         """Clean up expired admin sessions."""
         now = datetime.now()
         expired_sessions = []
-        
+
         for session_id, session in self.active_sessions.items():
-            if (now - session.last_activity).total_seconds() > (self.config.session_timeout_minutes * 60):
+            if (now - session.last_activity).total_seconds() > (
+                self.config.session_timeout_minutes * 60
+            ):
                 expired_sessions.append(session_id)
 
         for session_id in expired_sessions:
@@ -518,7 +535,10 @@ class AdminSecurityManager:
                 session.ip_address,
                 "session_cleanup",
                 True,
-                {"session_id": session_id, "duration_minutes": (now - session.created_at).total_seconds() / 60}
+                {
+                    "session_id": session_id,
+                    "duration_minutes": (now - session.created_at).total_seconds() / 60,
+                },
             )
 
         if expired_sessions:
@@ -527,13 +547,14 @@ class AdminSecurityManager:
     async def get_security_metrics(self) -> Dict[str, Any]:
         """Get security metrics for monitoring."""
         now = datetime.now()
-        
+
         # Count events by type in last 24 hours
         recent_events = [
-            event for event in self.security_events
+            event
+            for event in self.security_events
             if (now - event.timestamp).total_seconds() < 86400
         ]
-        
+
         event_counts = {}
         for event in recent_events:
             event_counts[event.event_type] = event_counts.get(event.event_type, 0) + 1
@@ -548,8 +569,8 @@ class AdminSecurityManager:
                 "mfa_required": self.config.require_mfa,
                 "certificate_auth": self.config.require_certificate_auth,
                 "brute_force_protection": self.config.brute_force_protection,
-                "resource_monitoring": self.config.resource_abuse_monitoring
-            }
+                "resource_monitoring": self.config.resource_abuse_monitoring,
+            },
         }
 
     # Private helper methods
@@ -560,66 +581,74 @@ class AdminSecurityManager:
         forwarded_for = request.headers.get("x-forwarded-for")
         if forwarded_for:
             return forwarded_for.split(",")[0].strip()
-        
+
         real_ip = request.headers.get("x-real-ip")
         if real_ip:
             return real_ip
-        
+
         # Fallback to direct connection
         if request.client:
             return request.client.host
-        
+
         return "unknown"
 
     def _is_ip_locked(self, ip_address: str) -> bool:
         """Check if IP is locked due to brute force attempts."""
         if not self.config.brute_force_protection:
             return False
-            
+
         attempts = self.failed_attempts.get(ip_address, [])
         now = datetime.now()
-        
+
         # Remove old attempts (older than lockout duration)
         recent_attempts = [
-            attempt for attempt in attempts
-            if (now - attempt).total_seconds() < (self.config.lockout_duration_minutes * 60)
+            attempt
+            for attempt in attempts
+            if (now - attempt).total_seconds()
+            < (self.config.lockout_duration_minutes * 60)
         ]
-        
+
         return len(recent_attempts) >= self.config.max_failed_attempts
 
     def _is_account_locked(self, user_id: str) -> bool:
         """Check if account is locked."""
         if user_id not in self.locked_accounts:
             return False
-            
+
         lock_time = self.locked_accounts[user_id]
         now = datetime.now()
-        
-        if (now - lock_time).total_seconds() > (self.config.lockout_duration_minutes * 60):
+
+        if (now - lock_time).total_seconds() > (
+            self.config.lockout_duration_minutes * 60
+        ):
             # Lock expired, remove it
             del self.locked_accounts[user_id]
             return False
-            
+
         return True
 
     async def _record_failed_attempt(self, ip_address: str, reason: str):
         """Record failed authentication attempt."""
         now = datetime.now()
-        
+
         if ip_address not in self.failed_attempts:
             self.failed_attempts[ip_address] = []
-            
+
         self.failed_attempts[ip_address].append(now)
-        
+
         # Check if we should lock this IP
         if len(self.failed_attempts[ip_address]) >= self.config.max_failed_attempts:
-            logger.warning(f"IP {ip_address} locked due to {len(self.failed_attempts[ip_address])} failed attempts")
+            logger.warning(
+                f"IP {ip_address} locked due to {len(self.failed_attempts[ip_address])} failed attempts"
+            )
 
-    async def _get_user_permissions(self, user_id: str, email: str) -> Set[AdminPermission]:
+    async def _get_user_permissions(
+        self, user_id: str, email: str
+    ) -> Set[AdminPermission]:
         """Get user admin permissions."""
         # In production, this would query the database
         # For now, determine permissions based on email or user_id patterns
-        
+
         if email.endswith("@aiteddybear.com"):
             if "super" in email or user_id == "1":
                 return {AdminPermission.SUPER_ADMIN}
@@ -631,7 +660,7 @@ class AdminSecurityManager:
                 return self.admin_permissions["monitoring_admin"]
             else:
                 return self.admin_permissions["system_admin"]
-        
+
         # Default to read-only for other admin users
         return self.admin_permissions["read_only_admin"]
 
@@ -640,10 +669,10 @@ class AdminSecurityManager:
         # Check for client certificate headers
         cert_header = request.headers.get("x-client-cert")
         cert_verified = request.headers.get("x-client-cert-verified")
-        
+
         if cert_header and cert_verified == "SUCCESS":
             return True
-            
+
         # In production, implement actual certificate verification
         # For now, return True if not strictly required
         return not self.config.require_certificate_auth
@@ -652,19 +681,21 @@ class AdminSecurityManager:
         """Verify multi-factor authentication."""
         # Check for MFA token in headers
         mfa_token = request.headers.get("x-mfa-token")
-        
+
         if not mfa_token:
             return False
-            
+
         # In production, verify MFA token against user's configured MFA
         # For now, check if it's a valid format (6 digits)
         try:
             if len(mfa_token) == 6 and mfa_token.isdigit():
                 # Simulate MFA verification
                 return True
-        except Exception as e:\n            logger.error(f\"Exception validating MFA token format for admin: {e}\", exc_info=True)\n            # Continue to return False for security - invalid token format
-            
-        return False
+        except Exception as e:
+            logger.error(
+                f"Exception validating MFA token format for admin: {e}", exc_info=True
+            )
+            # Continue to return False for security - invalid token format
 
     async def _log_security_event(
         self,
@@ -674,7 +705,7 @@ class AdminSecurityManager:
         ip_address: str,
         endpoint: str,
         success: bool,
-        details: Dict[str, Any]
+        details: Dict[str, Any],
     ):
         """Log security event for audit trail."""
         event = SecurityEvent(
@@ -684,16 +715,16 @@ class AdminSecurityManager:
             ip_address=ip_address,
             endpoint=endpoint,
             success=success,
-            details=details
+            details=details,
         )
-        
+
         # Store event
         self.security_events.append(event)
-        
+
         # Keep only last 10000 events to prevent memory issues
         if len(self.security_events) > 10000:
             self.security_events = self.security_events[-5000:]
-        
+
         # Log to security logger
         log_data = {
             "event_type": event_type,
@@ -701,30 +732,32 @@ class AdminSecurityManager:
             "ip_address": ip_address,
             "endpoint": endpoint,
             "success": success,
-            **details
+            **details,
         }
-        
+
         if severity == "error":
             security_logger.error(f"Security event: {event_type}", **log_data)
         elif severity == "warning":
             security_logger.warning(f"Security event: {event_type}", **log_data)
         else:
             security_logger.info(f"Security event: {event_type}", **log_data)
-        
+
         # COPPA audit logging
-        coppa_audit.log_event({
-            "event_type": f"admin_security_{event_type}",
-            "severity": severity,
-            "description": f"Admin security event: {event_type}",
-            "user_id": user_id,
-            "user_type": "admin",
-            "metadata": {
-                "ip_address": ip_address,
-                "endpoint": endpoint,
-                "success": success,
-                **details
+        coppa_audit.log_event(
+            {
+                "event_type": f"admin_security_{event_type}",
+                "severity": severity,
+                "description": f"Admin security event: {event_type}",
+                "user_id": user_id,
+                "user_type": "admin",
+                "metadata": {
+                    "ip_address": ip_address,
+                    "endpoint": endpoint,
+                    "success": success,
+                    **details,
+                },
             }
-        })
+        )
 
 
 # Global admin security manager instance
@@ -741,15 +774,16 @@ def get_admin_security_manager() -> AdminSecurityManager:
 
 # FastAPI Dependencies
 
+
 async def require_admin_auth(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     permission: AdminPermission = AdminPermission.READ_ONLY_ADMIN,
-    security_level: SecurityLevel = SecurityLevel.MEDIUM
+    security_level: SecurityLevel = SecurityLevel.MEDIUM,
 ) -> AdminSession:
     """
     FastAPI dependency for admin authentication.
-    
+
     Usage:
         @app.get("/admin/endpoint")
         async def admin_endpoint(
@@ -758,13 +792,17 @@ async def require_admin_auth(
             # Your admin endpoint logic
     """
     manager = get_admin_security_manager()
-    return await manager.authenticate_admin(request, credentials, permission, security_level)
+    return await manager.authenticate_admin(
+        request, credentials, permission, security_level
+    )
 
 
-def require_admin_permission(permission: AdminPermission, security_level: SecurityLevel = SecurityLevel.MEDIUM):
+def require_admin_permission(
+    permission: AdminPermission, security_level: SecurityLevel = SecurityLevel.MEDIUM
+):
     """
     Dependency factory for specific admin permissions.
-    
+
     Usage:
         @app.get("/admin/storage")
         async def storage_admin(
@@ -772,52 +810,60 @@ def require_admin_permission(permission: AdminPermission, security_level: Securi
         ):
             # Storage admin logic
     """
+
     async def permission_dependency(
-        request: Request,
-        credentials: HTTPAuthorizationCredentials = Depends(security)
+        request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)
     ) -> AdminSession:
         manager = get_admin_security_manager()
-        return await manager.authenticate_admin(request, credentials, permission, security_level)
-    
+        return await manager.authenticate_admin(
+            request, credentials, permission, security_level
+        )
+
     return permission_dependency
 
 
 # Decorator for admin endpoints
 
+
 def admin_endpoint(
     permission: AdminPermission = AdminPermission.READ_ONLY_ADMIN,
     security_level: SecurityLevel = SecurityLevel.MEDIUM,
     log_operation: bool = True,
-    check_resources: bool = True
+    check_resources: bool = True,
 ):
     """
     Decorator for admin endpoints with comprehensive security.
-    
+
     Usage:
         @admin_endpoint(AdminPermission.STORAGE_ADMIN, SecurityLevel.HIGH)
         async def storage_operation(request: Request):
             # Your endpoint logic
     """
+
     def decorator(func):
         @wraps(func)
         async def wrapper(request: Request, *args, **kwargs):
             manager = get_admin_security_manager()
-            
+
             # Get credentials from request
             auth_header = request.headers.get("authorization")
             if not auth_header or not auth_header.startswith("Bearer "):
                 raise HTTPException(
                     status_code=401,
                     detail="Missing or invalid authorization header",
-                    headers={"WWW-Authenticate": "Bearer"}
+                    headers={"WWW-Authenticate": "Bearer"},
                 )
-            
+
             token = auth_header.split(" ")[1]
-            credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
-            
+            credentials = HTTPAuthorizationCredentials(
+                scheme="Bearer", credentials=token
+            )
+
             # Authenticate
-            session = await manager.authenticate_admin(request, credentials, permission, security_level)
-            
+            session = await manager.authenticate_admin(
+                request, credentials, permission, security_level
+            )
+
             # Check resource limits if enabled
             if check_resources:
                 operation_name = func.__name__
@@ -826,44 +872,47 @@ def admin_endpoint(
                 )
                 if not resource_allowed:
                     raise HTTPException(
-                        status_code=429,
-                        detail="Resource limits exceeded"
+                        status_code=429, detail="Resource limits exceeded"
                     )
-            
+
             try:
                 # Execute the endpoint
                 result = await func(request, session, *args, **kwargs)
-                
+
                 # Log successful operation
                 if log_operation:
                     await manager.log_admin_operation(
                         session, func.__name__, str(request.url.path), True
                     )
-                
+
                 return result
-                
+
             except Exception as e:
                 # Log failed operation
                 if log_operation:
                     await manager.log_admin_operation(
-                        session, func.__name__, str(request.url.path), False,
-                        {"error": str(e), "error_type": type(e).__name__}
+                        session,
+                        func.__name__,
+                        str(request.url.path),
+                        False,
+                        {"error": str(e), "error_type": type(e).__name__},
                     )
                 raise
-        
+
         return wrapper
+
     return decorator
 
 
 # Export main components
 __all__ = [
     "AdminSecurityManager",
-    "AdminPermission", 
+    "AdminPermission",
     "SecurityLevel",
     "AdminSession",
     "AdminSecurityConfig",
     "get_admin_security_manager",
     "require_admin_auth",
-    "require_admin_permission", 
-    "admin_endpoint"
+    "require_admin_permission",
+    "admin_endpoint",
 ]

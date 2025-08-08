@@ -12,15 +12,21 @@ from ..services.esp32_chat_server import esp32_chat_server
 
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/esp32", tags=["ESP32"])
+router = APIRouter(tags=["ESP32"])
 
 
 @router.websocket("/chat")
 async def esp32_chat_websocket(
     websocket: WebSocket,
-    device_id: str = Query(..., min_length=8, max_length=32, description="Unique ESP32 device identifier"),
-    child_id: str = Query(..., min_length=1, max_length=50, description="Child profile identifier"),
-    child_name: str = Query(..., min_length=1, max_length=30, description="Child's name"),
+    device_id: str = Query(
+        ..., min_length=8, max_length=32, description="Unique ESP32 device identifier"
+    ),
+    child_id: str = Query(
+        ..., min_length=1, max_length=50, description="Child profile identifier"
+    ),
+    child_name: str = Query(
+        ..., min_length=1, max_length=30, description="Child's name"
+    ),
     child_age: int = Query(..., ge=3, le=13, description="Child's age (3-13)"),
 ):
     """
@@ -51,29 +57,29 @@ async def esp32_chat_websocket(
     try:
         # Input validation and sanitization
         import re
-        
+
         # Sanitize device_id
-        device_id = re.sub(r'[^a-zA-Z0-9_-]', '', device_id)
+        device_id = re.sub(r"[^a-zA-Z0-9_-]", "", device_id)
         if not device_id or len(device_id) < 8:
             await websocket.close(code=1008, reason="Invalid device ID")
             return
-        
+
         # Sanitize child_id
-        child_id = re.sub(r'[^a-zA-Z0-9_-]', '', child_id)
+        child_id = re.sub(r"[^a-zA-Z0-9_-]", "", child_id)
         if not child_id:
             await websocket.close(code=1008, reason="Invalid child ID")
             return
-        
+
         # Sanitize child_name
-        child_name = re.sub(r'[^a-zA-Z0-9\s]', '', child_name[:30])
+        child_name = re.sub(r"[^a-zA-Z0-9\s]", "", child_name[:30])
         if not child_name:
             child_name = "friend"
-        
+
         # Validate child_age
         if not isinstance(child_age, int) or not (3 <= child_age <= 13):
             await websocket.close(code=1008, reason="Invalid child age")
             return
-        
+
         # Connect device and create session
         session_id = await esp32_chat_server.connect_device(
             websocket=websocket,
@@ -92,7 +98,7 @@ async def esp32_chat_websocket(
             try:
                 # Receive message from ESP32 with size limit
                 raw_message = await websocket.receive_text()
-                
+
                 # Validate message size
                 if len(raw_message) > 10000:  # 10KB limit
                     logger.warning(f"Message too large from session {session_id}")
@@ -100,7 +106,7 @@ async def esp32_chat_websocket(
                         session_id, "message_too_large", "Message exceeds size limit"
                     )
                     continue
-                
+
                 # Basic message validation
                 if not raw_message.strip():
                     continue
@@ -135,12 +141,6 @@ async def esp32_chat_websocket(
         # Cleanup session
         if session_id:
             await esp32_chat_server.disconnect_device(session_id, "websocket_closed")
-
-
-@router.get("/health")
-async def esp32_health():
-    """ESP32 Chat Server health check."""
-    return await esp32_chat_server.health_check()
 
 
 @router.get("/metrics")

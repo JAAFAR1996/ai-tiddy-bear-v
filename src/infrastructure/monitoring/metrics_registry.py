@@ -526,8 +526,8 @@ class MetricsRegistry:
                         "error": str(e),
                     },
                 )
-                # Return a mock metric to prevent application crashes
-                return self._create_mock_metric(metric_type)
+                # Return a fallback metric to prevent application crashes # Development only
+                return self._create_mock_metric(metric_type)  # Fallback only
 
     def _create_metric(
         self,
@@ -570,7 +570,12 @@ class MetricsRegistry:
             raise ValueError(f"Unsupported metric type: {metric_type}")
 
     def _create_mock_metric(self, metric_type: MetricType) -> Any:
-        """Create a mock metric when Prometheus is unavailable or creation fails."""
+        """Create a fallback metric when Prometheus is unavailable or creation fails.
+        
+        WARNING: This is a fallback mechanism to prevent application crashes.
+        Production deployments should always have prometheus_client properly installed.
+        These mock metrics do not report to any monitoring system.
+        """
         if metric_type == MetricType.COUNTER:
             return Counter()
         elif metric_type == MetricType.HISTOGRAM:

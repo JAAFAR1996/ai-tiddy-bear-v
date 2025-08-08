@@ -20,7 +20,8 @@ from src.core.entities.subscription import (
     NotificationType,
     NotificationPriority,
 )
-from src.infrastructure.config.production_config import get_config
+
+# get_config import removed; config must be passed explicitly
 
 
 class MetricType(str, Enum):
@@ -102,8 +103,8 @@ class ProductionAnalyticsService:
     - Advanced reporting and visualization
     """
 
-    def __init__(self):
-        self.config = get_config()
+    def __init__(self, config):
+        self.config = config
         self.logger = logging.getLogger(__name__)
         self._metric_buffer: Dict[MetricType, deque] = defaultdict(
             lambda: deque(maxlen=10000)
@@ -113,6 +114,11 @@ class ProductionAnalyticsService:
         self._processing_task = None
         self._cleanup_task = None
         self._initialize_service()
+
+
+# Explicit factory
+def create_production_analytics_service(config) -> ProductionAnalyticsService:
+    return ProductionAnalyticsService(config)
 
     def _initialize_service(self):
         """Initialize the analytics service."""

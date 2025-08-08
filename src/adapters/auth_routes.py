@@ -32,7 +32,7 @@ from src.infrastructure.database.models import User, UserRole
 from src.utils.validation_utils import validate_password_strength
 
 # Setup
-router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+router = APIRouter(tags=["Authentication"])
 security = HTTPBearer()
 logger = get_logger(__name__, "auth_routes")
 token_manager = TokenManager()

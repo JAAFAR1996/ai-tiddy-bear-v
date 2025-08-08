@@ -16,7 +16,7 @@ from src.infrastructure.websocket.production_websocket_adapter import (
     MessageType,
 )
 
-from src.application.services.notification_service import NotificationService
+from src.application.services.notification.notification_service_main import NotificationService
 from src.infrastructure.config.premium_websocket_config import (
     WEBSOCKET_CONFIG,
     ALERT_CONFIG,
@@ -554,14 +554,9 @@ def get_real_time_notification_service() -> RealTimeNotificationService:
     # In production, these would be injected via DI container
     websocket_adapter = ProductionWebSocketAdapter()
 
-    # Mock notification service for now
-    class MockNotificationService:
-        async def send_notification(
-            self, recipient: str, message: str, urgent: bool = False
-        ):
-            logger.info(f"Fallback notification sent to {recipient}: {message}")
-
-    notification_service = MockNotificationService()
+    # Use production notification service
+    from src.application.services.notification.notification_service_production import ProductionNotificationService
+    notification_service = ProductionNotificationService()
 
     return RealTimeNotificationService(
         websocket_adapter=websocket_adapter,

@@ -47,7 +47,8 @@ from .interfaces import (
 
 from .payment_service import IraqiPaymentService, get_payment_service
 
-from .mock_provider import MockIraqiPaymentProvider
+# Mock provider removed for production - use real providers only
+# from .mock_provider import MockIraqiPaymentProvider
 
 from .config import (
     PaymentSystemConfig,
@@ -60,7 +61,8 @@ from .config import (
 
 from .api_endpoints import router as payment_router
 
-from .examples import PaymentExamples, PaymentSystemTester
+# Examples and testers removed for production
+# from .examples import PaymentExamples, PaymentSystemTester
 
 # Version information
 __version__ = "1.0.0"
@@ -87,7 +89,7 @@ __all__ = [
     # Main services
     "IraqiPaymentService",
     "get_payment_service",
-    "MockIraqiPaymentProvider",
+    # "MockIraqiPaymentProvider",  # Removed for production
     # Configuration
     "PaymentSystemConfig",
     "ProviderConfig",
@@ -97,9 +99,9 @@ __all__ = [
     "validate_config",
     # API
     "payment_router",
-    # Testing and examples
-    "PaymentExamples",
-    "PaymentSystemTester",
+    # Testing and examples - removed for production
+    # "PaymentExamples", 
+    # "PaymentSystemTester",
     # Exceptions
     "PaymentProviderError",
     # Metadata

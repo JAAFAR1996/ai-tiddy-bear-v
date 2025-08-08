@@ -3,17 +3,46 @@ from src.infrastructure.routing.route_manager import RouteManager, register_all_
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 
-# Simple admin_guard fallback (JWT with 'role'=='admin')
+# Production admin_guard with secure JWT verification
 def admin_guard(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())):
     import jwt
+    import os
+
+    # Get JWT secret from environment
+    jwt_secret = os.getenv("JWT_SECRET_KEY")
+    if not jwt_secret:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="JWT configuration error - contact administrator",
+        )
 
     try:
-        payload = jwt.decode(credentials.credentials, "secret", algorithms=["HS256"])
+        payload = jwt.decode(
+            credentials.credentials,
+            jwt_secret,
+            algorithms=["HS256"],
+            options={"verify_exp": True},
+        )
+
+        # Verify admin role
         if payload.get("role") != "admin":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
             )
-    except Exception:
+
+        # Verify token type
+        if payload.get("type") != "access":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type"
+            )
+
+        return payload
+
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired"
+        )
+    except jwt.InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin token"
         )
@@ -59,7 +88,7 @@ from pathlib import Path
 import os
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/web", tags=["Web Interface"])
+router = APIRouter(tags=["Web Interface"])
 
 # Dynamic template path
 TEMPLATE_DIR = Path(__file__).parent / "templates"

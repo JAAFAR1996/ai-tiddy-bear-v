@@ -13,7 +13,8 @@ from .cache_manager import CacheManager, create_cache_manager
 from .compression_manager import CompressionManager, create_compression_manager
 from .database_optimizer import ConnectionPoolManager, create_database_optimizer
 from .monitoring import PerformanceMonitor, create_performance_monitor
-from .load_testing import LoadTestRunner, create_load_test_runner
+# Load testing removed for production
+# from .load_testing import LoadTestRunner, create_load_test_runner
 from .optimization_engine import OptimizationEngine, create_optimization_engine
 
 
@@ -281,9 +282,10 @@ class PerformanceSystem:
         logger.info(f"Starting {duration_minutes}-minute performance benchmark...")
         
         # Configure benchmark scenarios
-        from .load_testing import TestScenario, TestType, LoadPattern
+        # Load testing imports removed for production
+        # from .load_testing import TestScenario, TestType, LoadPattern
         
-        benchmark_scenario = TestScenario(
+        # benchmark_scenario = TestScenario(  # Removed for production
             name="performance_benchmark",
             description=f"Comprehensive {duration_minutes}-minute benchmark",
             test_type=TestType.LOAD,

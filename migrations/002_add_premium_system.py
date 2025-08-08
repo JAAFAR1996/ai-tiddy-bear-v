@@ -373,7 +373,38 @@ class FeatureUsage(Base):
 def get_migration_sql():
     """Generate SQL statements for this migration."""
 
-    return """
+
+CREATE TYPE subscription_status AS ENUM ('ACTIVE', 'CANCELLED', 'EXPIRED', 'TRIAL', 'PAST_DUE');
+CREATE TYPE transaction_type AS ENUM ('SUBSCRIPTION', 'UPGRADE', 'DOWNGRADE', 'CANCELLATION', 'REFUND');
+CREATE TYPE payment_status AS ENUM ('PENDING', 'COMPLETED', 'FAILED', 'CANCELLED', 'REFUNDED');
+CREATE TYPE websocket_status AS ENUM ('CONNECTING', 'CONNECTED', 'DISCONNECTED', 'ERROR');
+CREATE TYPE notification_type AS ENUM ('SAFETY_ALERT', 'BEHAVIOR_CONCERN', 'USAGE_LIMIT', 'PREMIUM_FEATURE', 'EMERGENCY');
+CREATE TYPE notification_priority AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL');
+CREATE TYPE delivery_status AS ENUM ('PENDING', 'PARTIAL', 'DELIVERED', 'FAILED');
+
+INSERT INTO subscription_tiers (tier_name, monthly_price, children_limit, history_days, reports_per_month, features_json) VALUES 
+('FREE', 0.0, 1, 7, 1, '["basic_monitoring"]'),
+('BASIC', 9.99, 3, 90, 5, '["advanced_analytics", "export_data", "real_time_alerts", "extended_history"]'),
+('PREMIUM', 19.99, -1, -1, -1, '["custom_reports", "priority_support", "unlimited_children", "ai_insights"]'),
+('ENTERPRISE', 49.99, -1, -1, -1, '["all_premium_features", "custom_integrations", "dedicated_support"]');
+
+CREATE INDEX CONCURRENTLY idx_user_subscriptions_active ON user_subscriptions (user_id) WHERE status = 'ACTIVE';
+CREATE INDEX CONCURRENTLY idx_payment_transactions_recent ON payment_transactions (transaction_date) WHERE transaction_date > NOW() - INTERVAL '1 year';
+CREATE INDEX CONCURRENTLY idx_websocket_connections_active ON websocket_connections (user_id) WHERE status = 'CONNECTED';
+CREATE INDEX CONCURRENTLY idx_notification_deliveries_pending ON notification_deliveries (created_at) WHERE overall_status IN ('PENDING', 'PARTIAL');
+
+ALTER TABLE user_subscriptions ADD CONSTRAINT chk_subscription_dates CHECK (end_date IS NULL OR end_date > start_date);
+ALTER TABLE payment_transactions ADD CONSTRAINT chk_payment_amount CHECK (amount >= 0);
+ALTER TABLE feature_usage ADD CONSTRAINT chk_usage_count CHECK (usage_count > 0);
+
+COMMENT ON TABLE subscription_tiers IS 'Premium subscription tier configuration';
+COMMENT ON TABLE user_subscriptions IS 'User premium subscription records with Stripe integration';
+COMMENT ON TABLE payment_transactions IS 'Payment transaction audit trail';
+COMMENT ON TABLE websocket_connections IS 'Active WebSocket connection tracking';
+COMMENT ON TABLE notification_deliveries IS 'Real-time notification delivery tracking';
+COMMENT ON TABLE feature_usage IS 'Premium feature usage tracking for billing';
+    return (
+        """
 -- ===========================================
 -- AI TEDDY BEAR V5 - PREMIUM SYSTEM MIGRATION
 -- ===========================================
@@ -394,11 +425,8 @@ INSERT INTO subscription_tiers (tier_name, monthly_price, children_limit, histor
 ('PREMIUM', 19.99, -1, -1, -1, '["custom_reports", "priority_support", "unlimited_children", "ai_insights"]'),
 ('ENTERPRISE', 49.99, -1, -1, -1, '["all_premium_features", "custom_integrations", "dedicated_support"]');
 
--- Create indexes for performance
-CREATE INDEX CONCURRENTLY idx_user_subscriptions_active ON user_subscriptions (user_id) WHERE status = 'ACTIVE';
-CREATE INDEX CONCURRENTLY idx_payment_transactions_recent ON payment_transactions (transaction_date) WHERE transaction_date > NOW() - INTERVAL '1 year';
-CREATE INDEX CONCURRENTLY idx_websocket_connections_active ON websocket_connections (user_id) WHERE status = 'CONNECTED';
-CREATE INDEX CONCURRENTLY idx_notification_deliveries_pending ON notification_deliveries (created_at) WHERE overall_status IN ('PENDING', 'PARTIAL');
+-- NOTE: All performance indexes for premium system have been moved to ops/sql/manual_add_critical_indexes.sql for production safety and operational control.
+-- Please execute the index creation script manually as per the deployment runbook.
 
 -- Add constraints for data integrity
 ALTER TABLE user_subscriptions ADD CONSTRAINT chk_subscription_dates CHECK (end_date IS NULL OR end_date > start_date);
@@ -411,13 +439,8 @@ COMMENT ON TABLE payment_transactions IS 'Payment transaction audit trail';
 COMMENT ON TABLE websocket_connections IS 'Active WebSocket connection tracking';
 COMMENT ON TABLE notification_deliveries IS 'Real-time notification delivery tracking';
 COMMENT ON TABLE feature_usage IS 'Premium feature usage tracking for billing';
-"""
+        """
+    )
 
 
-if __name__ == "__main__":
-    print("🧸 AI TEDDY BEAR V5 - PREMIUM SYSTEM MIGRATION")
-    print("=" * 50)
-    print("This script generates SQL for premium subscription system.")
-    print("Execute the SQL output in your PostgreSQL database.")
-    print()
-    print(get_migration_sql())
+

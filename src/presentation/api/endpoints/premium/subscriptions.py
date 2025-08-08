@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Any
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from fastapi.responses import JSONResponse
 
 from src.application.services.premium.subscription_service import (
     PremiumSubscriptionService,
@@ -21,7 +22,7 @@ from src.core.entities.subscription import SubscriptionTier, SubscriptionStatus
 from src.infrastructure.security.auth import get_current_user
 from src.core.entities import User
 
-router = APIRouter(prefix="/api/v1/premium", tags=["Premium"])
+router = APIRouter(tags=["Premium"])
 
 
 # Request/Response Models
@@ -497,5 +498,17 @@ async def stripe_webhook(
     # Payment webhook handling disabled - webhook events logged only
     webhook_body = await request.body()
     logger.info(f"Stripe webhook received: {len(webhook_body)} bytes")
-    
+
     return {"status": "webhook_logged"}
+
+
+@router.get("/status", tags=["Maintenance"])
+async def service_unavailable():
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "detail": "هذه الخدمة غير متوفرة حالياً - سيتم تفعيلها قريباً.",
+            "service": "premium_subscription",
+            "status": "maintenance",
+        },
+    )

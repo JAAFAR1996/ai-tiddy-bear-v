@@ -7,27 +7,7 @@ from src.infrastructure.logging.production_logger import get_logger
 from .route_monitor import RouteMonitor
 
 
-def get_router_meta(router):
-    """
-    Helper to extract prefix and tags from any APIRouter, raising a clear error if missing.
-    """
-    prefix = getattr(router, "prefix", None)
-    tags = getattr(router, "tags", None)
-    if not prefix or not tags:
-        logger = get_logger()
-        logger.error(
-            f"❌ Router {router} missing prefix/tags. prefix={prefix}, tags={tags}",
-            extra={
-                "router": str(router),
-                "prefix": prefix,
-                "tags": tags,
-                "stack": traceback.format_stack(),
-            },
-        )
-        raise SystemExit(
-            f"Router {router} missing required prefix/tags. This is a fatal error. See logs for details."
-        )
-    return prefix, tags
+# get_router_meta function removed - prefixes now handled explicitly in register_all_routers
 
 
 """
@@ -62,11 +42,13 @@ class RouteManager:
         self,
         router: APIRouter,
         router_name: str,
-        prefix: Optional[str] = None,
         tags: Optional[List[str]] = None,
         dependencies: Optional[List] = None,
         require_auth: bool = True,
         skip_conflict_check: bool = False,
+        prefix: Optional[
+            str
+        ] = None,  # Kept for backward compatibility, but not required
     ) -> None:
         """
         Register a router with comprehensive conflict detection and unified security.
@@ -89,16 +71,19 @@ class RouteManager:
         import traceback
         import os
 
+        # If prefix is not provided, use the router's own prefix
+        if prefix is None:
+            prefix = getattr(router, "prefix", None)
         error_context = {
             "router_name": router_name,
             "prefix": prefix,
             "tags": tags,
         }
-        # Enforce explicit prefix/tags
-        if prefix is None or tags is None:
+        # Enforce explicit tags
+        if tags is None:
             traceback.print_stack()
             raise ValueError(
-                f"prefix and tags must be passed explicitly to register_router. Context: {error_context}"
+                f"tags must be passed explicitly to register_router. Context: {error_context}"
             )
         # Strict prefix validation: no auto-correction in production
         strict_prefix = os.environ.get("STRICT_PREFIX_VALIDATION")
@@ -354,12 +339,11 @@ def register_all_routers(app: FastAPI) -> RouteManager:
     try:
         from src.adapters.auth_routes import router as auth_router
 
-        prefix, tags = get_router_meta(auth_router)
         route_manager.register_router(
             router=auth_router,
             router_name="authentication",
-            prefix=prefix,
-            tags=tags,
+            prefix="/api/auth",
+            tags=["Authentication"],
             require_auth=False,
             skip_conflict_check=False,
         )
@@ -372,12 +356,11 @@ def register_all_routers(app: FastAPI) -> RouteManager:
     try:
         from src.adapters.dashboard_routes import router as dashboard_router
 
-        prefix, tags = get_router_meta(dashboard_router)
         route_manager.register_router(
             router=dashboard_router,
             router_name="dashboard",
-            prefix=prefix,
-            tags=tags,
+            prefix="/api/dashboard",
+            tags=["Dashboard"],
             require_auth=True,
         )
         logger.info("✅ Dashboard router registered")
@@ -389,12 +372,11 @@ def register_all_routers(app: FastAPI) -> RouteManager:
     try:
         from src.adapters.api_routes import router as main_api_router
 
-        prefix, tags = get_router_meta(main_api_router)
         route_manager.register_router(
             router=main_api_router,
             router_name="core_api",
-            prefix=prefix,
-            tags=tags,
+            prefix="/api/v1/core",
+            tags=["Core API"],
             require_auth=True,
         )
         logger.info("✅ Core API router registered")
@@ -406,12 +388,11 @@ def register_all_routers(app: FastAPI) -> RouteManager:
     try:
         from src.adapters.esp32_router import router as esp32_router
 
-        prefix, tags = get_router_meta(esp32_router)
         route_manager.register_router(
             router=esp32_router,
             router_name="esp32",
-            prefix=prefix,
-            tags=tags,
+            prefix="/esp32",
+            tags=["ESP32"],
             require_auth=True,
         )
         logger.info("✅ ESP32 router registered")
@@ -425,12 +406,11 @@ def register_all_routers(app: FastAPI) -> RouteManager:
             esp32_router as esp32_websocket_router,
         )
 
-        prefix, tags = get_router_meta(esp32_websocket_router)
         route_manager.register_router(
             router=esp32_websocket_router,
             router_name="esp32_websocket",
-            prefix=prefix,
-            tags=tags,
+            prefix="/esp32_ws",
+            tags=["ESP32"],
             require_auth=False,
         )
         logger.info("✅ ESP32 WebSocket router registered")
@@ -441,12 +421,11 @@ def register_all_routers(app: FastAPI) -> RouteManager:
     try:
         from src.adapters.web import router as web_router
 
-        prefix, tags = get_router_meta(web_router)
         route_manager.register_router(
             router=web_router,
             router_name="web_interface",
-            prefix=prefix,
-            tags=tags,
+            prefix="/web",
+            tags=["Web Interface"],
             require_auth=True,
         )
         logger.info("✅ Web interface router registered")
@@ -460,12 +439,11 @@ def register_all_routers(app: FastAPI) -> RouteManager:
             router as premium_router,
         )
 
-        prefix, tags = get_router_meta(premium_router)
         route_manager.register_router(
             router=premium_router,
             router_name="premium_subscriptions",
-            prefix=prefix,
-            tags=tags,
+            prefix="/api/v1/premium",
+            tags=["Premium"],
             require_auth=True,
         )
         logger.info("✅ Premium subscriptions router registered")
@@ -478,12 +456,11 @@ def register_all_routers(app: FastAPI) -> RouteManager:
             router as payment_router,
         )
 
-        prefix, tags = get_router_meta(payment_router)
         route_manager.register_router(
             router=payment_router,
             router_name="payment_system",
-            prefix=prefix,
-            tags=tags,
+            prefix="/api/v1/payments",
+            tags=["payments"],
             require_auth=True,
         )
         logger.info("✅ Payment system router registered")
@@ -496,12 +473,11 @@ def register_all_routers(app: FastAPI) -> RouteManager:
             router as iraqi_payment_router,
         )
 
-        prefix, tags = get_router_meta(iraqi_payment_router)
         route_manager.register_router(
             router=iraqi_payment_router,
             router_name="iraqi_payment_integration",
-            prefix=prefix,
-            tags=tags,
+            prefix="/api/v1/iraqi-payments",
+            tags=["iraqi-payments"],
             require_auth=True,
         )
         logger.info("✅ Iraqi payment integration router registered")
@@ -514,12 +490,11 @@ def register_all_routers(app: FastAPI) -> RouteManager:
             router as websocket_router,
         )
 
-        prefix, tags = get_router_meta(websocket_router)
         route_manager.register_router(
             router=websocket_router,
             router_name="websocket_notifications",
-            prefix=prefix,
-            tags=tags,
+            prefix="/ws",
+            tags=["WebSocket"],
             require_auth=True,
         )
         logger.info("✅ WebSocket notifications router registered")
