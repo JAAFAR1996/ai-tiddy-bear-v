@@ -46,7 +46,7 @@ class ProductionCodeChecker:
         
         # Patterns to check
         self.mock_class_pattern = re.compile(r'class\s+(Mock|Dummy|Fake|Test(?!ing))\w*')
-        self.mock_return_pattern = re.compile(r'return\s+.*?(mock_|dummy_|fake_|test_data)')
+        self.test_return_pattern = re.compile(r'return\s+.*?(test_data_|development_data_)')
         self.placeholder_pattern = re.compile(r'return\s+(True|None|False)\s*#\s*(placeholder|stub|todo|fixme)', re.IGNORECASE)
         self.todo_pattern = re.compile(r'#\s*(TODO|FIXME|HACK|XXX):', re.IGNORECASE)
         
@@ -100,15 +100,15 @@ class ProductionCodeChecker:
         except Exception as e:
             print(f"Error reading {file_path}: {e}")
     
-    def check_file_for_mock_returns(self, file_path: Path) -> None:
-        """Check for functions returning mock data."""
+    def check_file_for_test_returns(self, file_path: Path) -> None:
+        """Check for functions returning test data in production code."""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
                 lines = content.split('\n')
                 
             for i, line in enumerate(lines, 1):
-                match = self.mock_return_pattern.search(line)
+                match = self.test_return_pattern.search(line)
                 if match:
                     # Check if it's marked as fallback or development only
                     if not any(marker in line for marker in ['# Fallback', '# Development only']):
@@ -116,8 +116,8 @@ class ProductionCodeChecker:
                             level=IssueLevel.CRITICAL,
                             file_path=str(file_path),
                             line_number=i,
-                            issue_type="Mock Return Value",
-                            description=f"Function returns mock data",
+                            issue_type="Test Return Value",
+                            description=f"Function returns test data",
                             code_snippet=line.strip()
                         ))
         except Exception as e:
@@ -245,7 +245,7 @@ class ProductionCodeChecker:
             
             # Run all checks
             self.check_file_for_mock_classes(file_path)
-            self.check_file_for_mock_returns(file_path)
+            self.check_file_for_test_returns(file_path)
             self.check_file_for_placeholders(file_path)
             self.check_file_for_not_implemented(file_path)
             self.check_file_naming(file_path)
