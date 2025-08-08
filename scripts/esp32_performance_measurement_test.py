@@ -146,7 +146,7 @@ class MockESP32PerformanceDevice:
         
         return measurement
     
-    def simulate_data_transfer(self, data_size_kb: int) -> Optional[LatencyMeasurement]:
+    def simulate_test_transfer(self, data_size_kb: int) -> Optional[LatencyMeasurement]:
         """Simulate data transfer with latency measurement."""
         start_time = time.time()
         
@@ -435,7 +435,7 @@ class ESP32PerformanceTester:
                 for i in range(5):  # 5 measurements per size
                     self.device_logger.log_event("data_transfer", {"size_kb": size_kb, "attempt": i+1})
                     
-                    measurement = self.mock_esp32.simulate_data_transfer(size_kb)
+                    measurement = self.mock_esp32.simulate_test_transfer(size_kb)
                     if measurement:
                         data_measurements.append(measurement)
                         

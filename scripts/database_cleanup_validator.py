@@ -4,7 +4,7 @@
 =====================================================
 
 Production readiness script that:
-1. Identifies and removes ALL test/mock/demo data from the database
+1. Identifies and removes ALL development/testing/demo data from the database
 2. Validates production schema integrity
 3. Ensures COPPA compliance for all remaining data
 4. Generates detailed cleanup report

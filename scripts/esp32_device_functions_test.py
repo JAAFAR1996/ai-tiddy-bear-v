@@ -77,7 +77,7 @@ class MockESP32AudioDevice:
             "errors": []
         }
     
-    def generate_audio_data(self, duration_ms: int, frequency: int = 440) -> bytes:
+    def generate_test_audio_sample(self, duration_ms: int, frequency: int = 440) -> bytes:
         """Generate synthetic audio data."""
         samples = int(self.sample_rate * duration_ms / 1000)
         audio_data = []
@@ -115,7 +115,7 @@ class MockESP32AudioDevice:
                     
                     # Generate synthetic audio chunk (simulating microphone input)
                     chunk_size = self.buffer_size
-                    chunk_data = self.generate_audio_data(
+                    chunk_data = self.generate_test_audio_sample(
                         int(chunk_size * 1000 / (self.sample_rate * 2)), 
                         frequency=440 + random.randint(-50, 50)  # Slight frequency variation
                     )
@@ -448,7 +448,7 @@ class ESP32DeviceFunctionsTester:
             
             # Generate test audio data
             import math
-            test_audio = self.mock_esp32.generate_audio_data(duration_ms=2000, frequency=440)
+            test_audio = self.mock_esp32.generate_test_audio_sample(duration_ms=2000, frequency=440)
             
             playback_started = self.mock_esp32.play_audio(test_audio, volume=75)
             
@@ -488,7 +488,7 @@ class ESP32DeviceFunctionsTester:
             
             for i in range(3):
                 # Generate short audio sample
-                short_audio = self.mock_esp32.generate_audio_data(duration_ms=500, frequency=880)
+                short_audio = self.mock_esp32.generate_test_audio_sample(duration_ms=500, frequency=880)
                 
                 response_start = time.time()
                 playback_started = self.mock_esp32.play_audio(short_audio, volume=50)
@@ -524,7 +524,7 @@ class ESP32DeviceFunctionsTester:
             quality_tests = []
             
             for freq in [220, 440, 880]:  # Different frequencies
-                test_audio = self.mock_esp32.generate_audio_data(duration_ms=1000, frequency=freq)
+                test_audio = self.mock_esp32.generate_test_audio_sample(duration_ms=1000, frequency=freq)
                 playback_started = self.mock_esp32.play_audio(test_audio, volume=60)
                 
                 if playback_started:
@@ -637,7 +637,7 @@ class ESP32DeviceFunctionsTester:
             # Test 2: Disconnect during playback  
             print("   🔊❌ Testing disconnect during playback...")
             
-            test_audio = self.mock_esp32.generate_audio_data(duration_ms=3000, frequency=440)
+            test_audio = self.mock_esp32.generate_test_audio_sample(duration_ms=3000, frequency=440)
             playback_started = self.mock_esp32.play_audio(test_audio, volume=50)
             
             if playback_started:
@@ -729,7 +729,7 @@ class ESP32DeviceFunctionsTester:
                 })
             
             # Test playback recovery
-            test_audio = self.mock_esp32.generate_audio_data(duration_ms=1500, frequency=660)
+            test_audio = self.mock_esp32.generate_test_audio_sample(duration_ms=1500, frequency=660)
             playback_started = self.mock_esp32.play_audio(test_audio, volume=40)
             
             if playback_started:

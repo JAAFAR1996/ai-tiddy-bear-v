@@ -69,7 +69,7 @@ class MockESP32ReliabilityDevice:
         self.connection_drops = 0
         self.errors = []
         self.operations_completed = 0
-        self.data_buffer = []
+        self.test_buffer = []
         self.last_reboot = None
         
         # Performance metrics
@@ -165,7 +165,7 @@ class MockESP32ReliabilityDevice:
         # Save critical data before reboot
         pre_reboot_data = {
             "operations_completed": self.operations_completed,
-            "data_buffer": self.data_buffer.copy(),
+            "test_buffer": self.test_buffer.copy(),
             "timestamp": datetime.now().isoformat()
         }
         
@@ -185,7 +185,7 @@ class MockESP32ReliabilityDevice:
             # Simulate minor data loss
             lost_operations = random.randint(1, 5)
             self.operations_completed = max(0, pre_reboot_data["operations_completed"] - lost_operations)
-            self.data_buffer = self.data_buffer[:-lost_operations] if len(self.data_buffer) > lost_operations else []
+            self.test_buffer = self.test_buffer[:-lost_operations] if len(self.test_buffer) > lost_operations else []
         
         print(f"✅ Device {self.device_id} rebooted successfully")
         return not data_loss  # Return True if no data loss
@@ -481,7 +481,7 @@ class ESP32ReliabilityTester:
                 if self.mock_esp32.simulate_operation_cycle():
                     pre_reboot_operations += 1
                     # Add some data to buffer
-                    self.mock_esp32.data_buffer.append({
+                    self.mock_esp32.test_buffer.append({
                         "operation_id": i,
                         "timestamp": datetime.now().isoformat(),
                         "data": f"operation_data_{i}"
@@ -489,7 +489,7 @@ class ESP32ReliabilityTester:
                 time.sleep(0.02)
             
             operations_before = self.mock_esp32.operations_completed
-            buffer_size_before = len(self.mock_esp32.data_buffer)
+            buffer_size_before = len(self.mock_esp32.test_buffer)
             
             print(f"      Pre-reboot: {operations_before} operations, {buffer_size_before} buffer items")
             
@@ -497,7 +497,7 @@ class ESP32ReliabilityTester:
             reboot_successful = self.mock_esp32.simulate_reboot()
             
             operations_after = self.mock_esp32.operations_completed
-            buffer_size_after = len(self.mock_esp32.data_buffer)
+            buffer_size_after = len(self.mock_esp32.test_buffer)
             
             # Calculate data loss
             operations_lost = operations_before - operations_after
@@ -612,7 +612,7 @@ class ESP32ReliabilityTester:
                     "total_tests": len(reboot_tests),
                     "data_integrity_verified": overall_pass,
                     "final_operations_count": self.mock_esp32.operations_completed,
-                    "final_buffer_size": len(self.mock_esp32.data_buffer)
+                    "final_buffer_size": len(self.mock_esp32.test_buffer)
                 },
                 timestamp=datetime.now().isoformat(),
                 duration_ms=duration_ms

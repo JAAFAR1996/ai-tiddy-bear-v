@@ -250,7 +250,7 @@ def ai_response_fixture() -> Dict[str, Any]:
 
 @pytest.fixture
 def audio_data_fixture() -> bytes:
-    """Mock audio data for testing."""
+    """Test audio data fixture for validation."""
     # Simple WAV header + silent audio
     return b'RIFF' + b'\\x00' * 100
 

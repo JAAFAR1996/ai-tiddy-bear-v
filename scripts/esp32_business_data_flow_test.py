@@ -171,8 +171,8 @@ class MockParentDashboard:
         return self.dashboard_data.get(parent_id)
 
 
-class MockDataStore:
-    """Mock data store for testing business logic."""
+class TestDataStore:
+    """Test data store for ESP32 business logic validation."""
     
     def __init__(self):
         self.parents: Dict[str, Parent] = {}
@@ -395,7 +395,7 @@ class BusinessDataFlowTester:
     """Comprehensive business/data flow testing for ESP32 system."""
     
     def __init__(self):
-        self.data_store = MockDataStore()
+        self.data_store = TestDataStore()
         self.dashboard = MockParentDashboard()
         self.test_results = []
         
