@@ -66,6 +66,7 @@ try:
                 }
             except Exception as e:
                 import logging
+
                 # Only log as debug to avoid spam during testing
                 logging.debug(f"Failed to load services module: {e}")
                 # Set default services instead of raising

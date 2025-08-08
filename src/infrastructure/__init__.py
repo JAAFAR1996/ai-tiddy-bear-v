@@ -6,7 +6,7 @@ Infrastructure layer components including configuration, security, database, and
 
 # Infrastructure layer - Technical implementation details
 # This module contains all infrastructure concerns like:
-# - Configuration management  
+# - Configuration management
 # - Database connections and repositories
 # - Security and authentication
 # - Monitoring and logging

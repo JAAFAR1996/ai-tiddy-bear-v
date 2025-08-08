@@ -1,67 +1,13 @@
 """
 🧸 AI TEDDY BEAR V5 - ADAPTERS MODULE
 ===================================
-Organized exports for all adapter interfaces and implementations.
+Lightweight module exports - imports moved to prevent circular dependencies during startup.
+
+To import components from this module, import them directly:
+- from src.adapters.database_production import ProductionDatabaseAdapter
+- from src.adapters.auth_routes import router as auth_router
+- from src.adapters.web import router as web_router
 """
 
-# Database Adapters
-from .database_production import (
-    ProductionDatabaseAdapter,
-    ProductionUserRepository,
-    ProductionChildRepository,
-    ProductionConversationRepository,
-    ProductionMessageRepository,
-    ProductionEventRepository,
-    get_database_adapter,
-    initialize_production_database
-)
-
-# AI Provider
-from .providers.openai_provider import (
-    ProductionOpenAIProvider,
-    OpenAIProvider,
-    create_openai_provider,
-    create_child_safe_provider
-)
-
-# Web & API
-from .web import router as web_router
-from .api_routes import router as api_router
-
-# Dashboard Components
-from .dashboard import (
-    ParentDashboard,
-    ChildMonitor,
-    SafetyControls,
-    UsageReports,
-    NotificationCenter
-)
-
-__all__ = [
-    # Database
-    "ProductionDatabaseAdapter",
-    "ProductionUserRepository", 
-    "ProductionChildRepository",
-    "ProductionConversationRepository",
-    "ProductionMessageRepository",
-    "ProductionEventRepository",
-    "get_database_adapter",
-    "initialize_production_database",
-    
-    # AI Provider
-    "ProductionOpenAIProvider",
-    "OpenAIProvider",
-    "create_openai_provider",
-    "create_child_safe_provider",
-    
-    # Web & API
-    "web_router",
-    "api_router",
-    
-    # Dashboard
-    "ParentDashboard",
-    "ChildMonitor", 
-    "SafetyControls",
-    "UsageReports",
-    "NotificationCenter"
-]
+# Intentionally minimal to avoid circular imports during startup
+__all__ = []
