@@ -63,3 +63,7 @@ temp/
 
 #Ignore cursor AI rules
 .cursor\rules\codacy.mdc
+
+.env
+.env.*
+!.env.example
