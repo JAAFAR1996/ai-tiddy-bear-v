@@ -1319,7 +1319,11 @@ async def create_child(
         )
 
 
-@router.put("/children/{child_id}", response_model=Dict[str, Any])
+@router.put(
+    "/children/{child_id}",
+    response_model=Dict[str, Any],
+    dependencies=[Depends(get_current_user)],
+)
 async def update_child(
     child_id: str,
     child_data: ChildUpdateRequest,
