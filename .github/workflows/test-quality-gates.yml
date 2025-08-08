@@ -28,7 +28,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install -r requirements-test.txt
       
       - name: Check for fake tests
         run: |
@@ -98,7 +97,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install -r requirements-test.txt
       
       - name: Run all tests
         env:
@@ -137,7 +135,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install -r requirements-test.txt
       
       - name: Run coverage
         env:
@@ -181,7 +178,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install -r requirements-test.txt
       
       - name: Run mutation testing
         run: |
@@ -258,7 +254,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install -r requirements-test.txt
       
       - name: Run performance tests
         run: |
@@ -293,7 +288,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install -r requirements-test.txt
       
       - name: Run async tests
         run: |
