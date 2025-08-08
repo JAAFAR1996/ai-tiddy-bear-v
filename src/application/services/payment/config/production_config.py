@@ -11,6 +11,7 @@ from decimal import Decimal
 import os
 from enum import Enum
 import logging
+from src.infrastructure.config.production_config import get_config
 
 
 class Environment(Enum):
@@ -233,8 +234,6 @@ class ProductionPaymentConfig:
 
     def _init_security_config(self) -> SecurityConfig:
         """Initialize security configuration."""
-        from src.infrastructure.config.loader import get_config
-
         config = get_config()
         if not config.JWT_SECRET_KEY:
             raise Exception(
@@ -262,7 +261,7 @@ class ProductionPaymentConfig:
             f"CRITICAL: {key} environment variable is required for production. "
             f"Cannot start payment service without proper database credentials."
         )
-    
+
     def _init_database_config(self) -> DatabaseConfig:
         """Initialize database configuration."""
         return DatabaseConfig(
@@ -270,7 +269,8 @@ class ProductionPaymentConfig:
             port=int(os.getenv("DB_PORT", "5432")),
             database=os.getenv("DB_NAME", "aiteddy_payments"),
             username=os.getenv("DB_USER") or self._raise_config_error("DB_USER"),
-            password=os.getenv("DB_PASSWORD") or self._raise_config_error("DB_PASSWORD"),
+            password=os.getenv("DB_PASSWORD")
+            or self._raise_config_error("DB_PASSWORD"),
             pool_size=int(os.getenv("DB_POOL_SIZE", "20")),
             ssl_mode=os.getenv("DB_SSL_MODE", "require"),
         )

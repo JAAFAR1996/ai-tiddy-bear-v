@@ -434,7 +434,7 @@ class AdvancedJWTManager:
             if os.getenv("ENVIRONMENT") == "production":
                 raise Exception("SECURITY VIOLATION: HS256 not allowed in production")
 
-            from src.infrastructure.config.loader import get_config
+            from src.infrastructure.config.production_config import get_config
 
             config = get_config()
             jwt_secret = config.JWT_SECRET_KEY
@@ -529,7 +529,7 @@ class AdvancedJWTManager:
                 if not self.fallback_algorithm:
                     raise jwt.InvalidTokenError("No valid signing key available")
 
-                from src.infrastructure.config.loader import get_config
+                from src.infrastructure.config.production_config import get_config
 
                 config = get_config()
                 jwt_secret = config.JWT_SECRET_KEY
