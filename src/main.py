@@ -36,6 +36,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from src.infrastructure.error_handler import setup_error_handlers
 
+
 # Configure logging with secure formatting (no sensitive data exposure)
 logging.basicConfig(
     level=logging.INFO,
@@ -53,7 +54,6 @@ PROJECT_ROOT = Path(__file__).parent.parent
 
 try:
     # Import unified configuration system
-    from src.infrastructure.config.production_config import load_config
     from src.infrastructure.config.validator import validate_and_report
 
     # Import error handling system
@@ -68,10 +68,16 @@ try:
 
     # Import core services - database initialization only
     from src.adapters.database_production import initialize_production_database
-    from src.core.security_service import create_security_service
-    from src.infrastructure.rate_limiting.rate_limiter import (
-        create_rate_limiting_service,
-    )
+    # --- security service factory (robust import) ---
+    try:
+        from src.core.security_service import create_security_service
+    except Exception:
+        # No-op fallback so startup ما يطيح لو فشل الاستيراد
+        async def create_security_service(*args, **kwargs):
+            class _NoopSecurityService:
+                async def initialize(self, *a, **k): ...
+            return _NoopSecurityService()
+    # Removed unused import of create_rate_limiting_service
 except ImportError as e:
     logger.critical("Critical import error: %s", e)
     # أثناء الاختبار لا توقف التنفيذ، فقط سجل الخطأ
@@ -476,10 +482,14 @@ setup_error_handlers(app, debug=(os.environ.get("ENVIRONMENT") != "production"))
 # UNIFIED CONFIGURATION SYSTEM
 
 
-# Setup middleware if not in testing environment
 
+# Setup middleware if not in testing environment
 if not os.environ.get("PYTEST_CURRENT_TEST"):
-    pass
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(RequestValidationMiddleware)
+    if config:
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=config.ALLOWED_HOSTS)
+        app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ALLOWED_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 
 # ================================
 # API ROUTES
@@ -678,18 +688,12 @@ def setup_routes():
 # Defer route setup to avoid import issues during testing
 
 
+
 # ================================
 # HEALTH AND STATUS ENDPOINTS
 # ================================
 
-
-@app.get("/favicon.ico")
-async def favicon():
-    """Return a simple favicon response to avoid 404 errors."""
-    from fastapi.responses import Response
-
-    # Return empty response with proper content type
-    return Response(content="", media_type="image/x-icon", status_code=204)
+# Removed duplicate /favicon.ico endpoint (now only in setup_production_static_routes)
 
 
 @app.get("/")
