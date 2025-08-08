@@ -38,6 +38,7 @@ settings.py
 # Logs
 logs/
 *.log
+ESP32_Project/
 
 # OS
 .DS_Store
