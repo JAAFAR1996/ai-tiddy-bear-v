@@ -193,7 +193,7 @@ class ImportChecker:
             'fastapi', 'uvicorn', 'pydantic', 'sqlalchemy', 'asyncpg', 'alembic',
             'redis', 'pytest', 'pytest_asyncio', 'httpx', 'requests', 'aiohttp',
             'bcrypt', 'passlib', 'jwt', 'jose', 'cryptography', 'openai',
-            'anthropic', 'numpy', 'pandas', 'matplotlib', 'scipy', 'sklearn',
+            'anthropic', 'numpy', 'pandas', 'matplotlib', 'sklearn',
             'torch', 'tensorflow', 'keras', 'PIL', 'cv2', 'boto3', 'google',
             'azure', 'injector', 'dependency_injector', 'structlog', 'loguru',
             'prometheus_client', 'sentry_sdk', 'celery', 'flower', 'graphene',
