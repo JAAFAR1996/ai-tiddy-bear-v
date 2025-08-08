@@ -311,6 +311,8 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
       - name: Run load tests
         run: |
           python tests/load_and_stability/run_complete_load_tests.py \

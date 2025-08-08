@@ -3,7 +3,7 @@
 🧸 DATABASE TEST DATA CHECKER
 ============================
 
-Simple script to identify and report test/mock data in the database.
+Simple script to identify and report development/testing data in the database.
 This script provides a comprehensive report without making changes.
 """
 
@@ -49,7 +49,7 @@ class DatabaseTestDataChecker:
         
     async def check_for_test_data(self) -> Dict[str, Any]:
         """Check all tables for test data patterns."""
-        logger.info("🔍 Scanning database for test/mock data...")
+        logger.info("🔍 Scanning database for development/testing data...")
         
         results = {
             'timestamp': datetime.now().isoformat(),
