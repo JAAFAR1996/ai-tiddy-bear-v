@@ -303,11 +303,14 @@ config = None  # متغير عالمي للتهيئة الآمنة
 try:
     from src.infrastructure.rate_limiting.service import create_rate_limiting_service
 except Exception:
+
     class _NoopRateLimiter:
         limiter = None
+
         def __init__(self, *args, **kwargs): ...
     def create_rate_limiting_service(*args, **kwargs):
         return _NoopRateLimiter()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -357,15 +360,16 @@ async def lifespan(app: FastAPI):
             from src.infrastructure.config.config_integration import get_config_manager
 
             config_manager = get_config_manager()
-            rate_limiting_service = create_rate_limiting_service(
-                redis_url=config.REDIS_URL,
-                use_redis=config.ENABLE_REDIS,
-            )
-            security_service = await create_security_service(rate_limiting_service)
+            # تم تهيئة rate limiter مسبقًا، لا داعي لاستدعاء create_rate_limiting_service مرة أخرى
+            # rate_limiting_service = create_rate_limiting_service(
+            #     redis_url=config.REDIS_URL,
+            #     use_redis=config.ENABLE_REDIS,
+            # )
+            security_service = await create_security_service(limiter)
 
             # Store services in app state
             app.state.security_service = security_service
-            app.state.rate_limiting_service = rate_limiting_service
+            app.state.rate_limiting_service = limiter
             app.state.limiter = limiter
 
             # 🔒 IMPLEMENT COMPREHENSIVE ADMIN SECURITY
@@ -376,7 +380,7 @@ async def lifespan(app: FastAPI):
 
                 logger.info("🔒 Implementing comprehensive admin security...")
                 security_report = await implement_comprehensive_admin_security(
-                    app, rate_limiting_service
+                    app, limiter
                 )
 
                 # Store security report in app state
