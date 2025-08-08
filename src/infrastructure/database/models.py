@@ -40,7 +40,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.sql import func
 from cryptography.fernet import Fernet
 
-from ..config import get_config_manager
+from ..config.config_manager_provider import get_config_manager
 from ..logging import get_logger, security_logger
 
 

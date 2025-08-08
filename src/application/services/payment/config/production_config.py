@@ -11,7 +11,7 @@ from decimal import Decimal
 import os
 from enum import Enum
 import logging
-from src.infrastructure.config.production_config import get_config
+from src.infrastructure.config.config_provider import get_config
 
 
 class Environment(Enum):

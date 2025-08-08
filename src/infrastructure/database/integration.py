@@ -34,7 +34,7 @@ from . import (
 from .health_checks import run_database_health_check, get_database_health_summary
 from .models import User, Child, Conversation, Message
 from .repository import get_child_repository, get_conversation_repository
-from ..config import get_config_manager
+from ..config.config_manager_provider import get_config_manager
 from ..logging import get_logger, audit_logger, performance_logger, security_logger
 
 

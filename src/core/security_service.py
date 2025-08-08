@@ -5,7 +5,7 @@ Core security service for child protection and system security.
 """
 
 import time
-from src.infrastructure.config.production_config import get_config
+from src.infrastructure.config.config_provider import get_config
 import hashlib
 import json
 import re
@@ -33,7 +33,7 @@ from src.infrastructure.database.database_manager import initialize_database
 from src.infrastructure.persistence.models.production_models import (
     ChildModel,
 )
-from src.infrastructure.config.production_config import get_config
+from src.infrastructure.config.config_provider import get_config
 from src.infrastructure.rate_limiting.rate_limiter import (
     RateLimitingService,
     OperationType,
@@ -2007,7 +2007,7 @@ class ProductionChildDataEncryption:
 
     def __init__(self, encryption_key: str = None):
         """Initialize encryption service."""
-        from src.infrastructure.config.production_config import get_config
+        from src.infrastructure.config.config_provider import get_config
 
         self.config = get_config() if hasattr(get_config, "__call__") else None
 

@@ -17,7 +17,7 @@ import time
 import logging
 
 from src.core.exceptions import ValidationError
-from src.infrastructure.config.production_config import get_config
+from src.infrastructure.config.config_provider import get_config
 from datetime import datetime, UTC
 from typing import Dict, Any, Optional, List
 from uuid import uuid4

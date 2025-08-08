@@ -150,7 +150,7 @@ class RequestValidationMiddleware(BaseHTTPMiddleware):
 def setup_application(config_param=None):
     """Setup application configuration and dependencies. Accepts optional config for testability."""
     global limiter, redis_client, config
-    from src.infrastructure.config.production_config import get_config
+    from src.infrastructure.config.config_provider import get_config
 
     config = config_param or get_config()
     try:

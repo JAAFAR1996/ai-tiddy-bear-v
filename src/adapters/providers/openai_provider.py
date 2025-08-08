@@ -30,7 +30,7 @@ from openai.types import CreateEmbeddingResponse, Moderation
 
 # Internal imports
 from src.interfaces.providers.ai_provider import AIProvider
-from src.infrastructure.config.production_config import get_config
+from src.infrastructure.config.config_provider import get_config
 from src.core.value_objects.value_objects import SafetyLevel, AgeGroup, ChildPreferences
 from src.infrastructure.rate_limiting.rate_limiter import (
     RateLimitingService,
@@ -150,7 +150,7 @@ class ProductionOpenAIProvider(AIProvider):
             **kwargs: Additional configuration options
         """
         # Load configuration
-        from src.infrastructure.config.production_config import get_config
+        from src.infrastructure.config.config_provider import get_config
 
         self.config = kwargs.get("config") or get_config()
         # Initialize API client

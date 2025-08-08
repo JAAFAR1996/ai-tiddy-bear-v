@@ -34,7 +34,7 @@ from asyncpg.exceptions import (
 )
 from fastapi import Request
 
-from ..config import get_config_manager
+from ..config.config_manager_provider import get_config_manager
 from ..logging import get_logger, audit_logger, performance_logger
 from ..monitoring import get_metrics_collector
 

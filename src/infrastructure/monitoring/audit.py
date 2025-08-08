@@ -426,7 +426,7 @@ class COPPAAuditLogger:
         try:
             import asyncio
             from src.services.service_registry import get_notification_service
-            from src.infrastructure.config.production_config import get_config
+            from src.infrastructure.config.config_provider import get_config
 
             async def send_admin_alert():
                 notification_service = await get_notification_service()

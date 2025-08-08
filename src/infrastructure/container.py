@@ -153,7 +153,7 @@ class ApplicationModule(Module):
     def _get_app_settings(self) -> object:
         # Example: load from config loader
         def _provider(config=None):
-            from src.infrastructure.config.production_config import get_config
+            from src.infrastructure.config.config_provider import get_config
 
             return config or get_config()
 

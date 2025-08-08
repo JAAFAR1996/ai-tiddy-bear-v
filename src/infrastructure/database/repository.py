@@ -84,7 +84,7 @@ except ImportError:
     database_manager = None
     transaction_manager = None
 
-from ..config import get_config_manager
+from ..config.config_manager_provider import get_config_manager
 from ..logging import get_logger, audit_logger, security_logger, performance_logger
 from ..caching import get_cache_manager
 
