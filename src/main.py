@@ -27,6 +27,7 @@ from pathlib import Path
 import uvicorn
 import redis.asyncio as redis
 from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -208,6 +209,10 @@ def setup_application(config_param=None):
 # Production-grade rate limiting implementation
 async def rate_limit_dependency(request: Request, rate: str = "30/minute"):
     """Production rate limiting using Redis backend with in-memory fallback."""
+    path = request.url.path
+    # bypass for health checks
+    if path in ("/routes-health", "/health"):
+        return True
     try:
         # Extract rate limit parameters
         requests_str, period = rate.split("/")
@@ -468,6 +473,10 @@ app = FastAPI(
         },
     ],
 )
+
+# Mount static files for firmware distribution
+app.mount("/web", StaticFiles(directory="static"), name="static_files")
+
 # Removed fallback router registration
 # uvicorn.run(
 #     "src.main:app",
