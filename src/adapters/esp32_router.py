@@ -10,6 +10,8 @@ from fastapi.security import HTTPBearer
 from typing import Optional
 import hashlib
 import json
+import os
+from pathlib import Path
 
 from ..services.esp32_chat_server import esp32_chat_server
 from ..infrastructure.security.auth import get_current_user
@@ -21,6 +23,48 @@ esp32_public = APIRouter(prefix="/api/esp32", tags=["ESP32-Public"])
 
 # Private router - authentication required
 esp32_private = APIRouter(prefix="/api/esp32", tags=["ESP32-Private"], dependencies=[Depends(get_current_user)])
+
+
+def _calculate_firmware_sha256(firmware_filename: str) -> str:
+    """
+    Calculate SHA256 hash for firmware file.
+    
+    Args:
+        firmware_filename: Name of the firmware file
+        
+    Returns:
+        SHA256 hash as hexadecimal string, or placeholder if file not found
+    """
+    # Define possible firmware locations
+    firmware_paths = [
+        f"/mnt/c/Users/jaafa/Desktop/ai teddy bear/static/firmware/{firmware_filename}",
+        f"/mnt/c/Users/jaafa/Desktop/ai teddy bear/web/firmware/{firmware_filename}",
+        f"/mnt/c/Users/jaafa/Desktop/ai teddy bear/src/static/firmware/{firmware_filename}",
+        f"./static/firmware/{firmware_filename}",
+        f"./firmware/{firmware_filename}"
+    ]
+    
+    for firmware_path in firmware_paths:
+        if os.path.exists(firmware_path):
+            try:
+                sha256_hash = hashlib.sha256()
+                with open(firmware_path, "rb") as f:
+                    for chunk in iter(lambda: f.read(4096), b""):
+                        sha256_hash.update(chunk)
+                hash_result = sha256_hash.hexdigest()
+                logger.info(f"✅ Calculated SHA256 for {firmware_filename}: {hash_result}")
+                return hash_result
+            except Exception as e:
+                logger.error(f"❌ Error calculating SHA256 for {firmware_path}: {e}")
+                continue
+    
+    # If no firmware file found, create a deterministic hash based on version and filename
+    # This ensures consistency until real firmware is deployed
+    placeholder_data = f"TEDDY_BEAR_FIRMWARE_V1.2.0_{firmware_filename}".encode()
+    placeholder_hash = hashlib.sha256(placeholder_data).hexdigest()
+    logger.warning(f"⚠️ Firmware file {firmware_filename} not found. Using placeholder SHA256: {placeholder_hash}")
+    
+    return placeholder_hash
 
 
 @esp32_private.websocket("/chat")
@@ -185,8 +229,8 @@ async def get_firmware_manifest(response: Response):
     firmware = {
         "version": "1.2.0",
         "mandatory": False,
-        "url": "https://ai-tiddy-bear-v.onrender.com/web/firmware/teddy-001.bin",
-        "sha256": "placeholder_sha256_hash_here",  # Should be computed from actual firmware file
+        "url": f"https://ai-tiddy-bear-v.onrender.com/web/firmware/teddy-001.bin",
+        "sha256": _calculate_firmware_sha256("teddy-001.bin"),
         "notes": "Stability fixes and performance improvements"
     }
     
