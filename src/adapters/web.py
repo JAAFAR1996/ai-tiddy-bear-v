@@ -49,7 +49,7 @@ def admin_guard(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()
 
 
 router = APIRouter(
-    prefix="/web",
+    prefix="/dashboard",
     tags=["Web Interface"],
 )
 

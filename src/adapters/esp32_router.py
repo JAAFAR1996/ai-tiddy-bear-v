@@ -27,11 +27,10 @@ from ..infrastructure.security.auth import get_current_user
 logger = logging.getLogger(__name__)
 
 # Public router - no authentication required
-esp32_public = APIRouter(prefix="/api/esp32", tags=["ESP32-Public"])
+esp32_public = APIRouter(tags=["ESP32-Public"])
 
 # Private router - authentication required
 esp32_private = APIRouter(
-    prefix="/api/esp32/private",
     tags=["ESP32-Private"],
     dependencies=[Depends(get_current_user)],
 )

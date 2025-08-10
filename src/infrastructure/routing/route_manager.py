@@ -391,7 +391,7 @@ def register_all_routers(app: FastAPI) -> RouteManager:
         route_manager.register_router(
             router=esp32_public,
             router_name="esp32_public",
-            prefix=None,  # Router already has prefix
+            prefix="/api/v1/esp32",
             tags=["ESP32-Public"],
             require_auth=False,
         )
@@ -407,7 +407,7 @@ def register_all_routers(app: FastAPI) -> RouteManager:
         route_manager.register_router(
             router=esp32_private,
             router_name="esp32_private",
-            prefix=None,  # Router already has prefix
+            prefix="/api/v1/esp32/private",
             tags=["ESP32-Private"],
             require_auth=True,
         )
@@ -440,7 +440,7 @@ def register_all_routers(app: FastAPI) -> RouteManager:
         route_manager.register_router(
             router=web_router,
             router_name="web_interface",
-            prefix="/web",
+            prefix="/dashboard",
             tags=["Web Interface"],
             require_auth=True,
         )
