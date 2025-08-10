@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 esp32_public = APIRouter(prefix="/api/esp32", tags=["ESP32-Public"])
 
 # Private router - authentication required
-esp32_private = APIRouter(prefix="/api/esp32", tags=["ESP32-Private"], dependencies=[Depends(get_current_user)])
+esp32_private = APIRouter(prefix="/api/esp32/private", tags=["ESP32-Private"], dependencies=[Depends(get_current_user)])
 
 
 def _calculate_firmware_sha256(firmware_filename: str) -> str:
@@ -229,7 +229,7 @@ async def get_firmware_manifest(response: Response):
     firmware = {
         "version": "1.2.0",
         "mandatory": False,
-        "url": f"https://ai-tiddy-bear-v.onrender.com/web/firmware/teddy-001.bin",
+    "url": "https://ai-tiddy-bear-v.onrender.com/web/firmware/teddy-001.bin",
         "sha256": _calculate_firmware_sha256("teddy-001.bin"),
         "notes": "Stability fixes and performance improvements"
     }
