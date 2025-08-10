@@ -143,6 +143,26 @@ async def esp32_chat_websocket(
             await esp32_chat_server.disconnect_device(session_id, "websocket_closed")
 
 
+@router.get("/firmware")
+async def firmware():
+    """Get firmware version and download URL for ESP32 devices."""
+    return {
+        "version": "1.2.0",
+        "url": "https://ai-tiddy-bear-v.onrender.com/web/firmware/teddy-001.bin"
+    }
+
+
+@router.get("/config")
+async def device_config():
+    """Get device configuration for ESP32 devices."""
+    return {
+        "ssl": True,
+        "host": "ai-tiddy-bear-v.onrender.com",
+        "port": 443,
+        "ws_path": "/ws/esp32/connect"
+    }
+
+
 @router.get("/metrics")
 async def esp32_metrics():
     """ESP32 Chat Server metrics."""
