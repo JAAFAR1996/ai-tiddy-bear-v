@@ -475,7 +475,7 @@ app = FastAPI(
 )
 
 # Mount static files for firmware distribution
-app.mount("/web", StaticFiles(directory="static"), name="static_files")
+app.mount("/web", StaticFiles(directory="src/static"), name="static_files")
 
 # Removed fallback router registration
 # uvicorn.run(
