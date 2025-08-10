@@ -1,21 +1,29 @@
 """
 ESP32 WebSocket Endpoint for AI Teddy Bear
 =========================================
-Production-ready WebSocket endpoint for ESP32 devices.
+Production-ready WebSocket endpoint for ESP32 devices with separated public/private routes.
 """
 
 import logging
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException, Depends, Response
+from fastapi.security import HTTPBearer
 from typing import Optional
+import hashlib
+import json
 
 from ..services.esp32_chat_server import esp32_chat_server
-
+from ..infrastructure.security.auth import get_current_user
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["ESP32"])
+
+# Public router - no authentication required
+esp32_public = APIRouter(prefix="/api/esp32", tags=["ESP32-Public"])
+
+# Private router - authentication required
+esp32_private = APIRouter(prefix="/api/esp32", tags=["ESP32-Private"], dependencies=[Depends(get_current_user)])
 
 
-@router.websocket("/chat")
+@esp32_private.websocket("/chat")
 async def esp32_chat_websocket(
     websocket: WebSocket,
     device_id: str = Query(
@@ -143,29 +151,58 @@ async def esp32_chat_websocket(
             await esp32_chat_server.disconnect_device(session_id, "websocket_closed")
 
 
-@router.get("/firmware")
-async def firmware():
-    """Get firmware version and download URL for ESP32 devices."""
-    return {
-        "version": "1.2.0",
-        "url": "https://ai-tiddy-bear-v.onrender.com/web/firmware/teddy-001.bin"
-    }
-
-
-@router.get("/config")
-async def device_config():
-    """Get device configuration for ESP32 devices."""
-    return {
-        "ssl": True,
+# PUBLIC ROUTES - No authentication required
+@esp32_public.get("/config")
+async def get_device_config(response: Response):
+    """
+    Get device configuration for ESP32 devices.
+    Public endpoint for initial device setup.
+    """
+    config = {
         "host": "ai-tiddy-bear-v.onrender.com",
         "port": 443,
-        "ws_path": "/ws/esp32/connect"
+        "ws_path": "/ws/esp32/connect",
+        "tls": True,
+        "ntp": ["pool.ntp.org", "time.google.com", "time.cloudflare.com"],
+        "features": {"ota": True, "strict_tls": True}
     }
+    
+    # Add security headers and caching
+    response.headers["Cache-Control"] = "max-age=600"
+    response.headers["ETag"] = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:16]
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    
+    return config
 
 
-@router.get("/metrics")
+@esp32_public.get("/firmware")
+async def get_firmware_manifest(response: Response):
+    """
+    Get firmware version and download URL for ESP32 devices.
+    Public endpoint for OTA updates.
+    """
+    firmware = {
+        "version": "1.2.0",
+        "mandatory": False,
+        "url": "https://ai-tiddy-bear-v.onrender.com/web/firmware/teddy-001.bin",
+        "sha256": "placeholder_sha256_hash_here",  # Should be computed from actual firmware file
+        "notes": "Stability fixes and performance improvements"
+    }
+    
+    # Add security headers and caching
+    response.headers["Cache-Control"] = "max-age=600"
+    response.headers["ETag"] = hashlib.sha256(json.dumps(firmware, sort_keys=True).encode()).hexdigest()[:16]
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    
+    return firmware
+
+
+# PRIVATE ROUTES - Authentication required
+@esp32_private.get("/metrics")
 async def esp32_metrics():
-    """ESP32 Chat Server metrics."""
+    """ESP32 Chat Server metrics - requires authentication."""
     return esp32_chat_server.get_session_metrics()
 
 
