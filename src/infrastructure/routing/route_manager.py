@@ -384,23 +384,39 @@ def register_all_routers(app: FastAPI) -> RouteManager:
         logger.critical(f"❌ Failed to load core API router: {e}")
         raise SystemExit("Core API router is required. Shutting down.")
 
-    # 4. ESP32 Router - FIXED PREFIX to avoid conflict
+    # 4a. ESP32 Public Router - No authentication required
     try:
-        from src.adapters.esp32_router import router as esp32_router
+        from src.adapters.esp32_router import esp32_public
 
         route_manager.register_router(
-            router=esp32_router,
-            router_name="esp32",
-            prefix="/api/esp32",
-            tags=["ESP32"],
+            router=esp32_public,
+            router_name="esp32_public",
+            prefix=None,  # Router already has prefix
+            tags=["ESP32-Public"],
+            require_auth=False,
+        )
+        logger.info("✅ ESP32 public router registered")
+    except ImportError as e:
+        logger.critical(f"❌ Failed to load ESP32 public router: {e}")
+        raise SystemExit("ESP32 public router is required. Shutting down.")
+
+    # 4b. ESP32 Private Router - Authentication required
+    try:
+        from src.adapters.esp32_router import esp32_private
+
+        route_manager.register_router(
+            router=esp32_private,
+            router_name="esp32_private",
+            prefix=None,  # Router already has prefix
+            tags=["ESP32-Private"],
             require_auth=True,
         )
-        logger.info("✅ ESP32 router registered")
+        logger.info("✅ ESP32 private router registered")
     except ImportError as e:
-        logger.critical(f"❌ Failed to load ESP32 router: {e}")
-        raise SystemExit("ESP32 router is required. Shutting down.")
+        logger.critical(f"❌ Failed to load ESP32 private router: {e}")
+        raise SystemExit("ESP32 private router is required. Shutting down.")
 
-    # 4b. ESP32 WebSocket Router - Production WebSocket endpoints
+    # 4c. ESP32 WebSocket Router - Production WebSocket endpoints
     try:
         from src.adapters.esp32_websocket_router import (
             esp32_router as esp32_websocket_router,
