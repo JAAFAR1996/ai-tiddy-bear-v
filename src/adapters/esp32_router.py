@@ -5,7 +5,15 @@ Production-ready WebSocket endpoint for ESP32 devices with separated public/priv
 """
 
 import logging
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException, Depends, Response
+from fastapi import (
+    APIRouter,
+    WebSocket,
+    WebSocketDisconnect,
+    Query,
+    HTTPException,
+    Depends,
+    Response,
+)
 from fastapi.security import HTTPBearer
 from typing import Optional
 import hashlib
@@ -22,16 +30,20 @@ logger = logging.getLogger(__name__)
 esp32_public = APIRouter(prefix="/api/esp32", tags=["ESP32-Public"])
 
 # Private router - authentication required
-esp32_private = APIRouter(prefix="/api/esp32/private", tags=["ESP32-Private"], dependencies=[Depends(get_current_user)])
+esp32_private = APIRouter(
+    prefix="/api/esp32/private",
+    tags=["ESP32-Private"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 def _calculate_firmware_sha256(firmware_filename: str) -> str:
     """
     Calculate SHA256 hash for firmware file.
-    
+
     Args:
         firmware_filename: Name of the firmware file
-        
+
     Returns:
         SHA256 hash as hexadecimal string, or placeholder if file not found
     """
@@ -41,9 +53,9 @@ def _calculate_firmware_sha256(firmware_filename: str) -> str:
         f"/mnt/c/Users/jaafa/Desktop/ai teddy bear/web/firmware/{firmware_filename}",
         f"/mnt/c/Users/jaafa/Desktop/ai teddy bear/src/static/firmware/{firmware_filename}",
         f"./static/firmware/{firmware_filename}",
-        f"./firmware/{firmware_filename}"
+        f"./firmware/{firmware_filename}",
     ]
-    
+
     for firmware_path in firmware_paths:
         if os.path.exists(firmware_path):
             try:
@@ -52,18 +64,22 @@ def _calculate_firmware_sha256(firmware_filename: str) -> str:
                     for chunk in iter(lambda: f.read(4096), b""):
                         sha256_hash.update(chunk)
                 hash_result = sha256_hash.hexdigest()
-                logger.info(f"✅ Calculated SHA256 for {firmware_filename}: {hash_result}")
+                logger.info(
+                    f"✅ Calculated SHA256 for {firmware_filename}: {hash_result}"
+                )
                 return hash_result
             except Exception as e:
                 logger.error(f"❌ Error calculating SHA256 for {firmware_path}: {e}")
                 continue
-    
+
     # If no firmware file found, create a deterministic hash based on version and filename
     # This ensures consistency until real firmware is deployed
     placeholder_data = f"TEDDY_BEAR_FIRMWARE_V1.2.0_{firmware_filename}".encode()
     placeholder_hash = hashlib.sha256(placeholder_data).hexdigest()
-    logger.warning(f"⚠️ Firmware file {firmware_filename} not found. Using placeholder SHA256: {placeholder_hash}")
-    
+    logger.warning(
+        f"⚠️ Firmware file {firmware_filename} not found. Using placeholder SHA256: {placeholder_hash}"
+    )
+
     return placeholder_hash
 
 
@@ -208,15 +224,17 @@ async def get_device_config(response: Response):
         "ws_path": "/ws/esp32/connect",
         "tls": True,
         "ntp": ["pool.ntp.org", "time.google.com", "time.cloudflare.com"],
-        "features": {"ota": True, "strict_tls": True}
+        "features": {"ota": True, "strict_tls": True},
     }
-    
+
     # Add security headers and caching
     response.headers["Cache-Control"] = "max-age=600"
-    response.headers["ETag"] = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:16]
+    response.headers["ETag"] = hashlib.sha256(
+        json.dumps(config, sort_keys=True).encode()
+    ).hexdigest()[:16]
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
-    
+
     return config
 
 
@@ -229,17 +247,19 @@ async def get_firmware_manifest(response: Response):
     firmware = {
         "version": "1.2.0",
         "mandatory": False,
-    "url": "https://ai-tiddy-bear-v.onrender.com/web/firmware/teddy-001.bin",
+        "url": "https://ai-tiddy-bear-v.onrender.com/web/firmware/teddy-001.bin",
         "sha256": _calculate_firmware_sha256("teddy-001.bin"),
-        "notes": "Stability fixes and performance improvements"
+        "notes": "Stability fixes and performance improvements",
     }
-    
+
     # Add security headers and caching
     response.headers["Cache-Control"] = "max-age=600"
-    response.headers["ETag"] = hashlib.sha256(json.dumps(firmware, sort_keys=True).encode()).hexdigest()[:16]
+    response.headers["ETag"] = hashlib.sha256(
+        json.dumps(firmware, sort_keys=True).encode()
+    ).hexdigest()[:16]
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
-    
+
     return firmware
 
 
