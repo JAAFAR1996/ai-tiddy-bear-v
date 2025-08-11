@@ -1,0 +1,812 @@
+# ==========================================
+# ENTERPRISE LOG AGGREGATION SYSTEM
+# AI TEDDY BEAR PLATFORM
+# ==========================================
+# Production-grade centralized logging with:
+# - COPPA compliant log processing
+# - Child safety incident correlation
+# - Real-time anomaly detection
+# - Compliance audit trails
+# - Multi-tier log retention
+#
+# Author: Senior Engineering Team
+# Updated: August 2025
+
+# ==========================================
+# FLUENT BIT CONFIGURATION
+# ==========================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluent-bit-config
+  namespace: monitoring
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush         5
+        Log_Level     info
+        Daemon        off
+        Parsers_File  parsers.conf
+        HTTP_Server   On
+        HTTP_Listen   0.0.0.0
+        HTTP_Port     2020
+        Health_Check  On
+        storage.path              /var/log/flb-storage/
+        storage.sync              normal
+        storage.checksum          off
+        storage.backlog.mem_limit 100M
+
+    # ==========================================
+    # CHILD SAFETY LOGS - HIGHEST PRIORITY
+    # ==========================================
+    [INPUT]
+        Name              tail
+        Alias             child_safety_logs
+        Path              /var/log/ai-teddy-bear/child-safety/*.log
+        Path_Key          filepath
+        Parser            json
+        Tag               child_safety.*
+        Refresh_Interval  1
+        Rotate_Wait       30
+        storage.type      filesystem
+        Buffer_Chunk_Size 1MB
+        Buffer_Max_Size   10MB
+        Mem_Buf_Limit     50MB
+
+    [FILTER]
+        Name              record_modifier
+        Match             child_safety.*
+        Record            log_category child_safety
+        Record            priority critical
+        Record            compliance_level coppa
+        Record            retention_years 7
+
+    # Content filtering pipeline
+    [FILTER]
+        Name              grep
+        Match             child_safety.*
+        Exclude           message (?i)(password|token|secret|key|ssn|credit_card)
+
+    # Child ID anonymization for COPPA compliance
+    [FILTER]
+        Name              lua
+        Match             child_safety.*
+        script            /fluent-bit/scripts/child_id_hash.lua
+        call              anonymize_child_data
+
+    # ==========================================
+    # COPPA COMPLIANCE AUDIT LOGS
+    # ==========================================
+    [INPUT]
+        Name              tail
+        Alias             coppa_audit_logs
+        Path              /var/log/ai-teddy-bear/audit/coppa-*.log
+        Parser            json
+        Tag               coppa_audit.*
+        Refresh_Interval  2
+        storage.type      filesystem
+
+    [FILTER]
+        Name              record_modifier
+        Match             coppa_audit.*
+        Record            log_category coppa_audit
+        Record            priority high
+        Record            compliance_level regulatory
+        Record            retention_years 10
+
+    # ==========================================
+    # APPLICATION LOGS
+    # ==========================================
+    [INPUT]
+        Name              tail
+        Alias             application_logs
+        Path              /var/log/ai-teddy-bear/app/*.log
+        Parser            json
+        Tag               app.*
+        Refresh_Interval  5
+        storage.type      filesystem
+        Buffer_Chunk_Size 512KB
+        Buffer_Max_Size   5MB
+
+    [FILTER]
+        Name              record_modifier
+        Match             app.*
+        Record            log_category application
+        Record            priority normal
+        Record            retention_days 90
+
+    # ==========================================
+    # AI PROVIDER LOGS
+    # ==========================================
+    [INPUT]
+        Name              tail
+        Alias             ai_provider_logs
+        Path              /var/log/ai-teddy-bear/ai-providers/*.log
+        Parser            json
+        Tag               ai_provider.*
+        Refresh_Interval  3
+        storage.type      filesystem
+
+    [FILTER]
+        Name              record_modifier
+        Match             ai_provider.*
+        Record            log_category ai_provider
+        Record            priority high
+        Record            retention_days 180
+
+    # Cost tracking enhancement
+    [FILTER]
+        Name              lua
+        Match             ai_provider.*
+        script            /fluent-bit/scripts/ai_cost_calculator.lua
+        call              calculate_ai_costs
+
+    # ==========================================
+    # SECURITY & AUTHENTICATION LOGS
+    # ==========================================
+    [INPUT]
+        Name              tail
+        Alias             security_logs
+        Path              /var/log/ai-teddy-bear/security/*.log
+        Parser            json
+        Tag               security.*
+        Refresh_Interval  1
+        storage.type      filesystem
+
+    [FILTER]
+        Name              record_modifier
+        Match             security.*
+        Record            log_category security
+        Record            priority high
+        Record            compliance_level security_audit
+        Record            retention_years 5
+
+    # Real-time security anomaly detection
+    [FILTER]
+        Name              lua
+        Match             security.*
+        script            /fluent-bit/scripts/security_anomaly_detector.lua
+        call              detect_security_anomalies
+
+    # ==========================================
+    # PERFORMANCE & SYSTEM LOGS
+    # ==========================================
+    [INPUT]
+        Name              tail
+        Alias             performance_logs
+        Path              /var/log/ai-teddy-bear/performance/*.log
+        Parser            json
+        Tag               performance.*
+        Refresh_Interval  10
+
+    [FILTER]
+        Name              record_modifier
+        Match             performance.*
+        Record            log_category performance
+        Record            priority low
+        Record            retention_days 30
+
+    # ==========================================
+    # KUBERNETES LOGS
+    # ==========================================
+    [INPUT]
+        Name              tail
+        Alias             kubernetes_logs
+        Path              /var/log/containers/*ai-teddy-bear*.log
+        Parser            cri
+        Tag               kube.*
+        Refresh_Interval  5
+        Exclude_Path      /var/log/containers/*_kube-system_*
+
+    [FILTER]
+        Name              kubernetes
+        Match             kube.*
+        Kube_URL          https://kubernetes.default.svc:443
+        Kube_CA_File      /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        Kube_Token_File   /var/run/secrets/kubernetes.io/serviceaccount/token
+        Kube_Tag_Prefix   kube.var.log.containers.
+        Merge_Log         On
+        Keep_Log          Off
+
+    # ==========================================
+    # LOG ENRICHMENT & CORRELATION
+    # ==========================================
+    
+    # Add common metadata to all logs
+    [FILTER]
+        Name              record_modifier
+        Match             *
+        Record            environment ${ENVIRONMENT}
+        Record            cluster ${CLUSTER_NAME}
+        Record            service ai-teddy-bear
+        Record            version ${SERVICE_VERSION}
+        Record            timestamp ${time}
+
+    # Geolocation enrichment for security logs
+    [FILTER]
+        Name              geoip2
+        Match             security.*
+        Database          /etc/fluent-bit/GeoLite2-City.mmdb
+        Lookup_key        client_ip
+        Record            geoip_country_code ${country.iso_code}
+        Record            geoip_city ${city.names.en}
+        Record            geoip_region ${subdivisions.0.names.en}
+
+    # Session correlation across logs
+    [FILTER]
+        Name              lua
+        Match             *
+        script            /fluent-bit/scripts/session_correlator.lua
+        call              correlate_sessions
+
+    # ==========================================
+    # OUTPUT DESTINATIONS
+    # ==========================================
+
+    # CRITICAL: Child Safety & COPPA to dedicated Elasticsearch cluster
+    [OUTPUT]
+        Name              es
+        Match             child_safety.*
+        Host              ${ELASTICSEARCH_CHILD_SAFETY_HOST}
+        Port              9200
+        Index             child-safety-logs
+        Type              _doc
+        HTTP_User         ${ELASTICSEARCH_USER}
+        HTTP_Passwd       ${ELASTICSEARCH_PASSWORD}
+        Retry_Limit       5
+        tls               On
+        tls.verify        On
+        tls.ca_file       /etc/fluent-bit/ca.crt
+        Suppress_Type_Name On
+        Replace_Dots      On
+        storage.total_limit_size 500M
+
+    [OUTPUT]
+        Name              es
+        Match             coppa_audit.*
+        Host              ${ELASTICSEARCH_COMPLIANCE_HOST}
+        Port              9200
+        Index             coppa-audit-logs
+        Type              _doc
+        HTTP_User         ${ELASTICSEARCH_USER}
+        HTTP_Passwd       ${ELASTICSEARCH_PASSWORD}
+        Retry_Limit       5
+        tls               On
+        tls.verify        On
+        Suppress_Type_Name On
+
+    # Security logs to dedicated SIEM system
+    [OUTPUT]
+        Name              es
+        Match             security.*
+        Host              ${ELASTICSEARCH_SECURITY_HOST}
+        Port              9200
+        Index             security-logs-%Y.%m.%d
+        Type              _doc
+        HTTP_User         ${ELASTICSEARCH_SECURITY_USER}
+        HTTP_Passwd       ${ELASTICSEARCH_SECURITY_PASSWORD}
+        Logstash_Format   On
+        Logstash_Prefix   security-logs
+        Retry_Limit       5
+        tls               On
+
+    # Application logs to general cluster
+    [OUTPUT]
+        Name              es
+        Match             app.*
+        Host              ${ELASTICSEARCH_GENERAL_HOST}
+        Port              9200
+        Index             app-logs-%Y.%m.%d
+        Type              _doc
+        HTTP_User         ${ELASTICSEARCH_USER}
+        HTTP_Passwd       ${ELASTICSEARCH_PASSWORD}
+        Logstash_Format   On
+        Logstash_Prefix   app-logs
+        Retry_Limit       3
+
+    # AI Provider logs for cost analysis
+    [OUTPUT]
+        Name              es
+        Match             ai_provider.*
+        Host              ${ELASTICSEARCH_GENERAL_HOST}
+        Port              9200
+        Index             ai-provider-logs-%Y.%m
+        Type              _doc
+        HTTP_User         ${ELASTICSEARCH_USER}
+        HTTP_Passwd       ${ELASTICSEARCH_PASSWORD}
+        Logstash_Format   On
+        Logstash_Prefix   ai-provider-logs
+
+    # Performance logs (shorter retention)
+    [OUTPUT]
+        Name              es
+        Match             performance.*
+        Host              ${ELASTICSEARCH_GENERAL_HOST}
+        Port              9200
+        Index             performance-logs-%Y.%m.%d
+        Type              _doc
+        HTTP_User         ${ELASTICSEARCH_USER}
+        HTTP_Passwd       ${ELASTICSEARCH_PASSWORD}
+        Logstash_Format   On
+        Logstash_Prefix   performance-logs
+
+    # Real-time alerting output for critical events
+    [OUTPUT]
+        Name              http
+        Match             child_safety.*
+        Host              ${ALERT_WEBHOOK_HOST}
+        Port              443
+        URI               /webhooks/child-safety-alerts
+        Header            Authorization Bearer ${ALERT_WEBHOOK_TOKEN}
+        Format            json
+        tls               On
+
+    # CloudWatch for AWS integration
+    [OUTPUT]
+        Name              cloudwatch_logs
+        Match             *
+        region            ${AWS_REGION}
+        log_group_name    /ai-teddy-bear/${ENVIRONMENT}
+        log_stream_prefix fluent-bit-
+        auto_create_group On
+
+    # Backup to S3 for long-term compliance storage
+    [OUTPUT]
+        Name              s3
+        Match             child_safety.*,coppa_audit.*
+        bucket            ${S3_COMPLIANCE_BUCKET}
+        region            ${AWS_REGION}
+        total_file_size   100M
+        upload_timeout    60s
+        s3_key_format     /compliance-logs/%Y/%m/%d/%H/%M/%S-$UUID.gz
+        compression       gzip
+        store_dir         /tmp/fluent-bit/s3
+
+  parsers.conf: |
+    [PARSER]
+        Name        json
+        Format      json
+        Time_Key    timestamp
+        Time_Format %Y-%m-%dT%H:%M:%S.%fZ
+        Time_Keep   On
+
+    [PARSER]
+        Name        cri
+        Format      regex
+        Regex       ^(?<time>[^ ]+) (?<stream>stdout|stderr) (?<logtag>[^ ]*) (?<message>.*)$
+        Time_Key    time
+        Time_Format %Y-%m-%dT%H:%M:%S.%fZ
+
+    [PARSER]
+        Name        child_safety_parser
+        Format      json
+        Time_Key    timestamp
+        Time_Format %Y-%m-%dT%H:%M:%S.%fZ
+        Types       child_age:integer safety_score:float violation_severity:integer
+
+---
+# ==========================================
+# LUA SCRIPTS FOR LOG PROCESSING
+# ==========================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluent-bit-scripts
+  namespace: monitoring
+data:
+  child_id_hash.lua: |
+    function anonymize_child_data(tag, timestamp, record)
+        -- Hash child IDs for COPPA compliance while maintaining correlation
+        if record["child_id"] then
+            local crypto = require("crypto")
+            local salt = os.getenv("CHILD_ID_SALT") or "default_salt_change_in_prod"
+            local hashed_id = crypto.hash.digest("sha256", record["child_id"] .. salt)
+            record["child_id_hash"] = string.sub(hashed_id, 1, 16)
+            record["child_id"] = nil  -- Remove original ID
+        end
+        
+        -- Remove other PII fields
+        local pii_fields = {"real_name", "email", "phone", "address", "parent_email"}
+        for _, field in ipairs(pii_fields) do
+            if record[field] then
+                record[field] = "[REDACTED_COPPA]"
+            end
+        end
+        
+        return 2, timestamp, record
+    end
+
+  ai_cost_calculator.lua: |
+    function calculate_ai_costs(tag, timestamp, record)
+        -- Calculate AI provider costs for financial tracking
+        local costs = {
+            openai_gpt4 = {prompt = 0.03, completion = 0.06},  -- per 1K tokens
+            openai_gpt35 = {prompt = 0.0015, completion = 0.002},
+            elevenlabs = 0.30  -- per 1K characters
+        }
+        
+        if record["ai_provider"] and record["tokens_used"] then
+            local provider = record["ai_provider"]
+            local tokens = tonumber(record["tokens_used"]) or 0
+            
+            if provider == "openai" and record["model"] then
+                local model = record["model"]
+                local prompt_tokens = tonumber(record["prompt_tokens"]) or 0
+                local completion_tokens = tonumber(record["completion_tokens"]) or 0
+                
+                if string.find(model, "gpt-4") then
+                    record["estimated_cost"] = (prompt_tokens * costs.openai_gpt4.prompt + 
+                                             completion_tokens * costs.openai_gpt4.completion) / 1000
+                elseif string.find(model, "gpt-3.5") then
+                    record["estimated_cost"] = (prompt_tokens * costs.openai_gpt35.prompt + 
+                                             completion_tokens * costs.openai_gpt35.completion) / 1000
+                end
+            elseif provider == "elevenlabs" and record["characters_used"] then
+                local characters = tonumber(record["characters_used"]) or 0
+                record["estimated_cost"] = (characters * costs.elevenlabs) / 1000
+            end
+            
+            -- Add cost tracking metadata
+            record["cost_center"] = "ai_services"
+            record["billing_month"] = os.date("%Y-%m")
+        end
+        
+        return 2, timestamp, record
+    end
+
+  security_anomaly_detector.lua: |
+    function detect_security_anomalies(tag, timestamp, record)
+        -- Real-time security anomaly detection
+        local anomalies = {}
+        
+        -- Failed login attempts
+        if record["event_type"] == "auth_failure" then
+            local client_ip = record["client_ip"] or "unknown"
+            local attempts = tonumber(record["failed_attempts"]) or 1
+            
+            if attempts > 5 then
+                anomalies[#anomalies + 1] = "brute_force_attempt"
+                record["security_alert_level"] = "high"
+            elseif attempts > 10 then
+                anomalies[#anomalies + 1] = "critical_brute_force"
+                record["security_alert_level"] = "critical"
+            end
+        end
+        
+        -- Suspicious child safety bypass attempts
+        if record["event_type"] == "content_filter_bypass" then
+            anomalies[#anomalies + 1] = "filter_bypass_attempt"
+            record["security_alert_level"] = "critical"
+            record["requires_immediate_attention"] = true
+        end
+        
+        -- Unusual access patterns
+        if record["event_type"] == "child_access" then
+            local access_hour = tonumber(os.date("%H"))
+            if access_hour >= 23 or access_hour <= 5 then
+                anomalies[#anomalies + 1] = "unusual_access_time"
+                record["security_alert_level"] = "medium"
+            end
+        end
+        
+        -- Rate limiting violations
+        if record["event_type"] == "rate_limit_exceeded" then
+            local rate = tonumber(record["requests_per_minute"]) or 0
+            if rate > 100 then
+                anomalies[#anomalies + 1] = "rate_limit_abuse"
+                record["security_alert_level"] = "high"
+            end
+        end
+        
+        if #anomalies > 0 then
+            record["security_anomalies"] = table.concat(anomalies, ",")
+            record["anomaly_detected"] = true
+            record["investigation_required"] = true
+        end
+        
+        return 2, timestamp, record
+    end
+
+  session_correlator.lua: |
+    function correlate_sessions(tag, timestamp, record)
+        -- Correlate logs across sessions for better debugging
+        local session_id = record["session_id"] or record["trace_id"] or record["request_id"]
+        
+        if session_id then
+            record["correlation_id"] = session_id
+            
+            -- Add session context
+            if record["child_id_hash"] then
+                record["session_type"] = "child_session"
+            elseif record["parent_id"] then
+                record["session_type"] = "parent_session"
+            else
+                record["session_type"] = "system_session"
+            end
+        end
+        
+        -- Add request flow context
+        if record["http_method"] and record["endpoint"] then
+            record["request_signature"] = record["http_method"] .. "_" .. 
+                                        string.gsub(record["endpoint"], "/", "_")
+        end
+        
+        return 2, timestamp, record
+    end
+
+---
+# ==========================================
+# KIBANA DASHBOARDS CONFIGURATION
+# ==========================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kibana-dashboards
+  namespace: monitoring
+data:
+  child_safety_dashboard.json: |
+    {
+      "version": "8.0.0",
+      "title": "Child Safety - Real-time Monitoring",
+      "description": "Critical child safety incident monitoring and compliance tracking",
+      "panels": [
+        {
+          "title": "Safety Incidents (Last 24h)",
+          "type": "metric",
+          "query": "log_category:child_safety AND priority:critical AND @timestamp:[now-24h TO now]"
+        },
+        {
+          "title": "Content Filter Effectiveness",
+          "type": "line",
+          "query": "event_type:content_filtering",
+          "aggregation": "terms",
+          "field": "filter_result"
+        },
+        {
+          "title": "COPPA Compliance Score",
+          "type": "gauge",
+          "query": "log_category:coppa_audit",
+          "metric": "avg",
+          "field": "compliance_score"
+        },
+        {
+          "title": "Geographic Distribution of Safety Incidents",
+          "type": "map",
+          "query": "security_anomalies:* AND geoip_country_code:*"
+        },
+        {
+          "title": "Safety Alert Response Times",
+          "type": "histogram",
+          "query": "event_type:safety_alert_response",
+          "field": "response_time_seconds"
+        }
+      ]
+    }
+
+  operational_dashboard.json: |
+    {
+      "version": "8.0.0", 
+      "title": "Operational Intelligence Dashboard",
+      "description": "System health, performance, and operational metrics",
+      "panels": [
+        {
+          "title": "Log Volume by Category",
+          "type": "pie",
+          "query": "*",
+          "aggregation": "terms",
+          "field": "log_category"
+        },
+        {
+          "title": "AI Provider Performance", 
+          "type": "line",
+          "query": "log_category:ai_provider",
+          "aggregation": "avg",
+          "field": "response_time_ms"
+        },
+        {
+          "title": "Error Rate Trend",
+          "type": "line",  
+          "query": "level:ERROR",
+          "aggregation": "count"
+        },
+        {
+          "title": "Top Error Messages",
+          "type": "data_table",
+          "query": "level:ERROR",
+          "aggregation": "terms",
+          "field": "message.keyword",
+          "size": 20
+        }
+      ]
+    }
+
+---
+# ==========================================
+# LOG RETENTION POLICIES
+# ==========================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elasticsearch-index-templates
+  namespace: monitoring
+data:
+  child_safety_template.json: |
+    {
+      "index_patterns": ["child-safety-logs*"],
+      "template": {
+        "settings": {
+          "number_of_shards": 3,
+          "number_of_replicas": 2,
+          "refresh_interval": "5s",
+          "index.lifecycle.name": "child-safety-policy",
+          "index.lifecycle.rollover_alias": "child-safety-logs"
+        },
+        "mappings": {
+          "properties": {
+            "timestamp": {"type": "date"},
+            "child_id_hash": {"type": "keyword"},
+            "safety_score": {"type": "float"},
+            "violation_severity": {"type": "integer"},
+            "event_type": {"type": "keyword"},
+            "compliance_level": {"type": "keyword"},
+            "message": {
+              "type": "text",
+              "fields": {
+                "keyword": {"type": "keyword", "ignore_above": 512}
+              }
+            }
+          }
+        }
+      }
+    }
+
+  ilm_policies.json: |
+    {
+      "child-safety-policy": {
+        "policy": {
+          "phases": {
+            "hot": {
+              "actions": {
+                "rollover": {
+                  "max_size": "10gb",
+                  "max_age": "1d"
+                }
+              }
+            },
+            "warm": {
+              "min_age": "7d",
+              "actions": {
+                "allocate": {
+                  "number_of_replicas": 1
+                },
+                "forcemerge": {
+                  "max_num_segments": 1
+                }
+              }
+            },
+            "cold": {
+              "min_age": "30d", 
+              "actions": {
+                "allocate": {
+                  "number_of_replicas": 0
+                }
+              }
+            },
+            "delete": {
+              "min_age": "7y"
+            }
+          }
+        }
+      },
+      "general-logs-policy": {
+        "policy": {
+          "phases": {
+            "hot": {
+              "actions": {
+                "rollover": {
+                  "max_size": "5gb",
+                  "max_age": "1d"
+                }
+              }
+            },
+            "warm": {
+              "min_age": "3d"
+            },
+            "cold": {
+              "min_age": "7d"
+            },
+            "delete": {
+              "min_age": "90d"
+            }
+          }
+        }
+      }
+    }
+
+---
+# ==========================================
+# DEPLOYMENT CONFIGURATION
+# ==========================================
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluent-bit
+  namespace: monitoring
+  labels:
+    app: fluent-bit
+spec:
+  selector:
+    matchLabels:
+      app: fluent-bit
+  template:
+    metadata:
+      labels:
+        app: fluent-bit
+    spec:
+      serviceAccount: fluent-bit
+      containers:
+      - name: fluent-bit
+        image: fluent/fluent-bit:2.0.8
+        ports:
+          - containerPort: 2020
+            name: http
+        resources:
+          limits:
+            memory: 512Mi
+            cpu: 500m
+          requests:
+            memory: 256Mi
+            cpu: 100m
+        volumeMounts:
+        - name: config
+          mountPath: /fluent-bit/etc
+        - name: scripts
+          mountPath: /fluent-bit/scripts
+        - name: varlog
+          mountPath: /var/log
+          readOnly: true
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+        - name: storage
+          mountPath: /var/log/flb-storage
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: CLUSTER_NAME
+          value: "ai-teddy-bear-prod"
+        - name: SERVICE_VERSION
+          value: "2.0.0"
+        - name: ELASTICSEARCH_CHILD_SAFETY_HOST
+          valueFrom:
+            secretKeyRef:
+              name: elasticsearch-config
+              key: child-safety-host
+        - name: ELASTICSEARCH_USER
+          valueFrom:
+            secretKeyRef:
+              name: elasticsearch-config  
+              key: username
+        - name: ELASTICSEARCH_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: elasticsearch-config
+              key: password
+      volumes:
+      - name: config
+        configMap:
+          name: fluent-bit-config
+      - name: scripts
+        configMap:
+          name: fluent-bit-scripts
+          defaultMode: 0755
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
+      - name: storage
+        hostPath:
+          path: /var/log/flb-storage
+          type: DirectoryOrCreate

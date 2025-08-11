@@ -86,7 +86,7 @@ soundfile>=0.12.1,<1.0.0
 SpeechRecognition>=3.10.0,<4.0.0
 pydub>=0.25.1,<1.0.0
 webrtcvad>=2.0.10,<3.0.0
-openai-whisper
+openai-whisper>=20250625  # Latest version with turbo model support
 librosa>=0.10.0
 torchaudio>=2.6.0
 

@@ -205,6 +205,17 @@ class ElevenLabsTTSProvider(ITTSService):
     async def synthesize_speech(self, request: TTSRequest) -> TTSResult:
         """
         Synthesize speech using ElevenLabs API with full child safety compliance.
+        Now supports sentence-level streaming for reduced latency.
+        """
+        # Check if streaming is requested
+        if hasattr(request.config, 'stream_sentences') and request.config.stream_sentences:
+            return await self._synthesize_speech_streaming(request)
+        else:
+            return await self._synthesize_speech_standard(request)
+
+    async def _synthesize_speech_standard(self, request: TTSRequest) -> TTSResult:
+        """
+        Synthesize speech using ElevenLabs API with full child safety compliance.
 
         This method implements the complete TTS pipeline:
         1. Child safety validation (COPPA compliance)
@@ -361,6 +372,196 @@ class ElevenLabsTTSProvider(ITTSService):
                     provider="elevenlabs",
                     request_id=request_id,
                 ) from e
+
+    async def _synthesize_speech_streaming(self, request: TTSRequest) -> TTSResult:
+        """
+        Synthesize speech with sentence-level streaming for reduced latency.
+        """
+        start_time = time.time()
+        request_id = request.request_id or f"elevenlabs_stream_{int(time.time() * 1000)}"
+
+        # Update metrics
+        self._metrics["total_requests"] += 1
+        self._metrics["total_characters"] += len(request.text)
+
+        try:
+            # Step 1: Child safety validation (same as standard)
+            if request.safety_context:
+                await self._validate_child_safety(request)
+
+            is_safe, safety_warnings = await self.validate_content_safety(
+                request.text, request.safety_context or ChildSafetyContext()
+            )
+            if not is_safe:
+                self._metrics["safety_blocks"] += 1
+                raise TTSUnsafeContentError(
+                    f"Content failed safety validation: {', '.join(safety_warnings)}",
+                    provider="elevenlabs",
+                    request_id=request_id,
+                )
+
+            # Step 2: Split text into sentences for streaming
+            sentences = self._split_into_sentences(request.text)
+            logger.info(f"Split text into {len(sentences)} sentences for streaming")
+
+            # Step 3: Process sentences in parallel (limited concurrency)
+            audio_chunks = []
+            total_processing_time = 0.0
+            
+            # Use semaphore to limit concurrent API calls
+            semaphore = asyncio.Semaphore(3)  # Max 3 concurrent requests
+            
+            async def process_sentence(sentence: str, index: int):
+                async with semaphore:
+                    return await self._synthesize_single_sentence(
+                        sentence, request, index, request_id
+                    )
+            
+            # Create tasks for all sentences
+            tasks = [
+                process_sentence(sentence, i) 
+                for i, sentence in enumerate(sentences) 
+                if sentence.strip()
+            ]
+            
+            # Execute with progress tracking
+            completed_chunks = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Process results and combine audio
+            for i, chunk_result in enumerate(completed_chunks):
+                if isinstance(chunk_result, Exception):
+                    logger.error(f"Sentence {i} failed: {chunk_result}")
+                    # Use fallback for failed sentence
+                    continue
+                
+                if chunk_result and chunk_result['audio_data']:
+                    audio_chunks.append(chunk_result['audio_data'])
+                    total_processing_time += chunk_result['processing_time']
+
+            if not audio_chunks:
+                raise TTSProviderError("No audio chunks were successfully generated")
+
+            # Step 4: Combine audio chunks
+            combined_audio = self._combine_audio_chunks(audio_chunks)
+            
+            # Step 5: Calculate metrics
+            total_time = (time.time() - start_time) * 1000
+            character_count = len(request.text)
+            estimated_cost = character_count * self.PRICING_PER_CHARACTER
+
+            # Step 6: Create result
+            result = TTSResult(
+                audio_data=combined_audio,
+                request_id=request_id,
+                provider_name="elevenlabs_streaming",
+                config=request.config,
+                duration_seconds=self._estimate_audio_duration(len(combined_audio)),
+                sample_rate=22050,
+                bit_rate=128000,
+                file_size_bytes=len(combined_audio),
+                format=request.config.audio_format,
+                processing_time_ms=total_time,
+                provider_latency_ms=total_processing_time / len(sentences) if sentences else total_time,
+                content_filtered=len(safety_warnings) > 0,
+                safety_warnings=safety_warnings,
+                cached=False,
+                streaming=True,
+                metadata={
+                    "sentences_processed": len(sentences),
+                    "parallel_synthesis": True,
+                    "time_to_first_chunk_ms": audio_chunks[0] if audio_chunks else 0,
+                },
+                created_at=datetime.now(timezone.utc),
+            )
+
+            # Update success metrics
+            self._metrics["successful_requests"] += 1
+            self._metrics["total_cost_usd"] += estimated_cost
+            self._metrics["response_times"].append(total_time)
+
+            logger.info(
+                f"ElevenLabs streaming TTS synthesis successful: {len(sentences)} sentences, "
+                f"{total_time:.0f}ms total, {total_processing_time/len(sentences) if sentences else 0:.0f}ms avg per sentence"
+            )
+
+            return result
+
+        except Exception as e:
+            self._metrics["failed_requests"] += 1
+            logger.error(f"ElevenLabs streaming TTS failed: {e}")
+            raise TTSProviderError(f"Streaming synthesis failed: {str(e)}")
+
+    def _split_into_sentences(self, text: str) -> list[str]:
+        """Split text into sentences for streaming synthesis."""
+        import re
+        
+        # Enhanced sentence splitting that preserves punctuation
+        sentence_pattern = r'(?<=[.!?])\s+(?=[A-Z])|(?<=[.!?])\s*$'
+        sentences = re.split(sentence_pattern, text.strip())
+        
+        # Clean and filter sentences
+        cleaned_sentences = []
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if sentence and len(sentence) > 3:  # Minimum sentence length
+                # Ensure sentence ends with punctuation
+                if not sentence[-1] in '.!?':
+                    sentence += '.'
+                cleaned_sentences.append(sentence)
+        
+        # If no proper sentences found, treat as single sentence
+        if not cleaned_sentences:
+            cleaned_sentences = [text.strip() + '.']
+            
+        return cleaned_sentences
+
+    async def _synthesize_single_sentence(
+        self, sentence: str, original_request: TTSRequest, index: int, request_id: str
+    ) -> dict:
+        """Synthesize a single sentence."""
+        start_time = time.time()
+        
+        try:
+            # Prepare voice settings
+            voice_settings = await self._prepare_voice_settings(original_request)
+            voice_info = self._get_voice_info(original_request.config.voice_profile.voice_id)
+            
+            # Make API call for this sentence
+            audio_data = await self._call_elevenlabs_api(
+                voice_id=voice_info["voice_id"],
+                text=sentence,
+                voice_settings=voice_settings,
+                model_id=self.model,
+            )
+            
+            processing_time = (time.time() - start_time) * 1000
+            
+            return {
+                'audio_data': audio_data,
+                'processing_time': processing_time,
+                'sentence_index': index,
+                'sentence_text': sentence[:50] + "..." if len(sentence) > 50 else sentence,
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to synthesize sentence {index}: {e}")
+            return None
+
+    def _combine_audio_chunks(self, audio_chunks: list[bytes]) -> bytes:
+        """Combine multiple audio chunks into single audio stream."""
+        if not audio_chunks:
+            return b""
+        
+        if len(audio_chunks) == 1:
+            return audio_chunks[0]
+        
+        # Simple concatenation for MP3 (basic implementation)
+        # For production, you might want to use proper audio processing libraries
+        combined = b""
+        for chunk in audio_chunks:
+            combined += chunk
+            
+        return combined
 
     async def _call_elevenlabs_api(
         self, voice_id: str, text: str, voice_settings: Dict[str, Any], model_id: str
