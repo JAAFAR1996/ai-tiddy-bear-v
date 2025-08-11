@@ -1,0 +1,539 @@
+{
+  "business_intelligence_dashboards": {
+    "version": "2.0",
+    "created_by": "Senior Engineering Lead",
+    "updated": "2025-08-11",
+    "description": "Executive and stakeholder dashboards for AI Teddy Bear platform with business-critical KPIs",
+    
+    "dashboards": [
+      {
+        "id": "executive_overview",
+        "title": "🎯 Executive Overview - AI Teddy Bear Platform",
+        "description": "C-level dashboard with key business metrics and health indicators",
+        "audience": ["CEO", "CTO", "CPO", "Board Members"],
+        "refresh_interval": "5m",
+        "panels": [
+          {
+            "id": "business_health_score",
+            "title": "Overall Platform Health",
+            "type": "stat",
+            "position": {"x": 0, "y": 0, "w": 6, "h": 4},
+            "query": "avg_over_time(platform_health_score[5m])",
+            "thresholds": [
+              {"color": "red", "value": 0.7},
+              {"color": "yellow", "value": 0.85},
+              {"color": "green", "value": 0.95}
+            ],
+            "unit": "percentunit",
+            "sparkline": true
+          },
+          {
+            "id": "active_children",
+            "title": "Active Children (Last 24h)",
+            "type": "stat",
+            "position": {"x": 6, "y": 0, "w": 6, "h": 4},
+            "query": "increase(child_sessions_total[24h])",
+            "color": "blue",
+            "sparkline": true
+          },
+          {
+            "id": "revenue_projection",
+            "title": "Monthly Revenue Projection",
+            "type": "stat", 
+            "position": {"x": 12, "y": 0, "w": 6, "h": 4},
+            "query": "sum(subscription_revenue_monthly_projection)",
+            "unit": "currencyUSD",
+            "decimals": 0,
+            "color": "green"
+          },
+          {
+            "id": "parent_satisfaction",
+            "title": "Parent Satisfaction Score",
+            "type": "gauge",
+            "position": {"x": 18, "y": 0, "w": 6, "h": 4},
+            "query": "avg_over_time(parent_satisfaction_rating[24h])",
+            "min": 1,
+            "max": 5,
+            "thresholds": [
+              {"color": "red", "value": 3.0},
+              {"color": "yellow", "value": 4.0},
+              {"color": "green", "value": 4.5}
+            ]
+          },
+          {
+            "id": "growth_trend",
+            "title": "User Growth Trend (30 days)",
+            "type": "timeseries",
+            "position": {"x": 0, "y": 4, "w": 12, "h": 8},
+            "queries": [
+              {
+                "query": "increase(new_child_registrations_total[1d])",
+                "legend": "New Registrations",
+                "color": "blue"
+              },
+              {
+                "query": "increase(subscription_upgrades_total[1d])",
+                "legend": "Premium Upgrades", 
+                "color": "green"
+              },
+              {
+                "query": "increase(subscription_cancellations_total[1d])",
+                "legend": "Cancellations",
+                "color": "red"
+              }
+            ]
+          },
+          {
+            "id": "engagement_metrics",
+            "title": "Child Engagement Metrics",
+            "type": "timeseries",
+            "position": {"x": 12, "y": 4, "w": 12, "h": 8},
+            "queries": [
+              {
+                "query": "avg_over_time(avg_session_duration_minutes[1h])",
+                "legend": "Avg Session Duration (min)",
+                "color": "purple"
+              },
+              {
+                "query": "rate(child_interactions_total[1h])",
+                "legend": "Interactions per Hour",
+                "color": "orange"
+              }
+            ]
+          }
+        ]
+      },
+      
+      {
+        "id": "child_safety_executive",
+        "title": "🛡️ Child Safety & Compliance Dashboard",
+        "description": "Critical safety metrics and compliance status for executives",
+        "audience": ["CEO", "Legal Team", "Compliance Officer", "Child Safety Team"],
+        "refresh_interval": "1m",
+        "panels": [
+          {
+            "id": "safety_incidents_today",
+            "title": "Safety Incidents Today",
+            "type": "stat",
+            "position": {"x": 0, "y": 0, "w": 4, "h": 4},
+            "query": "increase(child_safety_violations_total[24h])",
+            "thresholds": [
+              {"color": "green", "value": 0},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 3}
+            ],
+            "color": "red"
+          },
+          {
+            "id": "coppa_compliance_score",
+            "title": "COPPA Compliance Score",
+            "type": "gauge",
+            "position": {"x": 4, "y": 0, "w": 4, "h": 4},
+            "query": "avg_over_time(coppa_compliance_score[1h])",
+            "min": 0,
+            "max": 100,
+            "thresholds": [
+              {"color": "red", "value": 90},
+              {"color": "yellow", "value": 95},
+              {"color": "green", "value": 99}
+            ]
+          },
+          {
+            "id": "content_filter_effectiveness",
+            "title": "Content Filter Effectiveness",
+            "type": "stat",
+            "position": {"x": 8, "y": 0, "w": 4, "h": 4},
+            "query": "1 - (rate(content_filter_bypassed_total[24h]) / rate(content_filter_checked_total[24h]))",
+            "unit": "percentunit",
+            "decimals": 3,
+            "thresholds": [
+              {"color": "red", "value": 0.95},
+              {"color": "yellow", "value": 0.98},
+              {"color": "green", "value": 0.995}
+            ]
+          },
+          {
+            "id": "parental_consent_status",
+            "title": "Parental Consent Coverage",
+            "type": "stat",
+            "position": {"x": 12, "y": 0, "w": 4, "h": 4},
+            "query": "sum(children_with_valid_consent) / sum(total_children_under_13)",
+            "unit": "percentunit",
+            "thresholds": [
+              {"color": "red", "value": 0.95},
+              {"color": "yellow", "value": 0.98},
+              {"color": "green", "value": 0.999}
+            ]
+          },
+          {
+            "id": "safety_response_times",
+            "title": "Safety Alert Response Times",
+            "type": "timeseries",
+            "position": {"x": 0, "y": 4, "w": 16, "h": 6},
+            "queries": [
+              {
+                "query": "histogram_quantile(0.50, rate(safety_alert_response_duration_seconds_bucket[5m]))",
+                "legend": "P50 Response Time",
+                "color": "blue"
+              },
+              {
+                "query": "histogram_quantile(0.95, rate(safety_alert_response_duration_seconds_bucket[5m]))",
+                "legend": "P95 Response Time",
+                "color": "orange"
+              }
+            ],
+            "unit": "s",
+            "alert_line": {"value": 30, "color": "red", "legend": "SLA Threshold"}
+          }
+        ]
+      },
+      
+      {
+        "id": "product_analytics",
+        "title": "📊 Product Analytics & User Insights",
+        "description": "Deep dive into product usage and user behavior patterns",
+        "audience": ["CPO", "Product Managers", "UX Team", "Data Science"],
+        "refresh_interval": "10m", 
+        "panels": [
+          {
+            "id": "feature_adoption",
+            "title": "Feature Adoption Rate",
+            "type": "piechart",
+            "position": {"x": 0, "y": 0, "w": 8, "h": 8},
+            "query": "sum by (feature_name) (increase(feature_usage_total[7d]))",
+            "legend": {"position": "bottom"}
+          },
+          {
+            "id": "age_group_engagement",
+            "title": "Engagement by Age Group",
+            "type": "barchart",
+            "position": {"x": 8, "y": 0, "w": 8, "h": 8},
+            "query": "avg by (age_group) (avg_session_duration_minutes)",
+            "unit": "m"
+          },
+          {
+            "id": "content_preferences",
+            "title": "Content Type Preferences",
+            "type": "timeseries",
+            "position": {"x": 16, "y": 0, "w": 8, "h": 8},
+            "queries": [
+              {
+                "query": "rate(story_requests_total{type='educational'}[1h])",
+                "legend": "Educational Stories",
+                "color": "green"
+              },
+              {
+                "query": "rate(story_requests_total{type='entertainment'}[1h])",
+                "legend": "Entertainment",
+                "color": "blue"
+              },
+              {
+                "query": "rate(story_requests_total{type='bedtime'}[1h])",
+                "legend": "Bedtime Stories",
+                "color": "purple"
+              }
+            ]
+          },
+          {
+            "id": "user_journey_funnel",
+            "title": "User Acquisition Funnel",
+            "type": "table",
+            "position": {"x": 0, "y": 8, "w": 12, "h": 6},
+            "query": "sum by (stage) (user_funnel_stage_total)",
+            "columns": [
+              {"field": "stage", "title": "Funnel Stage"},
+              {"field": "value", "title": "Users", "unit": "short"},
+              {"field": "conversion_rate", "title": "Conversion %", "unit": "percent"}
+            ]
+          },
+          {
+            "id": "churn_analysis",
+            "title": "Churn Risk Analysis",
+            "type": "heatmap",
+            "position": {"x": 12, "y": 8, "w": 12, "h": 6},
+            "query": "avg by (cohort, days_since_signup) (churn_probability)",
+            "color_mode": "spectrum"
+          }
+        ]
+      },
+      
+      {
+        "id": "operational_excellence",
+        "title": "⚙️ Operational Excellence Dashboard",
+        "description": "Platform reliability, performance, and operational metrics",
+        "audience": ["CTO", "Engineering Managers", "DevOps Team", "SRE"],
+        "refresh_interval": "30s",
+        "panels": [
+          {
+            "id": "sli_slo_overview",
+            "title": "SLI/SLO Status Overview",
+            "type": "table",
+            "position": {"x": 0, "y": 0, "w": 12, "h": 6},
+            "query": "group by (slo_name) (sli_current_value, slo_target, slo_error_budget_remaining)",
+            "columns": [
+              {"field": "slo_name", "title": "Service"},
+              {"field": "sli_current_value", "title": "Current SLI", "unit": "percentunit"},
+              {"field": "slo_target", "title": "SLO Target", "unit": "percentunit"},
+              {"field": "slo_error_budget_remaining", "title": "Error Budget", "unit": "percentunit"}
+            ],
+            "thresholds": [
+              {"column": "slo_error_budget_remaining", "color": "red", "value": 0.1},
+              {"column": "slo_error_budget_remaining", "color": "yellow", "value": 0.3},
+              {"column": "slo_error_budget_remaining", "color": "green", "value": 0.5}
+            ]
+          },
+          {
+            "id": "incident_trends",
+            "title": "Incident Trends (30 days)",
+            "type": "timeseries",
+            "position": {"x": 12, "y": 0, "w": 12, "h": 6},
+            "queries": [
+              {
+                "query": "increase(incidents_total{severity='critical'}[1d])",
+                "legend": "Critical Incidents",
+                "color": "red"
+              },
+              {
+                "query": "increase(incidents_total{severity='high'}[1d])",
+                "legend": "High Severity",
+                "color": "orange"
+              },
+              {
+                "query": "avg_over_time(mttr_minutes[1d])",
+                "legend": "MTTR (minutes)",
+                "color": "blue",
+                "yAxis": 2
+              }
+            ]
+          },
+          {
+            "id": "deployment_metrics",
+            "title": "Deployment Success Rate",
+            "type": "stat",
+            "position": {"x": 0, "y": 6, "w": 6, "h": 4},
+            "query": "sum(deployments_successful_total) / sum(deployments_total)",
+            "unit": "percentunit",
+            "thresholds": [
+              {"color": "red", "value": 0.9},
+              {"color": "yellow", "value": 0.95},
+              {"color": "green", "value": 0.98}
+            ]
+          },
+          {
+            "id": "cost_efficiency",
+            "title": "Infrastructure Cost per User",
+            "type": "stat",
+            "position": {"x": 6, "y": 6, "w": 6, "h": 4},
+            "query": "sum(infrastructure_cost_monthly) / sum(active_users_monthly)",
+            "unit": "currencyUSD",
+            "decimals": 2
+          },
+          {
+            "id": "ai_provider_performance",
+            "title": "AI Provider Performance",
+            "type": "timeseries",
+            "position": {"x": 12, "y": 6, "w": 12, "h": 4},
+            "queries": [
+              {
+                "query": "histogram_quantile(0.95, rate(ai_request_duration_seconds_bucket{provider='openai'}[5m]))",
+                "legend": "OpenAI P95 Latency",
+                "color": "green"
+              },
+              {
+                "query": "histogram_quantile(0.95, rate(ai_request_duration_seconds_bucket{provider='elevenlabs'}[5m]))",
+                "legend": "ElevenLabs P95 Latency", 
+                "color": "blue"
+              }
+            ],
+            "unit": "s"
+          }
+        ]
+      },
+      
+      {
+        "id": "financial_performance",
+        "title": "💰 Financial Performance Dashboard",
+        "description": "Revenue, costs, and financial health metrics",
+        "audience": ["CFO", "CEO", "Finance Team", "Business Operations"],
+        "refresh_interval": "1h",
+        "panels": [
+          {
+            "id": "mrr_growth",
+            "title": "Monthly Recurring Revenue (MRR)",
+            "type": "timeseries",
+            "position": {"x": 0, "y": 0, "w": 12, "h": 6},
+            "queries": [
+              {
+                "query": "sum(subscription_mrr_total)",
+                "legend": "Total MRR",
+                "color": "green"
+              },
+              {
+                "query": "sum(subscription_mrr_total{tier='premium'})",
+                "legend": "Premium MRR",
+                "color": "blue"
+              },
+              {
+                "query": "sum(subscription_mrr_total{tier='basic'})",
+                "legend": "Basic MRR",
+                "color": "orange"
+              }
+            ],
+            "unit": "currencyUSD"
+          },
+          {
+            "id": "customer_ltv",
+            "title": "Customer Lifetime Value (LTV)",
+            "type": "stat",
+            "position": {"x": 12, "y": 0, "w": 6, "h": 3},
+            "query": "avg_over_time(customer_ltv_usd[30d])",
+            "unit": "currencyUSD",
+            "decimals": 0,
+            "sparkline": true
+          },
+          {
+            "id": "cac_payback_period",
+            "title": "CAC Payback Period",
+            "type": "stat",
+            "position": {"x": 18, "y": 0, "w": 6, "h": 3},
+            "query": "avg_over_time(cac_payback_period_months[30d])",
+            "unit": "short",
+            "decimals": 1,
+            "thresholds": [
+              {"color": "green", "value": 6},
+              {"color": "yellow", "value": 12},
+              {"color": "red", "value": 18}
+            ]
+          },
+          {
+            "id": "unit_economics",
+            "title": "Unit Economics Overview",
+            "type": "table",
+            "position": {"x": 12, "y": 3, "w": 12, "h": 3},
+            "query": "group by (subscription_tier) (avg_revenue_per_user, avg_cost_per_user, avg_margin_per_user)",
+            "columns": [
+              {"field": "subscription_tier", "title": "Tier"},
+              {"field": "avg_revenue_per_user", "title": "ARPU", "unit": "currencyUSD"},
+              {"field": "avg_cost_per_user", "title": "Cost per User", "unit": "currencyUSD"},
+              {"field": "avg_margin_per_user", "title": "Margin", "unit": "currencyUSD"}
+            ]
+          },
+          {
+            "id": "operational_costs",
+            "title": "Operational Cost Breakdown",
+            "type": "piechart",
+            "position": {"x": 0, "y": 6, "w": 8, "h": 6},
+            "query": "sum by (cost_category) (operational_costs_monthly)",
+            "legend": {"position": "right"}
+          },
+          {
+            "id": "profitability_trend",
+            "title": "Profitability Trend",
+            "type": "timeseries",
+            "position": {"x": 8, "y": 6, "w": 16, "h": 6},
+            "queries": [
+              {
+                "query": "sum(monthly_revenue) - sum(monthly_costs)",
+                "legend": "Net Profit",
+                "color": "green"
+              },
+              {
+                "query": "(sum(monthly_revenue) - sum(monthly_costs)) / sum(monthly_revenue)",
+                "legend": "Profit Margin %",
+                "color": "blue",
+                "yAxis": 2
+              }
+            ],
+            "units": ["currencyUSD", "percentunit"]
+          }
+        ]
+      }
+    ],
+    
+    "alert_annotations": [
+      {
+        "query": "ALERTS{alertstate='firing',severity='critical'}",
+        "title": "Critical Alerts",
+        "color": "red",
+        "icon": "🚨"
+      },
+      {
+        "query": "changes(deployment_version[1h])",
+        "title": "Deployments", 
+        "color": "blue",
+        "icon": "🚀"
+      },
+      {
+        "query": "ALERTS{alertname=~'.*Safety.*',alertstate='firing'}",
+        "title": "Safety Incidents",
+        "color": "purple",
+        "icon": "🛡️"
+      }
+    ],
+    
+    "variables": [
+      {
+        "name": "environment",
+        "label": "Environment",
+        "type": "query",
+        "query": "label_values(up, environment)",
+        "current": "production"
+      },
+      {
+        "name": "time_range",
+        "label": "Time Range",
+        "type": "interval",
+        "options": ["5m", "1h", "6h", "1d", "7d", "30d"],
+        "current": "1h"
+      }
+    ],
+    
+    "templating": {
+      "enable_drill_down": true,
+      "cross_dashboard_links": true,
+      "export_formats": ["PDF", "PNG", "CSV"]
+    }
+  },
+  
+  "dashboard_deployment": {
+    "grafana_version": "10.0+",
+    "datasources_required": [
+      "prometheus",
+      "elasticsearch", 
+      "postgres"
+    ],
+    "plugins_required": [
+      "grafana-piechart-panel",
+      "grafana-worldmap-panel",
+      "grafana-polystat-panel"
+    ],
+    "access_control": {
+      "executive_overview": ["C-level", "VP", "Director"],
+      "child_safety_executive": ["Legal", "Compliance", "Safety Team", "C-level"],
+      "product_analytics": ["Product", "UX", "Data Science", "Marketing"],
+      "operational_excellence": ["Engineering", "DevOps", "SRE", "CTO"],
+      "financial_performance": ["Finance", "CFO", "CEO", "Business Operations"]
+    }
+  },
+  
+  "automated_reporting": {
+    "executive_summary": {
+      "frequency": "weekly",
+      "recipients": ["CEO", "CTO", "CPO", "CFO"],
+      "format": "PDF",
+      "includes": ["key_metrics", "incidents", "financial_summary", "safety_report"]
+    },
+    "board_report": {
+      "frequency": "monthly",
+      "recipients": ["board@company.com"],
+      "format": "PDF", 
+      "includes": ["executive_overview", "growth_metrics", "financial_performance", "regulatory_compliance"]
+    },
+    "safety_digest": {
+      "frequency": "daily",
+      "recipients": ["safety-team@company.com", "legal@company.com"],
+      "format": "Email",
+      "includes": ["safety_incidents", "coppa_compliance", "content_moderation"]
+    }
+  }
+}

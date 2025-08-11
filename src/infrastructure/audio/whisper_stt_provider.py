@@ -46,11 +46,13 @@ class WhisperSTTProvider(ISTTProvider):
 
     def __init__(
         self,
-        model_size: str = "base",
+        model_size: str = "turbo",  # Upgraded to turbo model for optimal speed and accuracy
         device: str = "auto",
-        compute_type: str = "float32",
+        compute_type: str = "float16",  # Optimized for GPU performance
         language: Optional[str] = None,
         enable_vad: bool = True,
+        adaptive_model: bool = True,  # Enable adaptive model switching
+        target_latency_ms: int = 2000,  # Target latency for model selection
     ):
         """
         Initialize Whisper STT Provider.
@@ -75,7 +77,10 @@ class WhisperSTTProvider(ISTTProvider):
         self.model_size = model_size
         self.language = language
         self.enable_vad = enable_vad
+        self.adaptive_model = adaptive_model
+        self.target_latency_ms = target_latency_ms
         self._model = None
+        self._fallback_model = None  # Smaller model for high-latency scenarios
         self._logger = logging.getLogger(__name__)
 
         # Determine optimal device
@@ -91,7 +96,7 @@ class WhisperSTTProvider(ISTTProvider):
         self._language_detections = {"ar": 0, "en": 0, "other": 0}
 
     async def _load_model(self) -> whisper.Whisper:
-        """Load Whisper model with optimization."""
+        """Load Whisper model with optimization and fallback."""
         if self._model is None:
             self._logger.info(
                 f"Loading Whisper model: {self.model_size} on {self.device}"
@@ -107,7 +112,33 @@ class WhisperSTTProvider(ISTTProvider):
             load_time = time.time() - start_time
             self._logger.info(f"Whisper model loaded in {load_time:.2f}s")
 
+            # Load fallback model if adaptive mode is enabled
+            if self.adaptive_model:
+                await self._load_fallback_model()
+
         return self._model
+
+    async def _load_fallback_model(self) -> None:
+        """Load smaller fallback model for high-latency scenarios."""
+        fallback_size = "tiny" if self.model_size != "tiny" else "base"
+        self._logger.info(f"Loading fallback model: {fallback_size}")
+        
+        try:
+            loop = asyncio.get_event_loop()
+            self._fallback_model = await loop.run_in_executor(
+                None, lambda: whisper.load_model(fallback_size, device=self.device)
+            )
+            self._logger.info(f"Fallback model {fallback_size} loaded successfully")
+        except Exception as e:
+            self._logger.warning(f"Failed to load fallback model: {e}")
+
+    def _should_use_fallback(self, recent_latency: float) -> bool:
+        """Determine if fallback model should be used based on recent latency."""
+        return (
+            self.adaptive_model and 
+            self._fallback_model is not None and
+            recent_latency > self.target_latency_ms
+        )
 
     async def transcribe(
         self, audio_data: bytes, language: Optional[str] = None
@@ -135,10 +166,20 @@ class WhisperSTTProvider(ISTTProvider):
             # Determine language
             target_language = language or self.language
 
+            # Check if we should use fallback model based on recent performance
+            avg_latency = self._total_processing_time / max(self._successful_requests, 1) * 1000
+            use_fallback = self._should_use_fallback(avg_latency)
+            
+            if use_fallback:
+                self._logger.info(f"Using fallback model due to high latency ({avg_latency:.0f}ms)")
+                selected_model = self._fallback_model
+            else:
+                selected_model = model
+
             # Transcribe with optimizations
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(
-                None, self._transcribe_sync, model, audio_array, target_language
+                None, self._transcribe_sync, selected_model, audio_array, target_language
             )
 
             processing_time = time.time() - start_time
