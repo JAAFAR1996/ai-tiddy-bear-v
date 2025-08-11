@@ -256,12 +256,11 @@ FIRMWARE_FILENAME = os.getenv("FIRMWARE_FILENAME", "teddy-001.bin")
 FIRMWARE_VERSION  = os.getenv("FIRMWARE_VERSION",  "1.2.1")
 PUBLIC_HOST       = os.getenv("PUBLIC_HOST", "ai-tiddy-bear-v.onrender.com")
 
-# Public router - no authentication required
-esp32_public = APIRouter(prefix="/api/v1/esp32", tags=["ESP32-Public"])
+# Public router - no authentication required (prefix handled by RouteManager)
+esp32_public = APIRouter(tags=["ESP32-Public"])
 
-# Private router - authentication required (WebSocket needs separate auth)
+# Private router - authentication required (prefix handled by RouteManager)
 esp32_private = APIRouter(
-    prefix="/api/v1/esp32",
     tags=["ESP32-Private"],
     # NOTE: WebSocket auth handled separately - HTTPBearer doesn't work with WebSocket
 )
