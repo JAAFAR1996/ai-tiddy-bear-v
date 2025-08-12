@@ -402,9 +402,17 @@ async def esp32_websocket_endpoint(
     token_manager = TokenManager()
     try:
         payload = await token_manager.verify_token(token)
-        # Ensure token is for a device and matches device_id
-        token_device_id = payload.get("device_id")
-        if not token_device_id or token_device_id != device_id:
+        # Extract device_id from subject field (format: device_id:child_id)
+        subject = payload.get("sub")
+        if not subject or ":" not in subject:
+            await websocket.close(code=1008)
+            logger.warning(
+                f"ESP32 WebSocket rejected: invalid token subject format for device {device_id}"
+            )
+            return
+            
+        token_device_id = subject.split(":")[0]
+        if token_device_id != device_id:
             await websocket.close(code=1008)
             logger.warning(
                 f"ESP32 WebSocket rejected: device_id mismatch (token: {token_device_id}, param: {device_id})"
