@@ -1026,7 +1026,9 @@ def get_database_manager() -> DatabaseManager:
     """Get or create database manager instance."""
     global database_manager
     if database_manager is None:
-        database_manager = DatabaseManager()
+        from ..config.config_manager_provider import get_config_manager
+        config_manager = get_config_manager()
+        database_manager = DatabaseManager(config_manager)
     return database_manager
 
 

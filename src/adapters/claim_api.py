@@ -98,8 +98,18 @@ security = HTTPBearer()
 token_manager = TokenManager()
 device_manager = DevicePairingManager()
 
-# Get configuration
-config = get_config()
+# Get configuration with error handling
+try:
+    config = get_config()
+except Exception as e:
+    logger.error(f"Failed to load configuration: {e}")
+    # Create a minimal fallback config for basic operation
+    class FallbackConfig:
+        ENVIRONMENT = "development"
+        HOST = "localhost"
+        REDIS_URL = "redis://localhost:6379/0"
+        JWT_SECRET_KEY = "dev-fallback-key"
+    config = FallbackConfig()
 
 # Redis manager for nonce tracking
 class SimpleRedisManager:
