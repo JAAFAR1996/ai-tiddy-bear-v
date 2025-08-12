@@ -138,13 +138,6 @@ class ServiceRegistry:
         Check readiness of all critical dependencies: DB, Redis, OpenAI, etc. with retry and timeout.
         Returns a dict with status and details. Raises if not ready.
         """
-        from tenacity import (
-            AsyncRetrying,
-            stop_after_attempt,
-            wait_exponential,
-            retry_if_exception_type,
-            RetryError,
-        )
 
         status = {"db": False, "redis": False, "openai": False, "errors": []}
         logger = self._audit_logger
@@ -179,26 +172,22 @@ class ServiceRegistry:
             return True
 
         async def run_with_retry(fn, name):
-            try:
-                async for attempt in AsyncRetrying(
-                    stop=stop_after_attempt(3),
-                    wait=wait_exponential(multiplier=1, min=2, max=8),
-                    retry=retry_if_exception_type(Exception),
-                    reraise=True,
-                ):
-                    with attempt:
-                        logger.info(
-                            f"Readiness check: {name} attempt {attempt.retry_state.attempt_number}"
-                        )
-                        return await asyncio.wait_for(fn(), timeout=5)
-            except RetryError as re:
-                logger.error(f"{name} readiness failed after retries: {re}")
-                status["errors"].append(f"{name}: {re}")
-                return False
-            except Exception as e:
-                logger.error(f"{name} readiness error: {e}")
-                status["errors"].append(f"{name}: {e}")
-                return False
+            max_attempts = 3
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    logger.info(f"Readiness check: {name} attempt {attempt}")
+                    result = await asyncio.wait_for(fn(), timeout=5)
+                    return result
+                except Exception as e:
+                    if attempt == max_attempts:
+                        logger.error(f"{name} readiness failed after {max_attempts} attempts: {e}")
+                        status["errors"].append(f"{name}: {e}")
+                        return False
+                    else:
+                        wait_time = min(2 ** attempt, 8)  # Exponential backoff
+                        logger.warning(f"{name} attempt {attempt} failed, retrying in {wait_time}s: {e}")
+                        await asyncio.sleep(wait_time)
+            return False
 
         status["db"] = await run_with_retry(db_check, "DB")
         status["redis"] = await run_with_retry(redis_check, "Redis")
