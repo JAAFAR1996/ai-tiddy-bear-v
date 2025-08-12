@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import QueuePool
 from sqlalchemy.sql import text
-from src.core.exceptions import DatabaseError, configurationerror, ValidationError
+from src.core.exceptions import DatabaseError, ConfigurationError, ValidationError
 from src.core.utils.crypto_utils import encrypt_sensitive_data, hash_data
 
 logger = logging.getLogger(__name__)

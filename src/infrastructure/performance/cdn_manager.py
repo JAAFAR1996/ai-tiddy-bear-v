@@ -15,18 +15,8 @@ from datetime import datetime, timedelta
 import httpx
 from pydantic import BaseModel, Field
 
-# Production-safe imports with fallbacks
-try:
-    import aiofiles
-    HAS_AIOFILES = True
-except ImportError:
-    HAS_AIOFILES = False
-
-try:
-    import boto3
-    HAS_BOTO3 = True
-except ImportError:
-    HAS_BOTO3 = False
+import aiofiles
+import boto3
 
 try:
     from azure.mgmt.cdn import CdnManagementClient
@@ -323,9 +313,6 @@ class AWSCloudFrontProvider(BaseCDNProvider):
 
     async def initialize(self) -> None:
         """Initialize CloudFront client."""
-        if not HAS_BOTO3:
-            raise RuntimeError("boto3 not available - cannot initialize AWS CloudFront provider")
-        
         self._client = boto3.client(
             "cloudfront",
             aws_access_key_id=decrypt_sensitive_data(self.config.api_key),

@@ -29,7 +29,13 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
-import aiofiles
+
+# Production-safe imports
+try:
+    import aiofiles
+    HAS_AIOFILES = True
+except ImportError:
+    HAS_AIOFILES = False
 
 from .production_file_storage import (
     StorageProvider,
