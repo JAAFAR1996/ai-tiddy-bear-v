@@ -517,6 +517,22 @@ def register_all_routers(app: FastAPI) -> RouteManager:
     except ImportError as e:
         logger.warning(f"⚠️ WebSocket router not available: {e}")
 
+    # 10. Claim API Router - ESP32 device claiming
+    try:
+        from src.adapters.claim_api import router as claim_router
+
+        route_manager.register_router(
+            router=claim_router,
+            router_name="claim_api",
+            prefix="/api/v1",
+            tags=["Device Claiming"],
+            require_auth=False,
+        )
+        logger.info("✅ Claim API router registered")
+    except ImportError as e:
+        logger.critical(f"❌ Failed to load claim API router: {e}")
+        raise SystemExit("Claim API router is required. Shutting down.")
+
     # Final validation
     if route_manager.validate_all_routes():
         logger.info("✅ All routers registered successfully with no conflicts detected")
