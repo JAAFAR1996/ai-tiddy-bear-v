@@ -128,14 +128,14 @@ aiohttp>=3.11.0,<4.0.0
 # ================================
 # FILE I/O & COMPRESSION
 # ================================
-# aiofiles>=24.1.0,<25.0.0  # Not currently used - uncomment when needed
-# brotli>=1.1.0,<2.0.0      # Not currently used - uncomment when needed
+aiofiles>=24.1.0,<25.0.0
+brotli>=1.1.0,<2.0.0
 
 # ================================
 # CLOUD STORAGE & CDN
 # ================================
-# boto3>=1.35.0,<2.0.0      # Not currently used - uncomment when needed
-# botocore>=1.35.0,<2.0.0   # Not currently used - uncomment when needed
+boto3>=1.35.0,<2.0.0
+botocore>=1.35.0,<2.0.0
 
 # ================================
 # TASK SCHEDULING
