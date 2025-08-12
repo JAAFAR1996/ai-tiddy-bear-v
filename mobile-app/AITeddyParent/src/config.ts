@@ -67,7 +67,7 @@ const getApiBaseUrl = (): string => {
     return env.DEV_API_BASE_URL;
   }
   
-  const prodUrl = env.API_BASE_URL || 'https://api.aiteddybear.com';
+  const prodUrl = env.API_BASE_URL || 'https://ai-tiddy-bear-v-xuqy.onrender.com';
   
   // Enforce HTTPS in production
   if (isProduction && !prodUrl.startsWith('https://')) {

@@ -718,11 +718,11 @@ uint32_t calculate_backoff_delay(uint8_t attempt) {
 ```c
 // NVS Configuration
 bool ssl_enabled = false;  // Must be false for Render
-char server_host[] = "your-app.onrender.com";
+char server_host[] = "ai-tiddy-bear-v-xuqy.onrender.com";
 uint16_t server_port = 8000;
 
 // WebSocket URL
-ws://your-app.onrender.com:8000/esp32/connect
+ws://ai-tiddy-bear-v-xuqy.onrender.com:8000/esp32/connect
 ```
 
 **الوضع المستقبلي** (Production TLS):
