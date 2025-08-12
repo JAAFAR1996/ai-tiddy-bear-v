@@ -29,6 +29,7 @@ class AITeddyBearException(Exception):
 
     error_code = "ai_teddybear_error"
     default_severity = "medium"
+    status_code = 500  # Default HTTP status code
 
     def __init__(
         self,
@@ -83,12 +84,14 @@ class AuthenticationError(AITeddyBearException):
 
     error_code = "auth_failed"
     default_severity = "high"
+    status_code = 401
 
 
 class InvalidTokenError(AuthenticationError):
     """Raised when JWT token is invalid or expired."""
 
     error_code = "invalid_token"
+    status_code = 401
 
 
 class AuthorizationError(AITeddyBearException):
@@ -96,12 +99,14 @@ class AuthorizationError(AITeddyBearException):
 
     error_code = "not_authorized"
     default_severity = "high"
+    status_code = 403
 
 
 class PermissionDeniedError(AuthorizationError):
     """Raised when specific permission is denied."""
 
     error_code = "permission_denied"
+    status_code = 403
 
     def __init__(
         self, permission: str, resource: str = None, *, context: dict = None, **kwargs
@@ -131,6 +136,7 @@ class SafetyViolationError(AITeddyBearException):
 
     error_code = "safety_violation"
     default_severity = "critical"
+    status_code = 400
 
     def __init__(
         self,
@@ -157,6 +163,7 @@ class COPPAViolationError(AITeddyBearException):
 
     error_code = "coppa_violation"
     default_severity = "critical"
+    status_code = 403
 
     def __init__(
         self,
@@ -202,6 +209,7 @@ class ResourceNotFoundError(AITeddyBearException):
 
     error_code = "resource_not_found"
     default_severity = "low"
+    status_code = 404
 
     def __init__(
         self,
@@ -250,6 +258,7 @@ class ValidationError(AITeddyBearException):
 
     error_code = "validation_error"
     default_severity = "medium"
+    status_code = 422
 
     def __init__(
         self,
@@ -320,6 +329,7 @@ class ConfigurationError(AITeddyBearException):
 
     error_code = "configuration_error"
     default_severity = "critical"
+    status_code = 500
 
 
 class DatabaseError(AITeddyBearException):
@@ -360,6 +370,7 @@ class RateLimitExceeded(AITeddyBearException):
 
     error_code = "rate_limit_exceeded"
     default_severity = "medium"
+    status_code = 429
 
     def __init__(
         self,
