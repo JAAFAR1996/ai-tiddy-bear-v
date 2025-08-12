@@ -91,7 +91,7 @@ class ErrorHandler:
 
         # Return filtered response
         response_data = exc.to_dict()
-        if not self.debug and exc.details:
+        if not self.debug and hasattr(exc, 'details') and exc.details:
             response_data["error"]["details"] = self._filter_sensitive_data(exc.details)
 
         return JSONResponse(status_code=exc.status_code, content=response_data)

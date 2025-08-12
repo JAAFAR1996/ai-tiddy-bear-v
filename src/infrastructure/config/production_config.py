@@ -464,8 +464,8 @@ class ConfigurationManager:
 
                 # يجب تمرير الرسالة في الحقل message واسم المتغير في config_key فقط — أي استخدام غير ذلك = خطأ إنتاجي ويجب إصلاحه فوراً.
                 raise ConfigurationError(
-                    message=f"Configuration validation failed: {str(e)}",
-                    config_key="CONFIG_VALIDATION",
+                    f"Configuration validation failed: {str(e)}",
+                    context={"config_key": "CONFIG_VALIDATION"}
                 ) from e
 
     def get_config(self) -> ProductionConfig:
@@ -474,8 +474,8 @@ class ConfigurationManager:
             if self._config is None:
                 # يجب تمرير الرسالة في الحقل message واسم المتغير في config_key فقط — أي استخدام غير ذلك = خطأ إنتاجي ويجب إصلاحه فوراً.
                 raise ConfigurationError(
-                    message="Configuration not loaded. Call load_config() first.",
-                    config_key="CONFIG_NOT_LOADED",
+                    "Configuration not loaded. Call load_config() first.",
+                    context={"config_key": "CONFIG_NOT_LOADED"}
                 )
             return self._config
 
@@ -535,8 +535,8 @@ def load_config(env_file: Optional[str] = None) -> ProductionConfig:
         traceback.print_exc()
         # رفع الاستثناء برسالة واضحة واسم متغير محدد
         raise ConfigurationError(
-            message=f"Application cannot start due to configuration failure: {str(e)}",
-            config_key="CONFIG_STARTUP",
+            f"Application cannot start due to configuration failure: {str(e)}",
+            context={"config_key": "CONFIG_STARTUP"}
         )
 
 
@@ -555,7 +555,8 @@ def reload_config(env_file: Optional[str] = None) -> ProductionConfig:
         traceback.print_exc()
         # رفع الاستثناء برسالة واضحة واسم متغير محدد
         raise ConfigurationError(
-            message=f"Configuration reload failed: {str(e)}", config_key="CONFIG_RELOAD"
+            f"Configuration reload failed: {str(e)}",
+            context={"config_key": "CONFIG_RELOAD"}
         )
 
 
