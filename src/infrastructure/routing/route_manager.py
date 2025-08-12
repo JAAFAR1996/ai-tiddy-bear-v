@@ -350,7 +350,11 @@ def register_all_routers(app: FastAPI) -> RouteManager:
         logger.info("✅ Authentication router registered")
     except ImportError as e:
         logger.critical(f"❌ Failed to load auth router: {e}")
-        raise SystemExit("Authentication router is required. Shutting down.")
+        from src.core.exceptions import ConfigurationError
+        raise ConfigurationError(
+            f"Authentication router is required but not found: {e}",
+            context={"config_key": "AUTH_ROUTER", "router_name": "authentication"}
+        )
 
     # 2. Dashboard Router (requires auth)
     try:
@@ -366,7 +370,11 @@ def register_all_routers(app: FastAPI) -> RouteManager:
         logger.info("✅ Dashboard router registered")
     except ImportError as e:
         logger.critical(f"❌ Failed to load dashboard router: {e}")
-        raise SystemExit("Dashboard router is required. Shutting down.")
+        from src.core.exceptions import ConfigurationError
+        raise ConfigurationError(
+            f"Dashboard router is required but not found: {e}",
+            context={"config_key": "DASHBOARD_ROUTER", "router_name": "dashboard"}
+        )
 
     # 3. Core API Router (chat, health, etc.) - FIXED PREFIX to avoid conflict
     try:
@@ -382,7 +390,11 @@ def register_all_routers(app: FastAPI) -> RouteManager:
         logger.info("✅ Core API router registered")
     except ImportError as e:
         logger.critical(f"❌ Failed to load core API router: {e}")
-        raise SystemExit("Core API router is required. Shutting down.")
+        from src.core.exceptions import ConfigurationError
+        raise ConfigurationError(
+            f"Core API router is required but not found: {e}",
+            context={"config_key": "CORE_API_ROUTER", "router_name": "core_api"}
+        )
 
     # 4a. ESP32 Public Router - No authentication required
     try:
@@ -398,7 +410,11 @@ def register_all_routers(app: FastAPI) -> RouteManager:
         logger.info("✅ ESP32 public router registered")
     except ImportError as e:
         logger.critical(f"❌ Failed to load ESP32 public router: {e}")
-        raise SystemExit("ESP32 public router is required. Shutting down.")
+        from src.core.exceptions import ConfigurationError
+        raise ConfigurationError(
+            f"ESP32 public router is required but not found: {e}",
+            context={"config_key": "ESP32_PUBLIC_ROUTER", "router_name": "esp32_public"}
+        )
 
     # 4b. ESP32 Private Router - Authentication required
     try:
@@ -414,7 +430,11 @@ def register_all_routers(app: FastAPI) -> RouteManager:
         logger.info("✅ ESP32 private router registered")
     except ImportError as e:
         logger.critical(f"❌ Failed to load ESP32 private router: {e}")
-        raise SystemExit("ESP32 private router is required. Shutting down.")
+        from src.core.exceptions import ConfigurationError
+        raise ConfigurationError(
+            f"ESP32 private router is required but not found: {e}",
+            context={"config_key": "ESP32_PRIVATE_ROUTER", "router_name": "esp32_private"}
+        )
 
     # 4c. ESP32 WebSocket Router - Production WebSocket endpoints
     try:
@@ -447,7 +467,11 @@ def register_all_routers(app: FastAPI) -> RouteManager:
         logger.info("✅ Web interface router registered")
     except ImportError as e:
         logger.critical(f"❌ Failed to load web router: {e}")
-        raise SystemExit("Web interface router is required. Shutting down.")
+        from src.core.exceptions import ConfigurationError
+        raise ConfigurationError(
+            f"Web interface router is required but not found: {e}",
+            context={"config_key": "WEB_ROUTER", "router_name": "web_interface"}
+        )
 
     # 6. Premium Subscriptions Router
     try:
@@ -531,7 +555,11 @@ def register_all_routers(app: FastAPI) -> RouteManager:
         logger.info("✅ Claim API router registered")
     except ImportError as e:
         logger.critical(f"❌ Failed to load claim API router: {e}")
-        raise SystemExit("Claim API router is required. Shutting down.")
+        from src.core.exceptions import ConfigurationError
+        raise ConfigurationError(
+            f"Claim API router is required but not found: {e}",
+            context={"config_key": "CLAIM_API_ROUTER", "router_name": "claim_api"}
+        )
 
     # Final validation
     if route_manager.validate_all_routes():
