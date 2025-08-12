@@ -254,7 +254,7 @@ APP_VERSION = "1.3.0"
 # متغيرات الفيرموير - يمكن تغييرها من Environment Variables
 FIRMWARE_FILENAME = os.getenv("FIRMWARE_FILENAME", "teddy-001.bin")
 FIRMWARE_VERSION  = os.getenv("FIRMWARE_VERSION",  "1.2.1")
-PUBLIC_HOST       = os.getenv("PUBLIC_HOST", "ai-tiddy-bear-v.onrender.com")
+PUBLIC_HOST       = os.getenv("PUBLIC_HOST", "ai-tiddy-bear-v-xuqy.onrender.com")
 
 # Public router - no authentication required (prefix handled by RouteManager)
 esp32_public = APIRouter(tags=["ESP32-Public"])

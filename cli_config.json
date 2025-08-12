@@ -1,0 +1,155 @@
+{
+  "version": "5.0.0",
+  "project_name": "AI Teddy Bear",
+  "description": "Child-safe AI companion with COPPA compliance",
+  
+  "commands": {
+    "check": {
+      "description": "System analysis and validation",
+      "subcommands": {
+        "full": {
+          "scripts": [
+            "validate_production_readiness.py",
+            "security_dependency_audit.py",
+            "dead_code_scanner.py", 
+            "test_coverage_report.py",
+            "esp32_network_connectivity_test.py"
+          ],
+          "description": "Complete system analysis including security, performance, and connectivity"
+        },
+        "connectivity": {
+          "scripts": [
+            "esp32_network_connectivity_test.py",
+            "esp32_ssl_tls_security_test.py",
+            "esp32_security_authentication_test.py"
+          ],
+          "description": "ESP32-Server connection and authentication tests"
+        },
+        "security": {
+          "scripts": [
+            "security_dependency_audit.py",
+            "jwt_security_test.py",
+            "secrets_audit.py",
+            "child_safety_validator.py"
+          ],
+          "description": "Security vulnerability scanning and COPPA compliance checks"
+        },
+        "performance": {
+          "scripts": [
+            "performance_optimizer.py",
+            "esp32_performance_measurement_test.py", 
+            "database_cleanup_validator.py"
+          ],
+          "description": "Performance validation and optimization recommendations"
+        }
+      }
+    },
+    
+    "test": {
+      "description": "Testing framework integration",
+      "subcommands": {
+        "all": {
+          "scripts": ["run_tests.py"],
+          "description": "Run complete test suite including unit, integration, and E2E tests"
+        },
+        "security": {
+          "scripts": [
+            "jwt_penetration_test.py",
+            "jwt_security_test.py",
+            "environment_security_test.py"
+          ],
+          "description": "Security-focused penetration and validation tests"
+        },
+        "esp32": {
+          "scripts": [
+            "esp32_device_functions_test.py",
+            "esp32_reliability_stress_test.py",
+            "esp32_business_data_flow_test.py"
+          ],
+          "description": "ESP32-specific hardware and firmware tests"
+        }
+      }
+    },
+    
+    "deploy": {
+      "description": "Deployment and release management", 
+      "subcommands": {
+        "production": {
+          "scripts": ["production/deploy.sh"],
+          "description": "Production deployment with full validation and rollback capability"
+        },
+        "staging": {
+          "scripts": ["production/deploy.sh"],
+          "args": ["--staging"],
+          "description": "Staging environment deployment for testing"
+        }
+      }
+    },
+    
+    "monitor": {
+      "description": "System monitoring and observability",
+      "subcommands": {
+        "health": {
+          "scripts": ["../monitoring/comprehensive-health-monitoring.py"],
+          "description": "Real-time health monitoring with alerting"
+        },
+        "metrics": {
+          "scripts": ["metrics_exporter.py"],
+          "description": "Export system metrics for analysis"
+        }
+      }
+    },
+    
+    "backup": {
+      "description": "Data backup and recovery operations",
+      "subcommands": {
+        "create": {
+          "scripts": ["backup_scheduler.py"],
+          "args": ["--create"],
+          "description": "Create full system backup including database and configurations"
+        },
+        "restore": {
+          "scripts": ["backup_restore_test.py"],
+          "description": "Restore system from backup file"
+        }
+      }
+    }
+  },
+  
+  "environment_checks": [
+    {
+      "name": "Python Version",
+      "check": "python --version",
+      "required": "3.10+"
+    },
+    {
+      "name": "Database Connection", 
+      "check": "database connectivity",
+      "required": "PostgreSQL accessible"
+    },
+    {
+      "name": "Redis Connection",
+      "check": "redis connectivity", 
+      "required": "Redis accessible"
+    },
+    {
+      "name": "ESP32 Connection",
+      "check": "esp32 connectivity",
+      "required": "ESP32 device connected"
+    }
+  ],
+  
+  "security_requirements": {
+    "jwt_validation": "required",
+    "coppa_compliance": "required", 
+    "data_encryption": "required",
+    "audit_logging": "required"
+  },
+  
+  "child_safety_features": {
+    "content_filtering": "active",
+    "parental_controls": "active", 
+    "data_protection": "active",
+    "session_monitoring": "active"
+  }
+}
