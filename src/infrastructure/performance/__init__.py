@@ -8,14 +8,51 @@ import logging
 from typing import Dict, Optional, Any
 from dataclasses import dataclass
 
-from .cdn_manager import CDNManager, create_cdn_manager
-from .cache_manager import CacheManager, create_cache_manager
-from .compression_manager import CompressionManager, create_compression_manager
-from .database_optimizer import ConnectionPoolManager, create_database_optimizer
-from .monitoring import PerformanceMonitor, create_performance_monitor
+# Production-safe imports with fallback handling
+try:
+    from .cdn_manager import CDNManager, create_cdn_manager
+    HAS_CDN_MANAGER = True
+except ImportError as e:
+    logging.warning(f"CDN manager not available: {e}")
+    HAS_CDN_MANAGER = False
+
+try:
+    from .cache_manager import CacheManager, create_cache_manager
+    HAS_CACHE_MANAGER = True
+except ImportError as e:
+    logging.warning(f"Cache manager not available: {e}")
+    HAS_CACHE_MANAGER = False
+
+try:
+    from .compression_manager import CompressionManager, create_compression_manager
+    HAS_COMPRESSION_MANAGER = True
+except ImportError as e:
+    logging.warning(f"Compression manager not available: {e}")
+    HAS_COMPRESSION_MANAGER = False
+
+try:
+    from .database_optimizer import ConnectionPoolManager, create_database_optimizer
+    HAS_DATABASE_OPTIMIZER = True
+except ImportError as e:
+    logging.warning(f"Database optimizer not available: {e}")
+    HAS_DATABASE_OPTIMIZER = False
+
+try:
+    from .monitoring import PerformanceMonitor, create_performance_monitor
+    HAS_PERFORMANCE_MONITOR = True
+except ImportError as e:
+    logging.warning(f"Performance monitor not available: {e}")
+    HAS_PERFORMANCE_MONITOR = False
+
 # Load testing removed for production
 # from .load_testing import LoadTestRunner, create_load_test_runner
-from .optimization_engine import OptimizationEngine, create_optimization_engine
+
+try:
+    from .optimization_engine import OptimizationEngine, create_optimization_engine
+    HAS_OPTIMIZATION_ENGINE = True
+except ImportError as e:
+    logging.warning(f"Optimization engine not available: {e}")
+    HAS_OPTIMIZATION_ENGINE = False
 
 
 logger = logging.getLogger(__name__)
