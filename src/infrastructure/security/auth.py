@@ -52,6 +52,7 @@ class TokenManager:
         self.config = config or get_config()
         self.advanced_jwt = AdvancedJWTManager()
         self.advanced_jwt.set_logger(auth_logger)
+        self._pending_redis_client = None
 
         # Initialize Redis for advanced features if available
         try:
@@ -59,21 +60,24 @@ class TokenManager:
                 "REDIS_URL"
             )
             if redis_url:
-                import asyncio
-
                 # Set up Redis client for token tracking
                 redis_client = redis.from_url(redis_url)
-                # Use asyncio to set Redis client
-                try:
-                    loop = asyncio.get_event_loop()
-                    loop.create_task(self.advanced_jwt.set_redis_client(redis_client))
-                except RuntimeError:
-                    # No event loop running, will set later
-                    pass
+                # Store redis client for later initialization when event loop is available
+                self._pending_redis_client = redis_client
+                # Will be set during startup in initialize_auth_services()
         except Exception as e:
             auth_logger.warning(
                 f"Redis initialization failed, advanced features disabled: {e}"
             )
+
+    async def initialize_async_services(self):
+        """Initialize async services when event loop is available."""
+        if self._pending_redis_client:
+            try:
+                await self.advanced_jwt.set_redis_client(self._pending_redis_client)
+                auth_logger.info("Redis client initialized for JWT manager")
+            except Exception as e:
+                auth_logger.warning(f"Failed to initialize Redis client: {e}")
 
     async def create_access_token(self, data: Dict[str, Any]) -> str:
         """Create JWT access token using advanced JWT manager (async)."""

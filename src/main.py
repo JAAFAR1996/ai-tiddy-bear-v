@@ -175,20 +175,22 @@ def setup_application(config_param=None):
     global limiter, redis_client, config
     from src.infrastructure.config.config_provider import get_config
 
-    config = config_param or get_config()
+    # Use parameter config if provided, otherwise get current config
+    current_config = config_param or get_config()
+    config = current_config  # Update global config
     try:
-        redis_client = redis.from_url(config.REDIS_URL)
+        redis_client = redis.from_url(current_config.REDIS_URL)
         limiter = Limiter(
             key_func=get_remote_address,
-            storage_uri=config.REDIS_URL,
-            default_limits=[f"{config.RATE_LIMIT_REQUESTS_PER_MINUTE}/minute"],
+            storage_uri=current_config.REDIS_URL,
+            default_limits=[f"{current_config.RATE_LIMIT_REQUESTS_PER_MINUTE}/minute"],
         )
     except Exception as e:
         from src.core.exceptions import ServiceUnavailableError
         from uuid import uuid4
 
         correlation_id = str(uuid4())
-        if config.ENVIRONMENT == "production":
+        if current_config.ENVIRONMENT == "production":
             logger.critical(
                 "CRITICAL: Redis connection failed in production - Error: %s, Type: %s, CorrelationID: %s",
                 str(e),
