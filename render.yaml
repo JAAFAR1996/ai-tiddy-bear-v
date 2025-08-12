@@ -43,8 +43,8 @@ services:
     # Health check configuration
     healthCheckPath: /health
     
-    # Build configuration
-    buildCommand: echo "Using Docker build - no additional build command needed"
+    # Build configuration - Force requirements installation
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     
     # Auto-deploy on successful build
     autoDeploy: true
