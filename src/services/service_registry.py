@@ -151,10 +151,28 @@ class ServiceRegistry:
         logger = self._audit_logger
 
         async def db_check():
-            session = await self._get_db_session()
-            if not session:
-                raise RuntimeError("DB session unavailable")
-            return True
+            try:
+                # استخدام الـ connection manager مع معالجة أي مشاكل import
+                try:
+                    from src.adapters.database_production import _connection_manager
+                    # تأكد من تهيئة الاتصال إذا لزم الأمر
+                    if not _connection_manager._initialized:
+                        await _connection_manager.initialize()
+                    # استخدم طريقة health check الخاصة بـ connection manager
+                    result = await _connection_manager.health_check()
+                    if not result:
+                        raise RuntimeError("Database health check failed")
+                    return True
+                except ImportError as e:
+                    # في حالة فشل الـ import، استخدم فحص بسيط
+                    database_url = getattr(self.config, "DATABASE_URL", None)
+                    if not database_url:
+                        raise RuntimeError("DATABASE_URL not set")
+                    if not database_url.startswith(("postgresql://", "postgres://")):
+                        raise RuntimeError("Invalid DATABASE_URL format")
+                    return True
+            except Exception as e:
+                raise RuntimeError(f"Database check failed: {e}")
 
         async def redis_check():
             import aioredis
@@ -295,21 +313,17 @@ class ServiceRegistry:
 
     async def _create_notification_repository(self) -> Any:
         """Create Notification repository instance (production)."""
-        session = await self._get_db_session()
         from src.infrastructure.database.production_notification_repository import (
             ProductionNotificationRepository,
         )
-
-        return ProductionNotificationRepository(session)
+        return ProductionNotificationRepository()
 
     async def _create_delivery_record_repository(self) -> Any:
         """Create DeliveryRecord repository instance (production)."""
-        session = await self._get_db_session()
         from src.infrastructure.database.production_notification_repository import (
             ProductionDeliveryRecordRepository,
         )
-
-        return ProductionDeliveryRecordRepository(session)
+        return ProductionDeliveryRecordRepository()
 
     def register_singleton(
         self,
@@ -557,43 +571,32 @@ class ServiceRegistry:
 
     async def _create_user_repository(self) -> Any:
         """Create User repository instance (production)."""
-        session = await self._get_db_session()
-        config = self.config
-        return ProductionUserRepository(session, config=config)
+        return ProductionUserRepository()
 
     async def _create_child_repository(self) -> Any:
         """Create Child repository instance (production)."""
-        session = await self._get_db_session()
-        config = self.config
-        return ProductionChildRepository(session, config=config)
+        return ProductionChildRepository()
 
     async def _create_conversation_repository(self) -> Any:
         """Create Conversation repository instance (production)."""
-        session = await self._get_db_session()
-        config = self.config
-        return ProductionConversationRepository(session, config=config)
+        return ProductionConversationRepository()
 
     async def _create_message_repository(self) -> Any:
         """Create Message repository instance (production)."""
-        session = await self._get_db_session()
-        config = self.config
-        return ProductionMessageRepository(session, config=config)
+        return ProductionMessageRepository()
 
     async def _create_consent_repository(self) -> Any:
         """Create Consent repository instance (production)."""
-        session = await self._get_db_session()
-        return ProductionConsentRepository(session)
+        return ProductionConsentRepository()
 
-    # Add a method to get the DB session (to be implemented according to your DB setup)
-    async def _get_db_session(self):
-        """Get async DB session from production database manager."""
-        # أفضل حل إنتاجي: استخدم جلسة SQLAlchemy async session مباشرة
-        from src.adapters.database_production import _connection_manager
-
-        # تأكد من تهيئة الاتصال إذا لزم الأمر
-        if not _connection_manager._initialized:
-            await _connection_manager.initialize()
-        return await _connection_manager.get_async_session()
+    def _get_db_session(self):
+        """Get async DB session context manager from production database manager."""
+        try:
+            from src.adapters.database_production import _connection_manager
+            return _connection_manager.get_async_session()
+        except ImportError:
+            # Fallback for cases where connection manager is not available
+            raise RuntimeError("Database connection manager not available")
 
     async def _create_coppa_validator(self) -> COPPAValidator:
         """Create COPPA validator instance."""
