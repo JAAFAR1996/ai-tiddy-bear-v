@@ -79,15 +79,15 @@ class ErrorHandler:
 
         # Simplified logging based on exception type
         if isinstance(exc, (AuthenticationError, AuthorizationError)):
-            security_logger.warning("Security exception", **log_data)
+            security_logger.warning("Security exception", extra=log_data)
             self._audit_security_event(exc, user_context)
         elif isinstance(exc, (ChildSafetyViolation, COPPAViolation)):
-            security_logger.error("Child safety violation", **log_data)
+            security_logger.error("Child safety violation", extra=log_data)
             self._audit_safety_violation(exc, user_context)
         elif isinstance(exc, RateLimitExceeded):
-            self.logger.info("Rate limit exceeded", **log_data)
+            self.logger.info("Rate limit exceeded", extra=log_data)
         else:
-            self.logger.warning("Application exception", **log_data)
+            self.logger.warning("Application exception", extra=log_data)
 
         # Return filtered response
         response_data = exc.to_dict()
@@ -197,11 +197,11 @@ class ErrorHandler:
             }
 
             if isinstance(exc, (SystemError, MemoryError, KeyboardInterrupt)):
-                self.logger.critical("Critical system error", **log_data)
+                self.logger.critical("Critical system error", extra=log_data)
                 self._audit_critical_error(exc, correlation_id, user_context)
             else:
                 self.logger.error(
-                    "Unhandled exception", traceback=traceback.format_exc(), **log_data
+                    "Unhandled exception", extra=dict(log_data, traceback=traceback.format_exc())
                 )
         except Exception:
             pass  # Prevent error handler from failing
