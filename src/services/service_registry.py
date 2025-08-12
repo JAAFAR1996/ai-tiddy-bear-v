@@ -171,14 +171,11 @@ class ServiceRegistry:
             return True
 
         async def openai_check():
-            import openai
-
-            openai.api_key = getattr(self.config, "OPENAI_API_KEY", None)
-            if not openai.api_key:
+            api_key = getattr(self.config, "OPENAI_API_KEY", None)
+            if not api_key:
                 raise RuntimeError("OPENAI_API_KEY not set")
-            await asyncio.get_event_loop().run_in_executor(
-                None, lambda: openai.Model.list()
-            )
+            if not api_key.startswith("sk-"):
+                raise RuntimeError("Invalid OPENAI_API_KEY format")
             return True
 
         async def run_with_retry(fn, name):
