@@ -43,10 +43,31 @@ class ReadinessGate(BaseHTTPMiddleware):
     def __init__(self, app, allow=("/health", "/health/ready", "/openapi.json", "/docs", "/redoc")):
         super().__init__(app)
         self.allow = set(allow)
+        self.config_dependent = {"/api/v1/pair/claim", "/api/v1/token/refresh"}
     
     async def dispatch(self, req, call_next):
-        if req.url.path in self.allow or getattr(req.app.state, "ready", False):
+        path = req.url.path
+        
+        # Always allow basic endpoints
+        if path in self.allow:
             return await call_next(req)
+            
+        # ESP32 pairing endpoints: allow if config is ready
+        if path in self.config_dependent:
+            if getattr(req.app.state, "config_ready", False):
+                return await call_next(req)  # Will return proper 4xx if other issues
+            else:
+                from fastapi.responses import JSONResponse
+                return JSONResponse(
+                    {"detail": "Service initializing - configuration loading"}, 
+                    status_code=503,
+                    headers={"Retry-After": "5"}
+                )
+        
+        # All other endpoints: require full readiness
+        if getattr(req.app.state, "ready", False):
+            return await call_next(req)
+            
         from fastapi.responses import JSONResponse
         return JSONResponse({"detail": "warming up"}, status_code=503)
 
@@ -361,7 +382,9 @@ async def lifespan(app: FastAPI):
     try:
         config = load_config()  # Direct synchronous load
         app.state.config = config  # Set IMMEDIATELY in app state
+        app.state.config_ready = True  # Mark config as ready for ESP32 pairing
         logger.info("✅ Configuration loaded and set in app.state")
+        logger.info("🔧 Config ready - ESP32 pairing endpoint available")
     except Exception as e:
         logger.critical(f"🚨 CRITICAL: Failed to load configuration: {e}")
         raise RuntimeError(f"Configuration loading failed: {e}")
