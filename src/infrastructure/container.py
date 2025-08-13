@@ -153,9 +153,10 @@ class ApplicationModule(Module):
     def _get_app_settings(self) -> object:
         # Example: load from config loader
         def _provider(config=None):
-            from src.infrastructure.config.config_provider import get_config
-
-            return config or get_config()
+            # Production: config must be passed explicitly
+            if config is None:
+                raise ValueError("App settings provider requires config parameter - no global fallback")
+            return config
 
         return _provider
 

@@ -221,9 +221,11 @@ class MonitoringConfig:
 class ProductionPaymentConfig:
     """Production configuration for Iraqi payment system."""
 
-    def __init__(self, environment: Environment = Environment.PRODUCTION):
+    def __init__(self, environment: Environment = Environment.PRODUCTION, config=None):
+        """Initialize with explicit config injection (production-grade)"""
         self.environment = environment
         self.debug_mode = environment != Environment.PRODUCTION
+        self.config = config  # Store injected config
 
         # Initialize configurations
         self.security = self._init_security_config()
@@ -234,7 +236,9 @@ class ProductionPaymentConfig:
 
     def _init_security_config(self) -> SecurityConfig:
         """Initialize security configuration."""
-        config = get_config()
+        if self.config is None:
+            raise RuntimeError("ProductionPaymentConfig requires config injection - no fallback allowed")
+        config = self.config
         if not config.JWT_SECRET_KEY:
             raise Exception(
                 "JWT_SECRET_KEY missing in config. COPPA compliance violation."

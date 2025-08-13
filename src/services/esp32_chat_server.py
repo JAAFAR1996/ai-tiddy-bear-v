@@ -146,12 +146,17 @@ class ESP32ChatServer:
 
     def __init__(
         self,
+        *,
+        config,
         stt_provider=None,
         tts_service=None,
         ai_service=None,
         safety_service=None,
     ):
-        self.config = get_config()
+        """Initialize with explicit config injection (production-grade)"""
+        if config is None:
+            raise RuntimeError("ESP32ChatServer requires config parameter - no fallback allowed in production")
+        self.config = config
         self.logger = logging.getLogger(__name__)
 
         # Core services - will be injected in production

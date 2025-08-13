@@ -5,7 +5,7 @@ Core security service for child protection and system security.
 """
 
 import time
-from src.infrastructure.config.config_provider import get_config
+# Production: no global config imports - use dependency injection
 import hashlib
 import json
 import re
@@ -33,7 +33,7 @@ from src.infrastructure.database.database_manager import initialize_database
 from src.infrastructure.persistence.models.production_models import (
     ChildModel,
 )
-from src.infrastructure.config.config_provider import get_config
+# Production: no global config imports - use dependency injection
 from src.infrastructure.rate_limiting.rate_limiter import (
     RateLimitingService,
     OperationType,
@@ -162,7 +162,10 @@ class MLAnomalyDetector:
     def __init__(self, redis_client: Optional[aioredis.Redis] = None, config=None):
         self.logger = get_logger(__name__, "ml_anomaly_detector")
         self.redis = redis_client
-        self.config = config or get_config()
+        if config is None:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=503, detail="SecurityService not properly configured")
+        self.config = config
 
         # Behavioral baselines for each user
         self.user_baselines: Dict[str, Dict[str, Any]] = {}
@@ -547,7 +550,10 @@ class ThreatDetector:
     def __init__(self, redis_client: Optional[aioredis.Redis] = None, config=None):
         self.logger = get_logger(__name__, "threat_detection")
         self.redis = redis_client
-        self.config = config or get_config()
+        if config is None:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=503, detail="SecurityService not properly configured")
+        self.config = config
         self.failed_attempts = {}  # Fallback for when Redis is unavailable
         self.suspicious_patterns = {}  # Pattern tracking
         self.ml_anomaly_detector = MLAnomalyDetector(redis_client, config)
@@ -776,7 +782,9 @@ class SecurityService:
         redis_client: Optional[aioredis.Redis] = None,
     ):
         self.logger = get_logger(__name__, "security_service")
-        self.config = get_config()
+        if not hasattr(self, 'config') or self.config is None:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=503, detail="SecurityService requires proper initialization")
         self.redis = redis_client
         self.threat_detector = ThreatDetector(redis_client, self.config)
         self.rate_limiting_service = rate_limiting_service
@@ -1626,8 +1634,8 @@ class SecurityService:
     ) -> str:
         """Create JWT session token."""
         if not secret_key:
-            config = get_config()
-            secret_key = config.JWT_SECRET_KEY
+            # Production: JWT secret must be passed from caller, not fetched globally
+            raise ValueError("JWT secret must be passed explicitly - no global config access in production")
             if not secret_key:
                 raise Exception(
                     "JWT_SECRET_KEY missing in config. COPPA compliance violation."
@@ -1647,8 +1655,8 @@ class SecurityService:
         """Validate JWT session token."""
         try:
             if not secret_key:
-                config = get_config()
-                secret_key = config.JWT_SECRET_KEY
+                # Production: JWT secret must be passed from caller
+                raise ValueError("JWT secret must be passed explicitly in production")
                 if not secret_key:
                     raise Exception(
                         "JWT_SECRET_KEY missing in config. COPPA compliance violation."
@@ -1953,11 +1961,13 @@ class SecurityService:
 
 
 async def create_security_service(
+    config,  # Config must be passed explicitly
     rate_limiting_service: Optional[RateLimitingService] = None,
     redis_client: Optional[aioredis.Redis] = None,
 ) -> SecurityService:
     """Factory function to create security service with Redis and rate limiting support."""
-    config = get_config()  # Use already imported get_config
+    if config is None:
+        raise ValueError("create_security_service requires config parameter - no global access in production")
     if redis_client is None:
         try:
             redis_client = aioredis.from_url(config.REDIS_URL)
@@ -2007,9 +2017,11 @@ class ProductionChildDataEncryption:
 
     def __init__(self, encryption_key: str = None):
         """Initialize encryption service."""
-        from src.infrastructure.config.config_provider import get_config
+        # Production: no global config imports - use dependency injection
 
-        self.config = get_config() if hasattr(get_config, "__call__") else None
+        if not hasattr(self, 'config') or self.config is None:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=503, detail="SecurityService requires proper initialization") if hasattr(get_config, "__call__") else None
 
         # Use provided key or get from config
         if encryption_key:

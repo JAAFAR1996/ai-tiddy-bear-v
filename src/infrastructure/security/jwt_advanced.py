@@ -152,19 +152,28 @@ class AdvancedJWTManager:
     - Audit logging
     """
 
-    def __init__(self):
+    def __init__(self, config=None):
+        """Initialize with explicit config injection (production-grade)"""
+        if config is None:
+            raise ValueError("AdvancedJWTManager requires config parameter - no global access in production")
+        
+        self.config = config
         self.logger = None  # Will be injected
         self._redis_client: Optional[redis.Redis] = None
 
-        # Configuration
+        # Configuration from injected config
         self.access_token_ttl = int(
-            os.getenv("JWT_ACCESS_TOKEN_TTL", "900")
+            getattr(config, 'JWT_ACCESS_TOKEN_TTL', None) or os.getenv("JWT_ACCESS_TOKEN_TTL", "900")
         )  # 15 minutes
         self.refresh_token_ttl = int(
-            os.getenv("JWT_REFRESH_TOKEN_TTL", "604800")
+            getattr(config, 'JWT_REFRESH_TOKEN_TTL', None) or os.getenv("JWT_REFRESH_TOKEN_TTL", "604800")
         )  # 7 days
-        self.mfa_token_ttl = int(os.getenv("JWT_MFA_TOKEN_TTL", "300"))  # 5 minutes
-        self.key_rotation_interval = int(os.getenv("JWT_KEY_ROTATION_DAYS", "30"))
+        self.mfa_token_ttl = int(
+            getattr(config, 'JWT_MFA_TOKEN_TTL', None) or os.getenv("JWT_MFA_TOKEN_TTL", "300")
+        )  # 5 minutes
+        self.key_rotation_interval = int(
+            getattr(config, 'JWT_KEY_ROTATION_DAYS', None) or os.getenv("JWT_KEY_ROTATION_DAYS", "30")
+        )
 
         # Algorithm configuration - PRODUCTION SECURITY
         env_algorithm = os.getenv("JWT_ALGORITHM", "RS256")
@@ -434,10 +443,8 @@ class AdvancedJWTManager:
             if os.getenv("ENVIRONMENT") == "production":
                 raise Exception("SECURITY VIOLATION: HS256 not allowed in production")
 
-            from src.infrastructure.config.config_provider import get_config
-
-            config = get_config()
-            jwt_secret = config.JWT_SECRET_KEY
+            # Use injected config instead of global access
+            jwt_secret = self.config.JWT_SECRET_KEY
             if not jwt_secret:
                 raise Exception(
                     "JWT_SECRET_KEY missing in config. COPPA compliance violation."
@@ -529,10 +536,8 @@ class AdvancedJWTManager:
                 if not self.fallback_algorithm:
                     raise jwt.InvalidTokenError("No valid signing key available")
 
-                from src.infrastructure.config.config_provider import get_config
-
-                config = get_config()
-                jwt_secret = config.JWT_SECRET_KEY
+                # Use injected config instead of global access
+                jwt_secret = self.config.JWT_SECRET_KEY
                 if not jwt_secret:
                     raise Exception(
                         "JWT_SECRET_KEY missing in config. COPPA compliance violation."

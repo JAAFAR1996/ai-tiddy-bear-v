@@ -12,7 +12,7 @@ try:
     from src.adapters.database_production import initialize_production_database  # async
 except Exception:
 
-    async def initialize_production_database() -> None:
+    async def initialize_production_database(config=None) -> None:
         return None
 
 
@@ -101,7 +101,7 @@ try:
     from src.adapters.database_production import initialize_production_database
 except Exception:
 
-    async def initialize_production_database():
+    async def initialize_production_database(config=None):
         return None
 
 
@@ -183,13 +183,14 @@ class RequestValidationMiddleware(BaseHTTPMiddleware):
 # APPLICATION SETUP - Deferred to avoid config issues during testing
 
 
-def setup_application(config_param=None):
-    """Setup application configuration and dependencies. Accepts optional config for testability."""
+def setup_application(config_param):
+    """Setup application configuration and dependencies (production-grade)."""
     global limiter, redis_client, config
-    from src.infrastructure.config.config_provider import get_config
-
-    # Use parameter config if provided, otherwise get current config
-    current_config = config_param or get_config()
+    
+    # Config must be explicitly provided (no fallback)
+    if config_param is None:
+        raise RuntimeError("setup_application requires config_param - no global access in production")
+    current_config = config_param
     config = current_config  # Update global config
     try:
         redis_client = redis.from_url(current_config.REDIS_URL)
@@ -370,7 +371,7 @@ async def lifespan(app: FastAPI):
 
     correlation_id = str(uuid4())
     try:
-        await initialize_production_database()
+        await initialize_production_database(config)
         logger.info("✅ Database initialized")
 
         if config and config.ENABLE_REDIS:
@@ -398,17 +399,28 @@ async def lifespan(app: FastAPI):
 
             config_manager = get_config_manager()
             # تم تهيئة rate limiter مسبقًا، لا داعي لاستدعاء create_rate_limiting_service مرة أخرى
-            # rate_limiting_service = create_rate_limiting_service(
-            #     redis_url=config.REDIS_URL,
-            #     use_redis=config.ENABLE_REDIS,
-            # )
-            security_service = await create_security_service(limiter)
-
-            # Store services in app state
+            # Create all heavy services once in startup (production-grade)
+            from src.infrastructure.security.auth import TokenManager, UserAuthenticator
+            
+            # Validate required config early (fail fast in startup, not during requests)
+            required_vars = ['JWT_SECRET_KEY', 'REDIS_URL', 'DATABASE_URL', 'OPENAI_API_KEY']
+            missing = [var for var in required_vars if not getattr(config, var, None)]
+            if missing:
+                logger.critical(f"🚨 STARTUP FAILURE: Missing required config: {missing}")
+                raise RuntimeError(f"STARTUP FAILURE: Missing required config: {missing}")
+            
+            # Create services with explicit config injection
+            security_service = await create_security_service(config, limiter)
+            token_manager = TokenManager(config=config)
+            user_authenticator = UserAuthenticator(config=config)
+            
+            # Store all services in app state (single source of truth)
+            app.state.config = config
             app.state.security_service = security_service
             app.state.rate_limiting_service = limiter
             app.state.limiter = limiter
-            # config already set above
+            app.state.token_manager = token_manager
+            app.state.user_authenticator = user_authenticator
 
             # 🔒 IMPLEMENT COMPREHENSIVE ADMIN SECURITY
             try:
@@ -438,7 +450,7 @@ async def lifespan(app: FastAPI):
                     logger.critical(
                         "🚨 CRITICAL: Cannot start production without admin security"
                     )
-                    sys.exit(1)
+                    raise RuntimeError("CRITICAL: Cannot start production without admin security")
 
             logger.info("✅ Security services initialized")
         logger.info(
@@ -457,7 +469,7 @@ async def lifespan(app: FastAPI):
             correlation_id,
         )
         if not os.environ.get("PYTEST_CURRENT_TEST"):
-            sys.exit(1)
+            raise RuntimeError(f"Application startup failed: {str(e)}")
 
     yield
 
@@ -499,9 +511,7 @@ app = FastAPI(
     ],
 )
 
-# Set app reference for compat shim (allows legacy get_config() to read app.state.config)
-from src.infrastructure.config.config_provider import set_app_ref
-set_app_ref(app)
+# Production-grade: all config access via app.state + DI pattern
 
 # Mount static files for firmware distribution
 app.mount("/web", StaticFiles(directory="src/static"), name="static_files")
@@ -915,7 +925,8 @@ if __name__ == "__main__":
 
     # Initialize configuration if not already done
     if not config:
-        setup_application()
+        from src.infrastructure.config.config_provider import get_config
+        setup_application(get_config())
 
     # Get configuration from environment with defaults
     host = config.HOST if config else "0.0.0.0"
@@ -980,7 +991,7 @@ async def initialize_configuration():
                     "🚨 ABORTING: Cannot start with invalid production configuration (ID: %s)",
                     correlation_id,
                 )
-                sys.exit(1)
+                raise RuntimeError(f"ABORTING: Cannot start with invalid production configuration (ID: {correlation_id})")
             else:
                 logger.warning(
                     "⚠️ Continuing with development mode despite validation warnings (ID: %s)",
@@ -993,11 +1004,11 @@ async def initialize_configuration():
             correlation_id,
             e.name if hasattr(e, "name") else "unknown",
         )
-        sys.exit(1)
+        raise RuntimeError(f"CRITICAL: Configuration module import failed (ID: {correlation_id})")
     except Exception as e:
         logger.critical(
             "🚨 CRITICAL: Configuration initialization failed (ID: %s) - Error: %s",
             correlation_id,
             str(e),
         )
-        sys.exit(1)
+        raise RuntimeError(f"CRITICAL: Configuration initialization failed (ID: {correlation_id})")

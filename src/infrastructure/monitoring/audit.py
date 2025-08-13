@@ -97,7 +97,9 @@ class AuditEvent:
 class COPPAAuditLogger:
     """COPPA-compliant audit logging system."""
 
-    def __init__(self):
+    def __init__(self, config=None):
+        """Initialize with explicit config injection (production-grade)"""
+        self.config = config  # Store config for admin alerts
         self.audit_logger = AuditLogger("coppa_compliance")
         self.events_cache: List[AuditEvent] = []
         self.cache_size = 1000
@@ -430,8 +432,8 @@ class COPPAAuditLogger:
 
             async def send_admin_alert():
                 notification_service = await get_notification_service()
-                config = get_config()
-                admin_email = getattr(config, "PARENT_NOTIFICATION_EMAIL", None)
+                # Use injected config instead of global access
+                admin_email = getattr(self.config, "PARENT_NOTIFICATION_EMAIL", None) if self.config else None
                 if not admin_email:
                     return
                 subject = f"[CRITICAL AUDIT EVENT] {event.event_type.value}"

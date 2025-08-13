@@ -6,62 +6,30 @@ This module should ONLY contain the get_config function and minimal dependencies
 """
 
 from functools import lru_cache
-from typing import TYPE_CHECKING, Optional
-import weakref
+from typing import TYPE_CHECKING
 from fastapi import Request, HTTPException
 
 if TYPE_CHECKING:
     from .production_config import ProductionConfig
 
-try:
-    from fastapi import FastAPI  # type: ignore
-except Exception:
-    FastAPI = object  # typing only
-
-# Global configuration instance
+# Global configuration instance for CLI/tools only
 _config_instance = None
-_app_ref: Optional[weakref.ReferenceType] = None
 
 
-def set_app_ref(app: "FastAPI") -> None:
-    """Store a weak ref to the app so legacy get_config() can read app.state.config at runtime."""
-    global _app_ref
-    _app_ref = weakref.ref(app)
-
-
-def _try_state_config():
-    """Try to get config from app.state if available."""
-    if _app_ref:
-        app = _app_ref()
-        if app is not None:
-            return getattr(app.state, "config", None)
-    return None
-
-
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=1)  
 def get_config() -> "ProductionConfig":
     """
-    Get the current configuration instance.
+    DEPRECATED: Get configuration instance.
     
-    Compat: prefer app.state.config if available (runtime-safe)
-    This prevents ConfigurationError during request processing.
+    This function is for CLI/tools only. In FastAPI apps, use:
+    - Depends(get_config_from_state) for endpoints
+    - request.app.state.config for functions with Request access
     """
-    # Try app.state.config first (runtime-safe)
-    cfg = _try_state_config()
-    if cfg is not None:
-        return cfg
-    
-    # Fallback: manager (CLI/tools). If not loaded, return 503 (not 500).
     global _config_instance
     if _config_instance is None:
-        try:
-            # Import here to avoid circular imports
-            from .production_config import _config_manager
-            _config_instance = _config_manager.get_config()
-        except Exception:
-            # Return 503 instead of ConfigurationError to prevent 500
-            raise HTTPException(status_code=503, detail="Configuration not loaded")
-
+        # Import here to avoid circular imports
+        from .production_config import _config_manager
+        _config_instance = _config_manager.get_config()
     return _config_instance
 
 
@@ -100,4 +68,4 @@ def get_config_from_state(request: Request) -> "ProductionConfig":
     return config
 
 
-__all__ = ["get_config", "reload_config", "get_config_from_state", "set_app_ref"]
+__all__ = ["get_config", "reload_config", "get_config_from_state"]

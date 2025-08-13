@@ -47,10 +47,12 @@ class TokenManager:
     """Unified JWT token management with advanced security features."""
 
     def __init__(self, config=None):
-        from src.infrastructure.config.config_provider import get_config
-
-        self.config = config or get_config()
-        self.advanced_jwt = AdvancedJWTManager()
+        """Initialize with explicit config injection (production-grade)"""
+        if config is None:
+            raise ValueError("TokenManager requires config parameter - no global access in production")
+        
+        self.config = config
+        self.advanced_jwt = AdvancedJWTManager(config=config)
         self.advanced_jwt.set_logger(auth_logger)
         self._pending_redis_client = None
 
@@ -223,8 +225,9 @@ class PasswordManager:
 class UserAuthenticator:
     """User authentication service."""
 
-    def __init__(self):
-        self.token_manager = TokenManager()
+    def __init__(self, config=None):
+        from src.infrastructure.config.config_provider import get_config_from_state
+        self.token_manager = TokenManager(config=config)
         self.password_manager = PasswordManager()
 
     async def authenticate_user(
@@ -456,12 +459,9 @@ _user_authenticator = None
 _authorization_manager = None
 
 
-def get_token_manager():
-    """Get token manager instance with lazy initialization."""
-    global _token_manager
-    if _token_manager is None:
-        _token_manager = TokenManager()
-    return _token_manager
+# Removed lazy initialization - use pure DI pattern instead
+# Token manager should be created in lifespan and stored in app.state
+# or injected via Depends(get_token_manager_from_state)
 
 
 def get_user_authenticator():
