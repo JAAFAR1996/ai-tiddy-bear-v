@@ -158,7 +158,8 @@ class ServiceRegistry:
                     # Test database connectivity using session
                     async with get_session_cm() as session:
                         # Simple connection test
-                        await session.execute("SELECT 1")
+                        from sqlalchemy import text
+                        await session.execute(text("SELECT 1"))
                         result = True
                     if not result:
                         raise RuntimeError("Database health check failed")
