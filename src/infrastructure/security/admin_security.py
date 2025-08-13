@@ -846,7 +846,8 @@ def admin_endpoint(
     def decorator(func):
         @wraps(func)
         async def wrapper(request: Request, *args, **kwargs):
-            manager = get_admin_security_manager()
+            from ...application.dependencies import get_admin_security_manager_from_state
+            manager = get_admin_security_manager_from_state(request.app)
 
             # Get credentials from request
             auth_header = request.headers.get("authorization")
