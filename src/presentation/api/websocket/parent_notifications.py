@@ -81,7 +81,7 @@ async def parent_notification_websocket(
         # Get TokenManager from app state (production-grade)
         token_manager = getattr(websocket.app.state, "token_manager", None)
         if token_manager is None:
-            await websocket.close(code=1011, reason="Token manager not ready")
+            await websocket.close(code=4503, reason="Token manager not ready")
             return
         try:
             # Use async verify_token (following the auth.py pattern)
@@ -407,7 +407,7 @@ async def esp32_websocket_endpoint(
     # Get TokenManager from app state (production-grade)
     token_manager = getattr(websocket.app.state, "token_manager", None)
     if token_manager is None:
-        await websocket.close(code=1011, reason="Token manager not ready")
+        await websocket.close(code=4503, reason="Token manager not ready")
         return
     try:
         payload = await token_manager.verify_token(token)
