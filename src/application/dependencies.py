@@ -151,9 +151,12 @@ def get_config_from_state(request) -> "ProductionConfig":
     from fastapi import Request, HTTPException
     config = getattr(request.app.state, "config", None)
     if config is None:
-        # احتياطي آمن - استخدام المدير العام في حالة سباق وقت البدء
-        from src.infrastructure.config.production_config import get_config as get_loaded_config
-        config = get_loaded_config()
+        # Service is still initializing - return 503 instead of 500
+        raise HTTPException(
+            status_code=503, 
+            detail="Service initializing - configuration not ready",
+            headers={"Retry-After": "5"}
+        )
     return config
 
 def get_token_manager_from_state(request) -> "TokenManager":
