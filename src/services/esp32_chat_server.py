@@ -1145,5 +1145,6 @@ class ESP32ChatServer:
         self.logger.info("ESP32 Chat Server shutdown complete")
 
 
-# Global instance - will be configured with services in production
-esp32_chat_server = ESP32ChatServer()
+# NOTE: No global instance - use proper DI pattern via ESP32ServiceFactory
+# For testing/development only:
+# esp32_chat_server = ESP32ChatServer(config=ProductionConfig())

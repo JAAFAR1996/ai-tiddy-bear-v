@@ -19,7 +19,11 @@ from src.shared.dto.ai_response import AIResponse
 class ESP32ServiceFactory:
     """Factory for creating production-ready ESP32 Chat Server."""
 
-    def __init__(self):
+    def __init__(self, config):
+        """Initialize factory with centralized config (production-grade DI)"""
+        if config is None:
+            raise RuntimeError("ESP32ServiceFactory requires config parameter - no fallback allowed in production")
+        self.config = config
         self.logger = logging.getLogger(__name__)
 
     async def create_production_server(
@@ -62,8 +66,8 @@ class ESP32ServiceFactory:
             # Create Child Safety Service
             safety_service = await self._create_safety_service()
 
-            # Create ESP32 Chat Server
-            chat_server = ESP32ChatServer()
+            # Create ESP32 Chat Server with centralized config
+            chat_server = ESP32ChatServer(config=self.config)
 
             # Inject all services
             chat_server.inject_services(
@@ -170,5 +174,7 @@ class ESP32ServiceFactory:
 
 
 
-# Global factory instance
-esp32_service_factory = ESP32ServiceFactory()
+# NOTE: No global factory instance - use proper DI pattern with config injection
+# For testing/development only:  
+# from src.infrastructure.config.production_config import ProductionConfig
+# esp32_service_factory = ESP32ServiceFactory(config=ProductionConfig())
