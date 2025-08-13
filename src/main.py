@@ -38,6 +38,19 @@ from slowapi.middleware import SlowAPIMiddleware
 from src.infrastructure.error_handler import setup_error_handlers
 
 
+# ReadinessGate Middleware - Production Grade
+class ReadinessGate(BaseHTTPMiddleware):
+    def __init__(self, app, allow=("/health", "/health/ready", "/openapi.json", "/docs", "/redoc")):
+        super().__init__(app)
+        self.allow = set(allow)
+    
+    async def dispatch(self, req, call_next):
+        if req.url.path in self.allow or getattr(req.app.state, "ready", False):
+            return await call_next(req)
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"detail": "warming up"}, status_code=503)
+
+
 # Configure logging with secure formatting (no sensitive data exposure)
 logging.basicConfig(
     level=logging.INFO,
@@ -339,6 +352,8 @@ async def lifespan(app: FastAPI):
         yield
         return
 
+    # Start in warming up state
+    app.state.ready = False
     logger.info("🚀 Starting AI Teddy Bear API...")
 
     # تهيئة الإعدادات بشكل آمن
@@ -390,6 +405,7 @@ async def lifespan(app: FastAPI):
             app.state.security_service = security_service
             app.state.rate_limiting_service = limiter
             app.state.limiter = limiter
+            app.state.config = config
 
             # 🔒 IMPLEMENT COMPREHENSIVE ADMIN SECURITY
             try:
@@ -425,6 +441,10 @@ async def lifespan(app: FastAPI):
         logger.info(
             "✅ API started in %s mode", config.ENVIRONMENT if config else "unknown"
         )
+        
+        # All resources initialized - mark as ready
+        app.state.ready = True
+        logger.info("🚀 Application is now ready to serve requests")
 
     except Exception as e:
         logger.critical(
@@ -511,6 +531,8 @@ if not os.environ.get("PYTEST_CURRENT_TEST"):
             allow_methods=["*"],
             allow_headers=["*"],
         )
+    # Add ReadinessGate as the last middleware (outermost - executes first)
+    app.add_middleware(ReadinessGate)
 
 # ================================
 # API ROUTES
