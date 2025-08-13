@@ -178,11 +178,29 @@ def get_advanced_jwt_from_state(request) -> "AdvancedJWTManager":
         raise HTTPException(status_code=503, detail="Advanced JWT manager not ready")
     return advanced_jwt
 
+def get_db_adapter_from_state(request) -> "ProductionDatabaseAdapter":
+    """Get ProductionDatabaseAdapter from app.state (production-grade)"""
+    from fastapi import Request, HTTPException
+    db_adapter = getattr(request.app.state, "db_adapter", None)
+    if db_adapter is None:
+        raise HTTPException(status_code=503, detail="Database adapter not ready")
+    return db_adapter
+
+def get_payment_system_from_state(request) -> "PaymentSystemIntegration":
+    """Get PaymentSystemIntegration from app.state (production-grade)"""
+    from fastapi import Request, HTTPException
+    payment_system = getattr(request.app.state, "payment_system", None)
+    if payment_system is None:
+        raise HTTPException(status_code=503, detail="Payment system not ready")
+    return payment_system
+
 # FastAPI dependency annotations for production services
 ConfigDep = Depends(get_config_from_state)
 TokenManagerDep = Depends(get_token_manager_from_state)
 SecurityServiceDep = Depends(get_security_service_from_state)
 AdvancedJWTDep = Depends(get_advanced_jwt_from_state)
+DBAdapterDep = Depends(get_db_adapter_from_state)
+PaymentDep = Depends(get_payment_system_from_state)
 
 # ========================= GENERIC DEPENDENCY HELPER =========================
 
