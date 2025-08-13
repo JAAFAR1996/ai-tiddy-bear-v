@@ -35,7 +35,7 @@ from .jwt_advanced import AdvancedJWTManager, TokenType
 from ..rate_limiting.rate_limiter import RateLimitingService, OperationType
 from ..logging.production_logger import get_logger, security_logger
 from ..monitoring.audit import coppa_audit
-from src.application.dependencies import TokenManagerDep, AdminSecurityDep
+from src.application.dependencies import AdminSecurityDep
 
 # Configure logging
 logger = get_logger(__name__, "admin_security")
@@ -770,11 +770,8 @@ _admin_security_manager: Optional[AdminSecurityManager] = None
 
 
 def get_admin_security_manager() -> AdminSecurityManager:
-    """Get global admin security manager instance."""
-    global _admin_security_manager
-    if _admin_security_manager is None:
-        _admin_security_manager = AdminSecurityManager()
-    return _admin_security_manager
+    """DEPRECATED: Use AdminSecurityDep dependency injection instead."""
+    raise RuntimeError("get_admin_security_manager() is deprecated - use AdminSecurityDep with proper dependency injection")
 
 
 # FastAPI Dependencies
