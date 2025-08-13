@@ -38,9 +38,15 @@ class SecurityIntegration:
     - Real-time threat monitoring
     """
     
-    def __init__(self):
-        # Initialize security components
-        self.jwt_manager = AdvancedJWTManager()
+    def __init__(self, config=None, advanced_jwt=None):
+        """Initialize with explicit config and AdvancedJWTManager injection (production-grade)"""
+        if config is None:
+            raise ValueError("SecurityIntegration requires config parameter - no global access in production")
+        if advanced_jwt is None:
+            raise ValueError("SecurityIntegration requires advanced_jwt parameter - no global access in production")
+        
+        # Use injected security components
+        self.jwt_manager = advanced_jwt
         self.rate_limiter = AdvancedRateLimiter()
         self.cors_manager = AdvancedCORSManager()
         self.input_validator = AdvancedInputValidator()

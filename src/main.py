@@ -410,12 +410,32 @@ async def lifespan(app: FastAPI):
                 raise RuntimeError(f"STARTUP FAILURE: Missing required config: {missing}")
             
             # Create services with explicit config injection
+            from src.infrastructure.security.jwt_advanced import AdvancedJWTManager
+            from src.infrastructure.logging.production_logger import get_logger
+            
+            # Create AdvancedJWTManager in lifespan (production-grade)
+            auth_logger = get_logger("auth", "jwt_manager")
+            advanced_jwt = AdvancedJWTManager(config=config)
+            advanced_jwt.set_logger(auth_logger)
+            
+            # Setup Redis for JWT if enabled
+            if getattr(config, "ENABLE_REDIS", False) and getattr(config, "REDIS_URL", None):
+                try:
+                    import redis.asyncio as aioredis
+                    redis_jwt = aioredis.from_url(config.REDIS_URL)
+                    await redis_jwt.ping()  # Test connection
+                    await advanced_jwt.set_redis_client(redis_jwt)
+                    logger.info("✅ AdvancedJWTManager Redis connected")
+                except Exception as e:
+                    logger.warning(f"AdvancedJWTManager Redis setup failed: {e}")
+            
             security_service = await create_security_service(config, limiter)
-            token_manager = TokenManager(config=config)
+            token_manager = TokenManager(config=config, advanced_jwt=advanced_jwt)
             user_authenticator = UserAuthenticator(config=config)
             
             # Store all services in app state (single source of truth)
             app.state.config = config
+            app.state.advanced_jwt = advanced_jwt  # Store AdvancedJWTManager
             app.state.security_service = security_service
             app.state.rate_limiting_service = limiter
             app.state.limiter = limiter
@@ -477,6 +497,8 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Shutting down AI Teddy Bear API...")
     if redis_client:
         await redis_client.close()
+        await redis_client.connection_pool.disconnect()
+        logger.info("✅ Redis connections closed")
     logger.info("✅ Shutdown complete")
 
 

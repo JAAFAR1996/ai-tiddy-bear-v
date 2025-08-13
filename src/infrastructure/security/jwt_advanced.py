@@ -902,5 +902,5 @@ class AdvancedJWTManager:
         }
 
 
-# Global instance
-advanced_jwt_manager = AdvancedJWTManager()
+# Global instance will be created in lifespan with proper config injection
+advanced_jwt_manager = None  # Will be initialized in main.py lifespan
