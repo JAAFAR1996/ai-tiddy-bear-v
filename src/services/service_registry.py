@@ -154,12 +154,12 @@ class ServiceRegistry:
             try:
                 # استخدام الـ connection manager مع معالجة أي مشاكل import
                 try:
-                    from src.adapters.database_production import _connection_manager
-                    # تأكد من تهيئة الاتصال إذا لزم الأمر
-                    if not _connection_manager._initialized:
-                        await _connection_manager.initialize()
-                    # استخدم طريقة health check الخاصة بـ connection manager
-                    result = await _connection_manager.health_check()
+                    from src.adapters.database_production import get_session_cm
+                    # Test database connectivity using session
+                    async with get_session_cm() as session:
+                        # Simple connection test
+                        await session.execute("SELECT 1")
+                        result = True
                     if not result:
                         raise RuntimeError("Database health check failed")
                     return True
@@ -605,8 +605,8 @@ class ServiceRegistry:
     def _get_db_session(self):
         """Get async DB session context manager from production database manager."""
         try:
-            from src.adapters.database_production import _connection_manager
-            return _connection_manager.get_async_session()
+            from src.adapters.database_production import get_session_cm
+            return get_session_cm()
         except ImportError:
             # Fallback for cases where connection manager is not available
             raise RuntimeError("Database connection manager not available")
