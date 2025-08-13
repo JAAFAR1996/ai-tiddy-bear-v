@@ -56,7 +56,8 @@ class AdminEndpointSecurityUpdater:
         """Initialize the security updater."""
         self.app = app
         self.rate_limiter = rate_limiter
-        self.security_manager = get_admin_security_manager()
+        from ...application.dependencies import get_admin_security_manager_from_state
+        self.security_manager = get_admin_security_manager_from_state(app)
         self.secured_endpoints: List[str] = []
         self.security_violations: List[Dict[str, Any]] = []
         
@@ -396,7 +397,8 @@ class AdminEndpointSecurityMiddleware:
     
     def __init__(self, app: FastAPI):
         self.app = app
-        self.security_manager = get_admin_security_manager()
+        from ...application.dependencies import get_admin_security_manager_from_state
+        self.security_manager = get_admin_security_manager_from_state(app)
     
     async def __call__(self, request: Request, call_next):
         """Process request and enforce admin security."""

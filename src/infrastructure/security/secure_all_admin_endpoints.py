@@ -34,8 +34,8 @@ from .admin_security import (
     SecurityLevel,
     AdminSession,
     require_admin_permission,
-    get_admin_security_manager
 )
+from ...application.dependencies import get_admin_security_manager_from_state
 from ..rate_limiting.rate_limiter import RateLimitingService
 from ..logging.production_logger import get_logger
 
@@ -63,7 +63,7 @@ async def apply_comprehensive_admin_security(
     Returns:
         Security implementation report
     """
-    security_manager = get_admin_security_manager()
+    security_manager = get_admin_security_manager_from_state(app)
     
     if rate_limiter:
         await security_manager.initialize(rate_limiter)

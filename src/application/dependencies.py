@@ -209,6 +209,14 @@ def get_admin_security_manager(token_manager: "TokenManager" = TokenManagerDep) 
 
 AdminSecurityDep = Depends(get_admin_security_manager)
 
+def get_admin_security_manager_from_state(app) -> "AdminSecurityManager":
+    """Build AdminSecurityManager at startup using services already in app.state."""
+    from src.infrastructure.security.admin_security import AdminSecurityManager
+    token_manager = getattr(app.state, "token_manager", None)
+    if token_manager is None:
+        raise RuntimeError("Token manager not ready")
+    return AdminSecurityManager(token_manager=token_manager)
+
 # ========================= GENERIC DEPENDENCY HELPER =========================
 
 
