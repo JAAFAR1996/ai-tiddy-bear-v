@@ -7,7 +7,10 @@ Production-grade authentication with COPPA compliance.
 import jwt
 import time
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .auth import TokenManager  # لتفادي الدورات الاستيرادية
 from datetime import datetime, timedelta
 from fastapi import HTTPException, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -226,9 +229,15 @@ class PasswordManager:
 class UserAuthenticator:
     """User authentication service."""
 
-    def __init__(self, config=None):
-        from src.infrastructure.config.config_provider import get_config_from_state
-        self.token_manager = TokenManager(config=config)
+    def __init__(self, config=None, token_manager: "TokenManager" = None):
+        """Initialize with explicit config and token_manager injection (production-grade)"""
+        if config is None:
+            raise ValueError("UserAuthenticator requires config parameter - no global access in production")
+        if token_manager is None:
+            raise ValueError("UserAuthenticator requires token_manager parameter - no global access in production")
+
+        self.config = config
+        self.token_manager = token_manager
         self.password_manager = PasswordManager()
 
     async def authenticate_user(
@@ -466,11 +475,8 @@ _authorization_manager = None
 
 
 def get_user_authenticator():
-    """Get user authenticator instance with lazy initialization."""
-    global _user_authenticator
-    if _user_authenticator is None:
-        _user_authenticator = UserAuthenticator()
-    return _user_authenticator
+    """Get user authenticator instance - DEPRECATED: Use dependency injection instead."""
+    raise RuntimeError("get_user_authenticator() is deprecated - use UserAuthenticator with proper dependency injection")
 
 
 def get_authorization_manager():

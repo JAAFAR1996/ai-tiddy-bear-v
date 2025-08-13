@@ -78,12 +78,11 @@ async def parent_notification_websocket(
         from src.infrastructure.security.auth import TokenManager, AuthenticationError
         from src.infrastructure.config.config_provider import get_config_from_state
         
-        # Create TokenManager with config from app state (no module-level get_config)
-        config = getattr(websocket.app.state, "config", None)
-        if config is None:
-            await websocket.close(code=1011, reason="Service not ready")
+        # Get TokenManager from app state (production-grade)
+        token_manager = getattr(websocket.app.state, "token_manager", None)
+        if token_manager is None:
+            await websocket.close(code=1011, reason="Token manager not ready")
             return
-        token_manager = TokenManager(config=config)
         try:
             # Use async verify_token (following the auth.py pattern)
             payload = await token_manager.verify_token(token)
@@ -405,12 +404,11 @@ async def esp32_websocket_endpoint(
     # Import TokenManager here to avoid circular imports
     from src.infrastructure.security.auth import TokenManager, AuthenticationError
 
-    # Create TokenManager with config from app state (no module-level get_config)
-    config = getattr(websocket.app.state, "config", None)
-    if config is None:
-        await websocket.close(code=1011, reason="Service not ready")
+    # Get TokenManager from app state (production-grade)
+    token_manager = getattr(websocket.app.state, "token_manager", None)
+    if token_manager is None:
+        await websocket.close(code=1011, reason="Token manager not ready")
         return
-    token_manager = TokenManager(config=config)
     try:
         payload = await token_manager.verify_token(token)
         # Extract device_id from subject field (format: device_id:child_id)
