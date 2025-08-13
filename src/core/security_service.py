@@ -163,8 +163,7 @@ class MLAnomalyDetector:
         self.logger = get_logger(__name__, "ml_anomaly_detector")
         self.redis = redis_client
         if config is None:
-            from fastapi import HTTPException
-            raise HTTPException(status_code=503, detail="SecurityService not properly configured")
+            raise RuntimeError("SecurityService requires config parameter - no global access in production")
         self.config = config
 
         # Behavioral baselines for each user
@@ -551,8 +550,7 @@ class ThreatDetector:
         self.logger = get_logger(__name__, "threat_detection")
         self.redis = redis_client
         if config is None:
-            from fastapi import HTTPException
-            raise HTTPException(status_code=503, detail="SecurityService not properly configured")
+            raise RuntimeError("SecurityService requires config parameter - no global access in production")
         self.config = config
         self.failed_attempts = {}  # Fallback for when Redis is unavailable
         self.suspicious_patterns = {}  # Pattern tracking
@@ -783,8 +781,7 @@ class SecurityService:
     ):
         self.logger = get_logger(__name__, "security_service")
         if not hasattr(self, 'config') or self.config is None:
-            from fastapi import HTTPException
-            raise HTTPException(status_code=503, detail="SecurityService requires proper initialization")
+            raise RuntimeError("SecurityService requires proper initialization - config missing")
         self.redis = redis_client
         self.threat_detector = ThreatDetector(redis_client, self.config)
         self.rate_limiting_service = rate_limiting_service
@@ -2020,8 +2017,7 @@ class ProductionChildDataEncryption:
         # Production: no global config imports - use dependency injection
 
         if not hasattr(self, 'config') or self.config is None:
-            from fastapi import HTTPException
-            raise HTTPException(status_code=503, detail="SecurityService requires proper initialization") if hasattr(get_config, "__call__") else None
+            raise RuntimeError("SecurityService requires proper initialization - config missing")
 
         # Use provided key or get from config
         if encryption_key:

@@ -46,14 +46,15 @@ class AuthorizationError(Exception):
 class TokenManager:
     """Unified JWT token management with advanced security features."""
 
-    def __init__(self, config=None):
-        """Initialize with explicit config injection (production-grade)"""
+    def __init__(self, config=None, advanced_jwt=None):
+        """Initialize with explicit config and AdvancedJWTManager injection (production-grade)"""
         if config is None:
             raise ValueError("TokenManager requires config parameter - no global access in production")
+        if advanced_jwt is None:
+            raise ValueError("TokenManager requires advanced_jwt parameter - no global access in production")
         
         self.config = config
-        self.advanced_jwt = AdvancedJWTManager(config=config)
-        self.advanced_jwt.set_logger(auth_logger)
+        self.advanced_jwt = advanced_jwt  # Use injected instance
         self._pending_redis_client = None
 
         # Initialize Redis for advanced features if available
