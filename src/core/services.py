@@ -45,15 +45,15 @@ class ChatService:
     ):
         # Import locally to avoid circular imports during module initialization
         if config is None:
-            from src.infrastructure.config.config_provider import get_config
-
-            config = get_config()
+            # Production: config must be passed from caller
+            raise ValueError("Config must be passed to AIServiceManager - no global access in production")
 
         from src.infrastructure.rate_limiting.rate_limiter import (
             create_rate_limiting_service,
         )
 
-        config = config or get_config()
+        if config is None:
+            raise ValueError("get_openai_provider requires config parameter - no global fallback in production")
         if ai_provider is not None:
             self.ai_provider = ai_provider
         else:

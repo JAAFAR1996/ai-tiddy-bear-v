@@ -149,10 +149,10 @@ class ProductionOpenAIProvider(AIProvider):
             rate_limiter: Rate limiting service instance
             **kwargs: Additional configuration options
         """
-        # Load configuration
-        from src.infrastructure.config.config_provider import get_config
-
-        self.config = kwargs.get("config") or get_config()
+        # Production-grade: config must be passed explicitly (no fallback to get_config)
+        self.config = kwargs.get("config")
+        if self.config is None:
+            raise ValueError("Config must be passed to OpenAI provider - no global fallback in production")
         # Initialize API client
         self.api_key = api_key or self.config.OPENAI_API_KEY
         if not self.api_key:

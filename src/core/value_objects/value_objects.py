@@ -5,16 +5,14 @@ from dataclasses import dataclass
 from typing import Optional
 
 
-def _get_config_value(attr_name: str, default_value):
-    """Get configuration value with fallback to default."""
+def _get_config_value(attr_name: str, default_value, config=None):
+    """Get configuration value with fallback to default (production-grade)."""
     try:
-        from src.infrastructure.config.config_provider import get_config
-
-        def get_config_value(attr_name, default_value=None, config=None):
-            config = config or get_config()
+        if config is not None:
             return getattr(config, attr_name, default_value)
-
-        return get_config_value(attr_name, default_value)
+        
+        # Fallback to default if no config provided (dev mode)
+        return default_value
     except (ImportError, Exception):
         return default_value
 
@@ -148,7 +146,7 @@ class SafetyScore:
     @property
     def is_safe(self) -> bool:
         """Check if content is safe based on configurable threshold."""
-        threshold = _get_config_value("SAFETY_SCORE_THRESHOLD", 0.8)
+        threshold = _get_config_value("SAFETY_SCORE_THRESHOLD", 0.8, None)  # Pass None config for now
         return self.score >= threshold and len(self.violations) == 0
 
     @property
@@ -261,10 +259,10 @@ class ContentComplexity:
     def is_age_appropriate(self, age: int) -> bool:
         """Check if complexity is appropriate for age using configurable thresholds."""
         simple_threshold = _get_config_value(
-            "CONTENT_COMPLEXITY_AGE_THRESHOLD_SIMPLE", 5
+            "CONTENT_COMPLEXITY_AGE_THRESHOLD_SIMPLE", 5, None
         )
         complex_threshold = _get_config_value(
-            "CONTENT_COMPLEXITY_AGE_THRESHOLD_COMPLEX", 8
+            "CONTENT_COMPLEXITY_AGE_THRESHOLD_COMPLEX", 8, None
         )
 
         if age < simple_threshold and self.level != "simple":
@@ -335,14 +333,14 @@ class ChildPreferences:
             )
 
         # Validate voice speed using configurable limits
-        min_speed = _get_config_value("VOICE_SPEED_MIN", 0.5)
-        max_speed = _get_config_value("VOICE_SPEED_MAX", 2.0)
+        min_speed = _get_config_value("VOICE_SPEED_MIN", 0.5, None)
+        max_speed = _get_config_value("VOICE_SPEED_MAX", 2.0, None)
         if not (min_speed <= self.voice_speed <= max_speed):
             raise ValueError(f"voice_speed must be between {min_speed} and {max_speed}")
 
         # Validate volume level using configurable limits
-        min_volume = _get_config_value("VOLUME_LEVEL_MIN", 0.1)
-        max_volume = _get_config_value("VOLUME_LEVEL_MAX", 1.0)
+        min_volume = _get_config_value("VOLUME_LEVEL_MIN", 0.1, None)
+        max_volume = _get_config_value("VOLUME_LEVEL_MAX", 1.0, None)
         if not (min_volume <= self.volume_level <= max_volume):
             raise ValueError(
                 f"volume_level must be between {min_volume} and {max_volume}"

@@ -27,6 +27,7 @@ from src.infrastructure.security.auth import (
 )
 from src.infrastructure.database.database_manager import get_db
 from src.infrastructure.logging.production_logger import get_logger
+from src.application.dependencies import get_token_manager_from_state, TokenManagerDep
 from src.infrastructure.monitoring.audit import coppa_audit
 from src.infrastructure.database.models import User, UserRole
 from src.utils.validation_utils import validate_password_strength
@@ -35,7 +36,9 @@ from src.utils.validation_utils import validate_password_strength
 router = APIRouter(tags=["Authentication"])
 security = HTTPBearer()
 logger = get_logger(__name__, "auth_routes")
-token_manager = TokenManager()
+# token_manager will be injected as dependency - no module-level instantiation
+
+# Use centralized dependency from application layer
 
 
 # Request/Response Models
@@ -77,7 +80,10 @@ class UserResponse(BaseModel):
 
 @router.post("/login", response_model=LoginResponse)
 async def login(
-    request: LoginRequest, req: Request, db: AsyncSession = Depends(get_db)
+    request: LoginRequest, 
+    req: Request, 
+    db: AsyncSession = Depends(get_db),
+    token_manager: TokenManager = TokenManagerDep
 ):
     """
     Parent login endpoint with security features:
@@ -279,7 +285,10 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/refresh")
-async def refresh_token(current_user: dict = Depends(get_current_user)):
+async def refresh_token(
+    current_user: dict = Depends(get_current_user),
+    token_manager: TokenManager = TokenManagerDep
+):
     """Refresh access token."""
     try:
         # Generate new token

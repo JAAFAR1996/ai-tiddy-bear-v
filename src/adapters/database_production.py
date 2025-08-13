@@ -185,8 +185,11 @@ class DatabaseConnectionManager:
     """Manages database connections with connection pooling and health monitoring."""
 
     def __init__(self, config=None):
-
-        self.config = config or get_config()
+        """Initialize with explicit config injection (production-grade)"""
+        if config is None:
+            raise ValueError("ProductionDatabaseAdapter requires config parameter - no global access in production")
+        
+        self.config = config
         self.async_engine = None
         self.sync_engine = None
         self.async_session_factory = None
@@ -1378,8 +1381,11 @@ class ProductionDatabaseAdapter(IDatabaseAdapter):
 # ================================
 
 
-async def initialize_production_database() -> ProductionDatabaseAdapter:
-    """Initialize production database with comprehensive setup."""
+async def initialize_production_database(config) -> ProductionDatabaseAdapter:
+    """Initialize production database with comprehensive setup (production-grade)."""
+    if config is None:
+        raise RuntimeError("initialize_production_database requires config parameter - no global access in production")
+    
     logger.info("🚀 Initializing production database...")
 
     try:
@@ -1388,11 +1394,11 @@ async def initialize_production_database() -> ProductionDatabaseAdapter:
             initialize_pool_manager,
         )
 
-        config = get_config()
+        # Use explicitly passed config (production-grade)
         await initialize_pool_manager(config.DATABASE_URL)
         logger.info("✅ Connection pool manager initialized")
 
-        adapter = ProductionDatabaseAdapter()
+        adapter = ProductionDatabaseAdapter(config=config)
         await adapter.initialize()
         await adapter.create_tables()
 

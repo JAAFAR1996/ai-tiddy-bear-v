@@ -29,7 +29,7 @@ from sqlalchemy import select, and_, or_
 from sqlalchemy.orm import selectinload
 
 # Core infrastructure imports  
-from src.infrastructure.config.config_provider import get_config_from_state
+from src.application.dependencies import get_config_from_state, ConfigDep
 
 # Basic logger setup first
 logger = logging.getLogger(__name__)
@@ -510,7 +510,7 @@ async def claim_device(
     request: ClaimRequest,
     req: Request,
     response: Response,
-    config = Depends(get_config_from_state),
+    config = ConfigDep,
     db: AsyncSession = Depends(get_db),
     token_manager: SimpleTokenManager = Depends(get_token_manager)
 ):

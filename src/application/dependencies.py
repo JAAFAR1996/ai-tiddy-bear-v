@@ -144,6 +144,37 @@ ConversationRepositoryDep = Depends(get_conversation_repository)
 MessageRepositoryDep = Depends(get_message_repository)
 
 
+# ========================= PRODUCTION CONFIG & AUTH DEPENDENCIES =========================
+
+def get_config_from_state(request) -> "ProductionConfig":
+    """Get configuration from app.state (production-grade)"""
+    from fastapi import Request, HTTPException
+    config = getattr(request.app.state, "config", None)
+    if config is None:
+        raise HTTPException(status_code=503, detail="Configuration not loaded")
+    return config
+
+def get_token_manager_from_state(request) -> "TokenManager":
+    """Get TokenManager from app.state (production-grade)"""
+    from fastapi import Request, HTTPException
+    token_manager = getattr(request.app.state, "token_manager", None)
+    if token_manager is None:
+        raise HTTPException(status_code=503, detail="Token manager not ready")
+    return token_manager
+
+def get_security_service_from_state(request) -> "SecurityService":
+    """Get SecurityService from app.state (production-grade)"""
+    from fastapi import Request, HTTPException
+    security_service = getattr(request.app.state, "security_service", None)
+    if security_service is None:
+        raise HTTPException(status_code=503, detail="Security service not ready")
+    return security_service
+
+# FastAPI dependency annotations for production services
+ConfigDep = Depends(get_config_from_state)
+TokenManagerDep = Depends(get_token_manager_from_state)
+SecurityServiceDep = Depends(get_security_service_from_state)
+
 # ========================= GENERIC DEPENDENCY HELPER =========================
 
 
