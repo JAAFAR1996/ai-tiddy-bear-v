@@ -65,6 +65,10 @@ class ESP32ProductionRunner:
                 redis_url=redis_url,
             )
 
+            # Inject into backward-compatibility proxy if needed
+            from src.services.esp32_chat_server import esp32_chat_server as _esp32_proxy  
+            _esp32_proxy.set(self.chat_server)
+
             self.logger.info("ESP32 Chat Server services initialized successfully")
 
         except Exception as e:
