@@ -357,11 +357,23 @@ async def lifespan(app: FastAPI):
     app.state.ready = False
     logger.info("🚀 Starting AI Teddy Bear API...")
 
-    # تهيئة الإعدادات بشكل آمن
-    config = await initialize_configuration()
-    
-    # Set config in app.state IMMEDIATELY for dependency injection
-    app.state.config = config
+    # CRITICAL: Load config FIRST before anything else
+    try:
+        config = load_config()  # Direct synchronous load
+        app.state.config = config  # Set IMMEDIATELY in app state
+        logger.info("✅ Configuration loaded and set in app.state")
+    except Exception as e:
+        logger.critical(f"🚨 CRITICAL: Failed to load configuration: {e}")
+        raise RuntimeError(f"Configuration loading failed: {e}")
+
+    # Additional validation for production-grade setup
+    try:
+        validation_results = await validate_and_report(config)
+        if not validation_results["valid"] and config.ENVIRONMENT == "production":
+            raise RuntimeError("Invalid production configuration")
+    except Exception as e:
+        logger.warning(f"Configuration validation warning: {e}")
+        # Continue in development, but log the warning
 
     # مرر config صراحةً لكل دالة تحتاجه
     setup_application(config_param=config)

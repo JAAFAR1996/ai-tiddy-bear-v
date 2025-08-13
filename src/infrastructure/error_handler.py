@@ -24,6 +24,7 @@ from src.core.exceptions import (
     COPPAViolation,
     RateLimitExceeded,
     AuthenticationError,
+    ConfigurationError,
 )
 from src.infrastructure.exceptions import map_exception
 
@@ -78,7 +79,21 @@ class ErrorHandler:
         }
 
         # Simplified logging based on exception type
-        if isinstance(exc, (AuthenticationError, AuthorizationError)):
+        if isinstance(exc, ConfigurationError):
+            # Configuration errors should return 503 Service Unavailable
+            self.logger.critical("Configuration error", extra=log_data)
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "error_code": "service_unavailable",
+                    "message": "Service temporarily unavailable - configuration issue",
+                    "severity": "critical",
+                    "timestamp": time.time(),
+                    "context": {"retry_after": "5"}
+                },
+                headers={"Retry-After": "5"}
+            )
+        elif isinstance(exc, (AuthenticationError, AuthorizationError)):
             security_logger.warning("Security exception", extra=log_data)
             self._audit_security_event(exc, user_context)
         elif isinstance(exc, (ChildSafetyViolation, COPPAViolation)):
