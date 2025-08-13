@@ -10,7 +10,7 @@ import os
 import sys
 from typing import Optional
 
-from src.services.esp32_service_factory import esp32_service_factory
+from src.services.esp32_service_factory import ESP32ServiceFactory
 from src.services.service_registry import ServiceRegistry
 
 
@@ -53,8 +53,12 @@ class ESP32ProductionRunner:
             stt_model_size = os.getenv("WHISPER_MODEL_SIZE", "base")
             redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
 
-            # Create production server with all services
-            self.chat_server = await esp32_service_factory.create_production_server(
+            # Create production server with all services using proper DI
+            from src.infrastructure.config.production_config import ProductionConfig
+            config = ProductionConfig()
+            factory = ESP32ServiceFactory(config=config)
+            
+            self.chat_server = await factory.create_production_server(
                 stt_model_size=stt_model_size,
                 ai_provider=ai_service,  # This will be the ConsolidatedAIService
                 tts_service=tts_service,
