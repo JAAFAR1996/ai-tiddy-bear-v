@@ -492,10 +492,13 @@ async def get_current_user(
     request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> Dict[str, Any]:
     """Get current authenticated user from JWT token (async)."""
+    from src.application.dependencies import get_token_manager_from_state
 
     try:
+        # Get token manager from app.state (production-grade)
+        token_manager = get_token_manager_from_state(request)
         # Verify token (now async)
-        payload = await get_token_manager().verify_token(credentials.credentials)
+        payload = await token_manager.verify_token(credentials.credentials)
 
         # Extract user info
         user_data = {
