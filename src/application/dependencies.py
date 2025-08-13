@@ -194,11 +194,6 @@ def get_payment_system_from_state(request) -> "PaymentSystemIntegration":
         raise HTTPException(status_code=503, detail="Payment system not ready")
     return payment_system
 
-def get_admin_security_manager(token_manager: "TokenManager" = TokenManagerDep) -> "AdminSecurityManager":
-    """Get AdminSecurityManager with proper TokenManager injection (production-grade)"""
-    from src.infrastructure.security.admin_security import AdminSecurityManager
-    return AdminSecurityManager(token_manager=token_manager)
-
 # FastAPI dependency annotations for production services
 ConfigDep = Depends(get_config_from_state)
 TokenManagerDep = Depends(get_token_manager_from_state)
@@ -206,6 +201,12 @@ SecurityServiceDep = Depends(get_security_service_from_state)
 AdvancedJWTDep = Depends(get_advanced_jwt_from_state)
 DBAdapterDep = Depends(get_db_adapter_from_state)
 PaymentDep = Depends(get_payment_system_from_state)
+
+def get_admin_security_manager(token_manager: "TokenManager" = TokenManagerDep) -> "AdminSecurityManager":
+    """Get AdminSecurityManager with proper TokenManager injection (production-grade)"""
+    from src.infrastructure.security.admin_security import AdminSecurityManager
+    return AdminSecurityManager(token_manager=token_manager)
+
 AdminSecurityDep = Depends(get_admin_security_manager)
 
 # ========================= GENERIC DEPENDENCY HELPER =========================
