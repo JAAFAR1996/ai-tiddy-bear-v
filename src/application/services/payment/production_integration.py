@@ -66,8 +66,11 @@ class PaymentSystemIntegration:
     Handles initialization, configuration, and service coordination.
     """
 
-    def __init__(self):
-        """Initialize the payment system integration."""
+    def __init__(self, database_adapter: "ProductionDatabaseAdapter") -> None:
+        """Initialize the payment system integration with proper DI."""
+        if database_adapter is None:
+            raise RuntimeError("PaymentSystemIntegration requires a database_adapter")
+        self._db = database_adapter
         self.config: Optional[ProductionPaymentConfig] = None
         self.security_service: Optional[PaymentSecurityManager] = None
         self.redis_client: Optional[aioredis.Redis] = None
@@ -194,10 +197,9 @@ class PaymentSystemIntegration:
         """Initialize database connections and repositories."""
         logger.info("🗄️ Initializing database connections...")
         
-        # Get database adapter from DI container (matches container.py pattern)
-        from src.adapters.database_production import ProductionDatabaseAdapter
-        database_adapter = ProductionDatabaseAdapter()
-        await database_adapter.initialize()
+        # Use injected database adapter (production-grade pattern)
+        if not self._db:
+            raise RuntimeError("Database adapter not injected - check PaymentSystemIntegration constructor")
         
         # Create PaymentRepository with proper session manager
         from src.adapters.database_production import _connection_manager
@@ -207,7 +209,7 @@ class PaymentSystemIntegration:
         )
         
         # Test database connectivity
-        db_health = await database_adapter.health_check()
+        db_health = await self._db.health_check()
         if not db_health:
             raise ConnectionError("Database connection failed")
             
@@ -503,12 +505,14 @@ class PaymentSystemIntegration:
 _payment_system: Optional[PaymentSystemIntegration] = None
 
 
-async def initialize_payment_system() -> PaymentSystemIntegration:
-    """Initialize the global payment system instance."""
+async def initialize_payment_system(database_adapter: "ProductionDatabaseAdapter") -> PaymentSystemIntegration:
+    """Initialize the global payment system instance with proper DI."""
     global _payment_system
 
     if _payment_system is None:
-        _payment_system = PaymentSystemIntegration()
+        if database_adapter is None:
+            raise RuntimeError("PaymentSystemIntegration requires database_adapter parameter - no global access in production")
+        _payment_system = PaymentSystemIntegration(database_adapter)
         success = await _payment_system.initialize()
 
         if not success:

@@ -429,12 +429,17 @@ async def lifespan(app: FastAPI):
                 except Exception as e:
                     logger.warning(f"AdvancedJWTManager Redis setup failed: {e}")
             
+            # Create database adapter with explicit config injection
+            from src.adapters.database_production import ProductionDatabaseAdapter
+            db_adapter = ProductionDatabaseAdapter(config=config)
+            
             security_service = await create_security_service(config, limiter)
             token_manager = TokenManager(config=config, advanced_jwt=advanced_jwt)
             user_authenticator = UserAuthenticator(config=config)
             
             # Store all services in app state (single source of truth)
             app.state.config = config
+            app.state.db_adapter = db_adapter  # Store database adapter
             app.state.advanced_jwt = advanced_jwt  # Store AdvancedJWTManager
             app.state.security_service = security_service
             app.state.rate_limiting_service = limiter

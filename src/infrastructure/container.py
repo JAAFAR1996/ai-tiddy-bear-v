@@ -308,9 +308,10 @@ class ApplicationModule(Module):
     @provider
     @singleton
     def _get_database_adapter(self) -> object:
-        from src.adapters.database_production import ProductionDatabaseAdapter
-
-        return ProductionDatabaseAdapter()
+        """Get database adapter from app.state (production-grade)"""
+        # This should be called via dependency injection from app.state
+        # Not creating new instance here - use DBAdapterDep instead
+        raise RuntimeError("Use DBAdapterDep dependency instead of container for database adapter")
 
     @provider
     def _get_child_repository(self, database_adapter) -> object:

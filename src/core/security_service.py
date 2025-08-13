@@ -778,10 +778,12 @@ class SecurityService:
         self,
         rate_limiting_service: Optional[RateLimitingService] = None,
         redis_client: Optional[aioredis.Redis] = None,
+        config = None,
     ):
         self.logger = get_logger(__name__, "security_service")
-        if not hasattr(self, 'config') or self.config is None:
-            raise RuntimeError("SecurityService requires proper initialization - config missing")
+        if config is None:
+            raise RuntimeError("SecurityService requires config parameter - no global access in production")
+        self.config = config
         self.redis = redis_client
         self.threat_detector = ThreatDetector(redis_client, self.config)
         self.rate_limiting_service = rate_limiting_service
@@ -1996,8 +1998,8 @@ async def create_security_service(
             logger.warning("Could not create rate limiting service: %s", str(e))
             rate_limiting_service = None
     return SecurityService(
-        rate_limiting_service, redis_client
-    )  # Fixed: removed extra config parameter
+        rate_limiting_service, redis_client, config
+    )  # Pass config parameter
 
 
 # =============================================================================
