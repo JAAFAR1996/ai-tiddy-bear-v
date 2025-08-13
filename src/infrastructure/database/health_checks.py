@@ -315,7 +315,8 @@ class DatabaseHealthChecker:
         try:
             async with transaction_manager.transaction() as tx:
                 # Simple transaction test
-                result = await tx.execute("SELECT 1 as test_value")
+                from sqlalchemy import text
+                result = await tx.execute(text("SELECT 1 as test_value"))
                 details["transaction_test"] = {
                     "success": True,
                     "result": "Transaction test completed successfully"
