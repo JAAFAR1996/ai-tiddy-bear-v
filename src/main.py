@@ -3,9 +3,7 @@ AI Teddy Bear - Production-Hardened FastAPI Application
 Enterprise-grade security with child protection and COPPA compliance
 """
 
-from src.infrastructure.config.production_config import load_config
-
-load_config()
+# Removed early load_config() call - will be done in lifespan only
 
 # --- production DB init (robust import) ---
 try:
@@ -53,15 +51,19 @@ class ReadinessGate(BaseHTTPMiddleware):
             return await call_next(req)
             
         # ESP32 pairing endpoints: allow if config is ready
-        if path in self.config_dependent:
+        if path.startswith("/api/v1/pair"):
             if getattr(req.app.state, "config_ready", False):
                 return await call_next(req)  # Will return proper 4xx if other issues
             else:
                 from fastapi.responses import JSONResponse
                 return JSONResponse(
-                    {"detail": "Service initializing - configuration loading"}, 
                     status_code=503,
-                    headers={"Retry-After": "5"}
+                    headers={"Retry-After": "5"},
+                    content={
+                        "error_code": "service_unavailable",
+                        "message": "Service initializing - configuration not ready",
+                        "severity": "critical"
+                    }
                 )
         
         # All other endpoints: require full readiness
@@ -69,7 +71,14 @@ class ReadinessGate(BaseHTTPMiddleware):
             return await call_next(req)
             
         from fastapi.responses import JSONResponse
-        return JSONResponse({"detail": "warming up"}, status_code=503)
+        return JSONResponse(
+            status_code=503, 
+            headers={"Retry-After": "5"}, 
+            content={
+                "error_code": "service_unavailable",
+                "message": "Service warming up"
+            }
+        )
 
 
 # Configure logging with secure formatting (no sensitive data exposure)
@@ -385,6 +394,21 @@ async def lifespan(app: FastAPI):
         app.state.config_ready = True  # Mark config as ready for ESP32 pairing
         logger.info("✅ Configuration loaded and set in app.state")
         logger.info("🔧 Config ready - ESP32 pairing endpoint available")
+        
+        # Add config-dependent middleware now that config is loaded
+        if not os.environ.get("PYTEST_CURRENT_TEST") and not getattr(app.state, "cors_added", False):
+            from fastapi.middleware.cors import CORSMiddleware
+            from fastapi.middleware.trustedhost import TrustedHostMiddleware
+            app.add_middleware(TrustedHostMiddleware, allowed_hosts=config.ALLOWED_HOSTS)
+            app.add_middleware(
+                CORSMiddleware,
+                allow_origins=config.CORS_ALLOWED_ORIGINS,
+                allow_methods=["*"],
+                allow_headers=["*"],
+            )
+            app.state.cors_added = True
+            logger.info("🛡️ CORS and TrustedHost middleware added")
+            
     except Exception as e:
         logger.critical(f"🚨 CRITICAL: Failed to load configuration: {e}")
         raise RuntimeError(f"Configuration loading failed: {e}")
@@ -624,14 +648,7 @@ setup_error_handlers(app, debug=(os.environ.get("ENVIRONMENT") != "production"))
 if not os.environ.get("PYTEST_CURRENT_TEST"):
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestValidationMiddleware)
-    if config:
-        app.add_middleware(TrustedHostMiddleware, allowed_hosts=config.ALLOWED_HOSTS)
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=config.CORS_ALLOWED_ORIGINS,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
+    # Note: CORS and TrustedHost middleware will be added in lifespan after config loads
     # Add ReadinessGate as the last middleware (outermost - executes first)
     app.add_middleware(ReadinessGate)
 
