@@ -358,6 +358,9 @@ async def lifespan(app: FastAPI):
 
     # تهيئة الإعدادات بشكل آمن
     config = await initialize_configuration()
+    
+    # Set config in app.state IMMEDIATELY for dependency injection
+    app.state.config = config
 
     # مرر config صراحةً لكل دالة تحتاجه
     setup_application(config_param=config)
@@ -405,7 +408,7 @@ async def lifespan(app: FastAPI):
             app.state.security_service = security_service
             app.state.rate_limiting_service = limiter
             app.state.limiter = limiter
-            app.state.config = config
+            # config already set above
 
             # 🔒 IMPLEMENT COMPREHENSIVE ADMIN SECURITY
             try:
