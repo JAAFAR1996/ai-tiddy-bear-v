@@ -499,6 +499,10 @@ app = FastAPI(
     ],
 )
 
+# Set app reference for compat shim (allows legacy get_config() to read app.state.config)
+from src.infrastructure.config.config_provider import set_app_ref
+set_app_ref(app)
+
 # Mount static files for firmware distribution
 app.mount("/web", StaticFiles(directory="src/static"), name="static_files")
 

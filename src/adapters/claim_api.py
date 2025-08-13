@@ -29,7 +29,7 @@ from sqlalchemy import select, and_, or_
 from sqlalchemy.orm import selectinload
 
 # Core infrastructure imports  
-from src.infrastructure.config.config_provider import get_config, get_config_from_state
+from src.infrastructure.config.config_provider import get_config_from_state
 
 # Basic logger setup first
 logger = logging.getLogger(__name__)
@@ -97,7 +97,7 @@ logger = get_logger(__name__, "claim_api")
 router = APIRouter(tags=["Device Claiming"])
 security = HTTPBearer()
 # No module-level instantiation - use dependency injection
-device_manager = DevicePairingManager()
+# device_manager removed to avoid import-time config access
 
 # ✅ Configuration will come via Depends(get_config_from_state) - no module-level access
 
