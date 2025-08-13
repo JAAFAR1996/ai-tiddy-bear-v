@@ -77,6 +77,10 @@ class ESP32ServiceFactory:
                 safety_service=safety_service,
             )
 
+            # Inject instance into backward-compatibility proxy
+            from src.services.esp32_chat_server import esp32_chat_server as _esp32_proxy
+            _esp32_proxy.set(chat_server)
+            
             self.logger.info("ESP32 Chat Server created successfully with all services")
             return chat_server
 

@@ -1145,6 +1145,22 @@ class ESP32ChatServer:
         self.logger.info("ESP32 Chat Server shutdown complete")
 
 
-# NOTE: No global instance - use proper DI pattern via ESP32ServiceFactory
-# For testing/development only:
-# esp32_chat_server = ESP32ChatServer(config=ProductionConfig())
+class _ESP32ServerProxy:
+    """Back-compat proxy: keeps the old import path but defers real instance injection."""
+    __slots__ = ("_inst",)
+    def __init__(self):
+        self._inst = None
+
+    def set(self, inst):
+        self._inst = inst
+
+    def __getattr__(self, name):
+        if self._inst is None:
+            raise RuntimeError(
+                "ESP32ChatServer not initialized yet (proxy). "
+                "Initialize via ESP32ServiceFactory before use."
+            )
+        return getattr(self._inst, name)
+
+# Exported symbol for old imports:
+esp32_chat_server = _ESP32ServerProxy()
