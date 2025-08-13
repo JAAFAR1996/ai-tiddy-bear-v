@@ -365,7 +365,6 @@ async def lifespan(app: FastAPI):
 
     # مرر config صراحةً لكل دالة تحتاجه
     setup_application(config_param=config)
-    setup_routes()
 
     from uuid import uuid4
 
@@ -430,8 +429,12 @@ async def lifespan(app: FastAPI):
                     logger.warning(f"AdvancedJWTManager Redis setup failed: {e}")
             
             # Create database adapter with explicit config injection
-            from src.adapters.database_production import ProductionDatabaseAdapter
+            from src.adapters.database_production import (
+                ProductionDatabaseAdapter,
+                set_connection_manager,
+            )
             db_adapter = ProductionDatabaseAdapter(config=config)
+            await db_adapter.initialize()  # مهم قبل أي تسجيل راوترات
             
             security_service = await create_security_service(config, limiter)
             token_manager = TokenManager(config=config, advanced_jwt=advanced_jwt)
@@ -446,6 +449,9 @@ async def lifespan(app: FastAPI):
             app.state.limiter = limiter
             app.state.token_manager = token_manager
             app.state.user_authenticator = user_authenticator
+
+            # تمرير الـ connection manager إلى الـ compat shim (لأي كود قديم)
+            set_connection_manager(db_adapter.connection_manager)
 
             # 🔒 IMPLEMENT COMPREHENSIVE ADMIN SECURITY
             try:
@@ -478,6 +484,11 @@ async def lifespan(app: FastAPI):
                     raise RuntimeError("CRITICAL: Cannot start production without admin security")
 
             logger.info("✅ Security services initialized")
+            
+            # الآن فقط سجّل الراوترات عبر RouteManager (بعد تهيئة DB)
+            setup_routes()
+            logger.info("✅ All routers registered via RouteManager")
+            
         logger.info(
             "✅ API started in %s mode", config.ENVIRONMENT if config else "unknown"
         )
@@ -500,10 +511,21 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("🛑 Shutting down AI Teddy Bear API...")
+    
+    # Close database connections
+    if hasattr(app.state, 'db_adapter') and app.state.db_adapter:
+        try:
+            await app.state.db_adapter.close()
+            logger.info("✅ Database connections closed")
+        except Exception as e:
+            logger.warning(f"Database shutdown warning: {e}")
+    
+    # Close Redis connections
     if redis_client:
         await redis_client.close()
         await redis_client.connection_pool.disconnect()
         logger.info("✅ Redis connections closed")
+    
     logger.info("✅ Shutdown complete")
 
 

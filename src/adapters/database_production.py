@@ -314,14 +314,39 @@ class DatabaseConnectionManager:
         logger.info("Database connections closed")
 
 
-# Global connection manager instance
-_connection_manager = DatabaseConnectionManager()
+# Global connection manager instance (will be initialized in lifespan)
+_connection_manager = None
+
+def set_connection_manager(cm) -> None:
+    """Called from lifespan after building the manager/adapter."""
+    global _connection_manager
+    _connection_manager = cm
+
+
+# Export main components
+__all__ = [
+    "ProductionDatabaseAdapter",
+    "set_connection_manager", 
+    "get_database_session",
+    "get_session_cm",
+    "DatabaseConnectionManager",
+    "initialize_production_database"
+]
 
 
 async def get_database_session():
     """Get async database session for dependency injection."""
+    if _connection_manager is None:
+        raise RuntimeError("DB connection manager not initialized")
     async with _connection_manager.get_async_session() as session:
         yield session
+
+
+def get_session_cm():
+    """Get session context manager for non-FastAPI scenarios."""
+    if _connection_manager is None:
+        raise RuntimeError("DB connection manager not initialized")
+    return _connection_manager.get_async_session()
 
 
 # ================================
@@ -1216,8 +1241,20 @@ class ProductionMessageRepository(BaseRepository, IMessageRepository):
 class ProductionDatabaseAdapter(IDatabaseAdapter):
     """Production database adapter with async support and connection pooling."""
 
-    def __init__(self):
-        self.connection_manager = _connection_manager
+    def __init__(self, config=None, connection_manager=None):
+        """Initialize with explicit config or connection_manager (production-grade)"""
+        if connection_manager is not None:
+            # Use provided connection manager
+            self.connection_manager = connection_manager
+        elif config is not None:
+            # Create new connection manager with config
+            self.connection_manager = DatabaseConnectionManager(config=config)
+        elif _connection_manager is not None:
+            # Fallback to global connection manager (compatibility)
+            self.connection_manager = _connection_manager
+        else:
+            raise ValueError("ProductionDatabaseAdapter requires config parameter - no global access in production")
+        
         self._initialized = False
 
     async def initialize(self):

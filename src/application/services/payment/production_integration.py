@@ -202,9 +202,9 @@ class PaymentSystemIntegration:
             raise RuntimeError("Database adapter not injected - check PaymentSystemIntegration constructor")
         
         # Create PaymentRepository with proper session manager
-        from src.adapters.database_production import _connection_manager
+        from src.adapters.database_production import get_session_cm
         self.payment_repository = PaymentRepository(
-            db_session=_connection_manager.get_async_session,  # Context manager
+            db_session=get_session_cm,  # ✔️ callable يعيد async context manager
             logger=logger
         )
         
