@@ -60,27 +60,28 @@ except ImportError:
             logger.info(f"AUDIT: {kwargs}")
     coppa_audit = MockAudit()
 
-# Authentication
-try:
-    from src.infrastructure.security.auth import TokenManager
-except ImportError:
-    # Create simple token manager
-    import jwt
-    class SimpleTokenManager:
-        def __init__(self):
-            self.secret = getattr(config, 'JWT_SECRET_KEY', 'dev-secret-key-change-in-production')
-        
-        async def create_token(self, data: dict, expires_delta: timedelta):
-            """Create JWT token"""
-            import time
-            payload = data.copy()
-            payload['exp'] = int(time.time() + expires_delta.total_seconds())
-            return jwt.encode(payload, self.secret, algorithm='HS256')
-        
-        async def decode_token(self, token: str):
-            """Decode JWT token"""
-            return jwt.decode(token, self.secret, algorithms=['HS256'])
-    TokenManager = SimpleTokenManager
+# Token Manager with Dependency Injection (NO import-time config access)
+import jwt
+class SimpleTokenManager:
+    def __init__(self, secret: str, algorithm: str = "HS256"):
+        self.secret = secret
+        self.algorithm = algorithm
+    
+    async def create_token(self, data: dict, expires_delta: timedelta):
+        """Create JWT token"""
+        import time
+        now = int(time.time())
+        payload = {**data, "iat": now, "exp": now + int(expires_delta.total_seconds())}
+        return jwt.encode(payload, self.secret, algorithm=self.algorithm)
+    
+    async def decode_token(self, token: str):
+        """Decode JWT token"""
+        return jwt.decode(token, self.secret, algorithms=[self.algorithm])
+
+# Dependency factory (no import-time instantiation)
+def get_token_manager(config = Depends(get_config_from_state)) -> SimpleTokenManager:
+    """Get TokenManager instance with config from app.state"""
+    return SimpleTokenManager(secret=config.JWT_SECRET_KEY, algorithm="HS256")
 
 # Device management
 try:
@@ -95,7 +96,7 @@ except ImportError:
 logger = get_logger(__name__, "claim_api")
 router = APIRouter(tags=["Device Claiming"])
 security = HTTPBearer()
-token_manager = TokenManager()
+# No module-level instantiation - use dependency injection
 device_manager = DevicePairingManager()
 
 # ✅ Configuration will come via Depends(get_config_from_state) - no module-level access
@@ -396,7 +397,8 @@ async def get_device_record(device_id: str, db: AsyncSession, config) -> Optiona
 async def issue_device_tokens(
     device_id: str, 
     child_id: str,
-    device_session_id: str
+    device_session_id: str,
+    token_manager: SimpleTokenManager
 ) -> tuple[str, str, int]:
     """
     Issue JWT access and refresh tokens for device
@@ -509,7 +511,8 @@ async def claim_device(
     req: Request,
     response: Response,
     config = Depends(get_config_from_state),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    token_manager: SimpleTokenManager = Depends(get_token_manager)
 ):
     """
     ESP32 device claiming endpoint with comprehensive security
@@ -598,7 +601,8 @@ async def claim_device(
         access_token, refresh_token, expires_in = await issue_device_tokens(
             request.device_id,
             request.child_id,
-            device_session_id
+            device_session_id,
+            token_manager
         )
         
         # Step 7: Device configuration
@@ -665,7 +669,8 @@ async def claim_device(
 async def refresh_device_token(
     request: RefreshRequest,
     req: Request,
-    response: Response
+    response: Response,
+    token_manager: SimpleTokenManager = Depends(get_token_manager)
 ):
     """
     Refresh device access token using valid refresh token
@@ -751,7 +756,8 @@ async def refresh_device_token(
 async def get_device_status(
     device_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(security)
+    current_user: dict = Depends(security),
+    config = Depends(get_config_from_state)
 ):
     """
     Get device status and configuration (requires authentication)
@@ -766,7 +772,7 @@ async def get_device_status(
     """
     try:
         # Validate device exists
-        device_record = await get_device_record(device_id, db)
+        device_record = await get_device_record(device_id, db, config)
         if not device_record:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
