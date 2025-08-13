@@ -28,8 +28,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 from sqlalchemy.orm import selectinload
 
-# Core infrastructure imports
-from src.infrastructure.config.config_provider import get_config
+# Core infrastructure imports  
+from src.infrastructure.config.config_provider import get_config, get_config_from_state
 
 # Basic logger setup first
 logger = logging.getLogger(__name__)
@@ -98,18 +98,7 @@ security = HTTPBearer()
 token_manager = TokenManager()
 device_manager = DevicePairingManager()
 
-# Get configuration with error handling
-try:
-    config = get_config()
-except Exception as e:
-    logger.error(f"Failed to load configuration: {e}")
-    # Create a minimal fallback config for basic operation
-    class FallbackConfig:
-        ENVIRONMENT = "development"
-        HOST = "localhost"
-        REDIS_URL = "redis://localhost:6379/0"
-        JWT_SECRET_KEY = "dev-fallback-key"
-    config = FallbackConfig()
+# ✅ Configuration will come via Depends(get_config_from_state) - no module-level access
 
 # Redis manager for nonce tracking
 class SimpleRedisManager:
@@ -118,13 +107,11 @@ class SimpleRedisManager:
     def __init__(self):
         self._client = None
     
-    async def get_client(self):
+    async def get_client(self, redis_url: str):
         """Get Redis client instance"""
         if not self._client:
             try:
                 import redis.asyncio as aioredis
-                # Use Redis from config or fallback to local
-                redis_url = getattr(config, 'REDIS_URL', 'redis://localhost:6379/0')
                 self._client = aioredis.from_url(redis_url)
                 # Test connection
                 await self._client.ping()
@@ -254,7 +241,7 @@ class RefreshResponse(BaseModel):
 
 # Core Security Functions
 
-async def verify_nonce_once(nonce: str) -> None:
+async def verify_nonce_once(nonce: str, redis_url: str) -> None:
     """
     Verify nonce hasn't been used before (anti-replay protection)
     
@@ -265,7 +252,7 @@ async def verify_nonce_once(nonce: str) -> None:
         HTTPException: If Redis unavailable or nonce already used
     """
     try:
-        redis_client = await redis_manager.get_client()
+        redis_client = await redis_manager.get_client(redis_url)
         if not redis_client:
             logger.error("Redis unavailable for nonce verification")
             raise HTTPException(
@@ -349,7 +336,7 @@ def verify_device_hmac(
         return False
 
 
-async def get_device_record(device_id: str, db: AsyncSession) -> Optional[Dict[str, Any]]:
+async def get_device_record(device_id: str, db: AsyncSession, config) -> Optional[Dict[str, Any]]:
     """
     Retrieve device record from database or device registry
     
@@ -521,6 +508,7 @@ async def claim_device(
     request: ClaimRequest,
     req: Request,
     response: Response,
+    config = Depends(get_config_from_state),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -558,10 +546,10 @@ async def claim_device(
         )
         
         # Step 1: Anti-replay protection
-        await verify_nonce_once(request.nonce)
+        await verify_nonce_once(request.nonce, config.REDIS_URL)
         
         # Step 2: Device validation
-        device_record = await get_device_record(request.device_id, db)
+        device_record = await get_device_record(request.device_id, db, config)
         if not device_record:
             logger.warning(f"Device not found: {request.device_id} (IP: {client_ip})")
             raise HTTPException(

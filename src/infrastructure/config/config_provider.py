@@ -7,6 +7,7 @@ This module should ONLY contain the get_config function and minimal dependencies
 
 from functools import lru_cache
 from typing import TYPE_CHECKING
+from fastapi import Request, HTTPException
 
 if TYPE_CHECKING:
     from .production_config import ProductionConfig
@@ -50,4 +51,23 @@ def reload_config() -> "ProductionConfig":
     return _config_instance
 
 
-__all__ = ["get_config", "reload_config"]
+def get_config_from_state(request: Request) -> "ProductionConfig":
+    """
+    Get configuration from FastAPI app state (production-grade dependency)
+    
+    Args:
+        request: FastAPI Request object
+        
+    Returns:
+        ProductionConfig: Configuration from app.state
+        
+    Raises:
+        HTTPException: 503 if config not available in app.state
+    """
+    config = getattr(request.app.state, "config", None)
+    if config is None:
+        raise HTTPException(status_code=503, detail="Configuration not loaded")
+    return config
+
+
+__all__ = ["get_config", "reload_config", "get_config_from_state"]
