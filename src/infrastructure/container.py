@@ -420,9 +420,8 @@ class ApplicationModule(Module):
             # Create wrapper that implements IAuthService interface with enhanced features
             class UnifiedAuthService:
                 def __init__(self):
-                    self.authenticator = get_user_authenticator()
-                    self.authorizer = get_authorization_manager()
-                    self.token_manager = get_token_manager()
+                    # Use dependency injection from app.state instead of global functions
+                    raise RuntimeError("UnifiedAuthService should use dependency injection from app.state - deprecated pattern")
 
                 async def authenticate_user(
                     self, credentials: Dict[str, Any]

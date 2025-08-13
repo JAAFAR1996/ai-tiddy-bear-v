@@ -7,10 +7,7 @@ Production-grade authentication with COPPA compliance.
 import jwt
 import time
 import os
-from typing import Dict, Any, Optional, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from .auth import TokenManager  # لتفادي الدورات الاستيرادية
+from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 from fastapi import HTTPException, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
