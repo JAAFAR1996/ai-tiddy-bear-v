@@ -54,8 +54,8 @@ class ESP32ProductionRunner:
             redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
 
             # Create production server with all services using proper DI
-            from src.infrastructure.config.production_config import ProductionConfig
-            config = ProductionConfig()
+            from src.infrastructure.config.production_config import get_config as get_loaded_config
+            config = get_loaded_config()
             factory = ESP32ServiceFactory(config=config)
             
             self.chat_server = await factory.create_production_server(
