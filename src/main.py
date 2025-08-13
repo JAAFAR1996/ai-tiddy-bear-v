@@ -438,7 +438,7 @@ async def lifespan(app: FastAPI):
             
             security_service = await create_security_service(config, limiter)
             token_manager = TokenManager(config=config, advanced_jwt=advanced_jwt)
-            user_authenticator = UserAuthenticator(config=config)
+            user_authenticator = UserAuthenticator(config=config, token_manager=token_manager)
             
             # Store all services in app state (single source of truth)
             app.state.config = config
