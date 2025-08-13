@@ -11,6 +11,8 @@ Comprehensive security layer for all admin endpoints with:
 - Zero-trust security model
 """
 
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import hmac
@@ -28,11 +30,12 @@ from fastapi import HTTPException, Request, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
 
-from .auth import get_token_manager, AuthenticationError, AuthorizationError
+from .auth import TokenManager, AuthenticationError, AuthorizationError
 from .jwt_advanced import AdvancedJWTManager, TokenType
 from ..rate_limiting.rate_limiter import RateLimitingService, OperationType
 from ..logging.production_logger import get_logger, security_logger
 from ..monitoring.audit import coppa_audit
+from src.application.dependencies import TokenManagerDep, AdminSecurityDep
 
 # Configure logging
 logger = get_logger(__name__, "admin_security")
@@ -121,10 +124,10 @@ class AdminSecurityManager:
     - Session management
     """
 
-    def __init__(self, config: Optional[AdminSecurityConfig] = None):
+    def __init__(self, config: Optional[AdminSecurityConfig] = None, token_manager: Optional[TokenManager] = None):
         """Initialize admin security manager."""
         self.config = config or AdminSecurityConfig()
-        self.token_manager = get_token_manager()
+        self.token_manager = token_manager  # Will be injected via dependency
         self.rate_limiter: Optional[RateLimitingService] = None
 
         # Security tracking
@@ -202,6 +205,8 @@ class AdminSecurityManager:
                 )
 
             # 2. Verify JWT token
+            if not self.token_manager:
+                raise HTTPException(status_code=503, detail="Token manager not available")
             try:
                 payload = await self.token_manager.verify_token(credentials.credentials)
             except AuthenticationError as e:
@@ -778,6 +783,7 @@ def get_admin_security_manager() -> AdminSecurityManager:
 async def require_admin_auth(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
+    manager: AdminSecurityManager = AdminSecurityDep,
     permission: AdminPermission = AdminPermission.READ_ONLY_ADMIN,
     security_level: SecurityLevel = SecurityLevel.MEDIUM,
 ) -> AdminSession:
@@ -791,7 +797,6 @@ async def require_admin_auth(
         ):
             # Your admin endpoint logic
     """
-    manager = get_admin_security_manager()
     return await manager.authenticate_admin(
         request, credentials, permission, security_level
     )
@@ -812,9 +817,10 @@ def require_admin_permission(
     """
 
     async def permission_dependency(
-        request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)
+        request: Request, 
+        credentials: HTTPAuthorizationCredentials = Depends(security),
+        manager: AdminSecurityManager = AdminSecurityDep
     ) -> AdminSession:
-        manager = get_admin_security_manager()
         return await manager.authenticate_admin(
             request, credentials, permission, security_level
         )
