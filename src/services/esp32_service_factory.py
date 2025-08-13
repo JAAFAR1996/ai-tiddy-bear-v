@@ -180,5 +180,5 @@ class ESP32ServiceFactory:
 
 # NOTE: No global factory instance - use proper DI pattern with config injection
 # For testing/development only:  
-# from src.infrastructure.config.production_config import ProductionConfig
-# esp32_service_factory = ESP32ServiceFactory(config=ProductionConfig())
+# from src.infrastructure.config.production_config import get_config
+# esp32_service_factory = ESP32ServiceFactory(config=get_config())

@@ -51,7 +51,8 @@ class ProductionConfig:
 
 def get_config():
     """Get configuration - production ready."""
-    return ProductionConfig()
+    from src.infrastructure.config.production_config import get_config as get_loaded_config
+    return get_loaded_config()
 
 
 logger = logging.getLogger(__name__)
