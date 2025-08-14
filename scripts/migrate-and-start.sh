@@ -7,8 +7,15 @@ echo "================================================"
 # Set Python path for proper imports
 export PYTHONPATH=/app
 
-# Set working directory
+# Ensure we're in the right directory
 cd /app
+
+# Verify we have the required environment variables
+if [[ -z "$DATABASE_URL" ]]; then
+    echo "❌ ERROR: DATABASE_URL environment variable is not set!"
+    echo "This is required for database migrations."
+    exit 1
+fi
 
 echo "📋 Environment Check:"
 echo "   - Python Path: $PYTHONPATH"
