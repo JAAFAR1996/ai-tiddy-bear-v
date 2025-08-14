@@ -195,9 +195,24 @@ class ChildDataTransaction:
 class TransactionManager:
     """Advanced transaction manager with distributed support."""
 
-    def __init__(self, config_manager):
+    def __init__(self, *, config=None, sessionmaker=None, config_manager=None):
+        self._config = config
+        self._sessionmaker = sessionmaker
         self.config_manager = config_manager
         self.logger = get_logger("transaction_manager")
+
+
+    def _get_cfg(self):
+        if self._config is not None:
+            return self._config
+        if self.config_manager and hasattr(self.config_manager, "get_config"):
+            return self.config_manager.get_config()
+        from src.core.exceptions import ConfigurationError
+        raise ConfigurationError("Config not injected", context={"component":"TransactionManager"})
+
+    def get_config_value(self, key, default=None):
+        cfg = self._get_cfg()
+        return getattr(cfg, key, default)
 
         # Active transactions
         self.active_transactions: Dict[str, "Transaction"] = {}
@@ -862,8 +877,10 @@ class DistributedTransaction(Transaction):
 
 
 def get_transaction_manager() -> TransactionManager:
-    config_manager = get_config_manager()
-    return TransactionManager(config_manager)
+    # Use DI config instead of global manager
+    from src.infrastructure.config.production_config import get_config
+    config = get_config()
+    return TransactionManager(config=config)
 
 
 def create_transaction_manager(config_manager) -> TransactionManager:

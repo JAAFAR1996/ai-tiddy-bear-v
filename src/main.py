@@ -642,6 +642,20 @@ def create_app() -> FastAPI:
         app.state.db_engine = engine  # Store engine for cleanup
         app.state.db_sessionmaker = SessionLocal
         app.state.db_adapter = DatabaseManager(config=config, sessionmaker=SessionLocal)
+        
+        # Initialize Enterprise and Transaction managers with DI
+        try:
+            from src.infrastructure.database.enterprise_database_manager import database_manager as EnterpriseDatabaseManager
+            from src.infrastructure.database.transaction_manager import TransactionManager
+            
+            app.state.ent_db = EnterpriseDatabaseManager(config=config, sessionmaker=SessionLocal)
+            app.state.tx_manager = TransactionManager(config=config, sessionmaker=SessionLocal)
+            logger.info("✅ Enterprise Database and Transaction managers initialized with DI")
+        except Exception as e:
+            logger.warning(f"Enterprise managers initialization failed: {e}")
+            app.state.ent_db = None
+            app.state.tx_manager = None
+        
         logger.info("✅ Database adapter initialized with DI pattern")
     except Exception as e:
         logger.warning(f"Database bootstrap failed, will use fallback: {e}")

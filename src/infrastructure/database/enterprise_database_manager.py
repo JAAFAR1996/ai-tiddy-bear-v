@@ -279,7 +279,13 @@ class SecurityManager:
         global ENCRYPTION_KEY
         if ENCRYPTION_KEY is None:
             # In production, get from secure key management service
-            key = get_config_manager().get("DATABASE_ENCRYPTION_KEY")
+            # Get from DI config instead of global manager
+            try:
+                from src.infrastructure.config.production_config import get_config
+                cfg = get_config()
+                key = getattr(cfg, "DATABASE_ENCRYPTION_KEY", None)
+            except Exception:
+                key = None
             if key:
                 ENCRYPTION_KEY = key.encode()
             else:
@@ -367,7 +373,14 @@ class SecurityManager:
 
     def _hash_identifier(self, identifier: str) -> str:
         """Create a secure hash of sensitive identifiers."""
-        salt = get_config_manager().get("AUDIT_SALT", "default_salt").encode()
+        # Get from DI config instead of global manager
+        try:
+            from src.infrastructure.config.production_config import get_config
+            cfg = get_config()
+            salt_value = getattr(cfg, "AUDIT_SALT", "default_salt")
+            salt = salt_value.encode()
+        except Exception:
+            salt = "default_salt".encode()
         return hashlib.pbkdf2_hmac("sha256", identifier.encode(), salt, 100000).hex()[
             :16
         ]
@@ -1798,9 +1811,25 @@ class EnterpriseDisasterRecoveryManager:
 class database_manager:
     """Main enterprise database manager orchestrating all components."""
 
-    def __init__(self, config_manager=None):
-        self.config_manager = config_manager or get_config_manager()
+    def __init__(self, *, config=None, sessionmaker=None, config_manager=None):
+        """DI-first; يسمح بفول باك تدريجي حتى إزالة الـ legacy."""
+        self._config = config
+        self._sessionmaker = sessionmaker
+        self.config_manager = config_manager  # فول باك مؤقت
         self.logger = get_logger("enterprise_database_manager")
+
+
+    def _get_cfg(self):
+        if self._config is not None:
+            return self._config
+        if self.config_manager and hasattr(self.config_manager, "get_config"):
+            return self.config_manager.get_config()
+        from src.core.exceptions import ConfigurationError
+        raise ConfigurationError("Config not injected", context={"component":"EnterpriseDatabaseManager"})
+
+    def get_config_value(self, key: str, default=None):
+        cfg = self._get_cfg()
+        return getattr(cfg, key, default)
 
         # Core components
         self.pools: Dict[str, EnterpriseConnectionPool] = {}
