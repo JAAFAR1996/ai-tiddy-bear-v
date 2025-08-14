@@ -8,9 +8,28 @@ from alembic import context
 db_url = os.getenv("DATABASE_URL")
 if not db_url:
     raise RuntimeError("DATABASE_URL not set in environment")
+
+# Convert postgresql:// to postgresql+psycopg2:// for Alembic compatibility
+if db_url.startswith("postgresql://"):
+    sync_db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+elif db_url.startswith("postgres://"):
+    sync_db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
+else:
+    sync_db_url = db_url
+
 config = context.config
-config.set_main_option("sqlalchemy.url", db_url)
-print(f"[alembic] Using SQLAlchemy URL: {db_url}")
+config.set_main_option("sqlalchemy.url", sync_db_url)
+
+# Mask password in logs for security
+masked_url = sync_db_url
+if '@' in sync_db_url and ':' in sync_db_url:
+    parts = sync_db_url.split('@')
+    if len(parts) == 2:
+        auth_part = parts[0]
+        if '://' in auth_part and ':' in auth_part.split('://')[-1]:
+            scheme_user = auth_part.rsplit(':', 1)[0]
+            masked_url = f"{scheme_user}:***@{parts[1]}"
+print(f"[alembic] Using SQLAlchemy URL: {masked_url}")
 
 # Ensure src is in sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -30,7 +49,16 @@ target_metadata = Base.metadata
 def run_migrations_offline():
     """Run migrations in 'offline' mode."""
     url = config.get_main_option("sqlalchemy.url")
-    print(f"[alembic] Using SQLAlchemy URL (offline): {url}")
+    # Mask password in logs for security
+    masked_url = url
+    if '@' in url and ':' in url:
+        parts = url.split('@')
+        if len(parts) == 2:
+            auth_part = parts[0]
+            if '://' in auth_part and ':' in auth_part.split('://')[-1]:
+                scheme_user = auth_part.rsplit(':', 1)[0]
+                masked_url = f"{scheme_user}:***@{parts[1]}"
+    print(f"[alembic] Using SQLAlchemy URL (offline): {masked_url}")
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -46,9 +74,18 @@ def run_migrations_offline():
 def run_migrations_online():
     """Run migrations in 'online' mode."""
 
-    # Print the URL for production diagnostics
+    # Print the URL for production diagnostics (mask password for security)
     url = config.get_main_option("sqlalchemy.url")
-    print(f"[alembic] Using SQLAlchemy URL (online): {url}")
+    # Mask password in logs for security
+    masked_url = url
+    if '@' in url and ':' in url:
+        parts = url.split('@')
+        if len(parts) == 2:
+            auth_part = parts[0]
+            if '://' in auth_part and ':' in auth_part.split('://')[-1]:
+                scheme_user = auth_part.rsplit(':', 1)[0]
+                masked_url = f"{scheme_user}:***@{parts[1]}"
+    print(f"[alembic] Using SQLAlchemy URL (online): {masked_url}")
 
     connectable = engine_from_config(
         config.get_section(config.config_ini_section),
