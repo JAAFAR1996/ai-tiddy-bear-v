@@ -205,6 +205,10 @@ class ClaimRequest(BaseModel):
         pattern=r'^[a-zA-Z0-9._-]+$',
         description="Device firmware version"
     )
+    timestamp: Optional[int] = Field(
+        None,
+        description="Unix timestamp for anti-replay protection (ESP32 compatibility)"
+    )
 
     @validator('nonce')
     def validate_nonce_format(cls, v):
