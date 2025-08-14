@@ -396,27 +396,7 @@ def register_all_routers(app: FastAPI) -> RouteManager:
             context={"config_key": "CORE_API_ROUTER", "router_name": "core_api"}
         )
 
-    # 4a. ESP32 Public Router - No authentication required
-    try:
-        from src.adapters.esp32_router import esp32_public
-
-        route_manager.register_router(
-            router=esp32_public,
-            router_name="esp32_public",
-            prefix="/api/v1/esp32",
-            tags=["ESP32-Public"],
-            require_auth=False,
-        )
-        logger.info("✅ ESP32 public router registered")
-    except ImportError as e:
-        logger.critical(f"❌ Failed to load ESP32 public router: {e}")
-        from src.core.exceptions import ConfigurationError
-        raise ConfigurationError(
-            f"ESP32 public router is required but not found: {e}",
-            context={"config_key": "ESP32_PUBLIC_ROUTER", "router_name": "esp32_public"}
-        )
-
-    # 4b. ESP32 Private Router - Authentication required
+    # 4a. ESP32 Private Router - Authentication required (register first to avoid prefix overlap)
     try:
         from src.adapters.esp32_router import esp32_private
 
@@ -434,6 +414,26 @@ def register_all_routers(app: FastAPI) -> RouteManager:
         raise ConfigurationError(
             f"ESP32 private router is required but not found: {e}",
             context={"config_key": "ESP32_PRIVATE_ROUTER", "router_name": "esp32_private"}
+        )
+
+    # 4b. ESP32 Public Router - No authentication required (register after private)
+    try:
+        from src.adapters.esp32_router import esp32_public
+
+        route_manager.register_router(
+            router=esp32_public,
+            router_name="esp32_public",
+            prefix="/api/v1/esp32",
+            tags=["ESP32-Public"],
+            require_auth=False,
+        )
+        logger.info("✅ ESP32 public router registered")
+    except ImportError as e:
+        logger.critical(f"❌ Failed to load ESP32 public router: {e}")
+        from src.core.exceptions import ConfigurationError
+        raise ConfigurationError(
+            f"ESP32 public router is required but not found: {e}",
+            context={"config_key": "ESP32_PUBLIC_ROUTER", "router_name": "esp32_public"}
         )
 
     # 4c. ESP32 WebSocket Router - Production WebSocket endpoints

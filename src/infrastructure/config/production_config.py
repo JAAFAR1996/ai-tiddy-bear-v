@@ -620,8 +620,8 @@ OPENAI_MODEL=gpt-4
 OPENAI_MAX_TOKENS=1500
 
 # CORS - Production domains only (no localhost)
-CORS_ALLOWED_ORIGINS=["https://aiteddybear.com","https://www.aiteddybear.com","https://api.aiteddybear.com"]
-ALLOWED_HOSTS=["aiteddybear.com","www.aiteddybear.com","api.aiteddybear.com"]
+CORS_ALLOWED_ORIGINS=["https://aiteddybear.com","https://www.aiteddybear.com","https://api.aiteddybear.com","https://ai-tiddy-bear-v-xuqy.onrender.com"]
+ALLOWED_HOSTS=["aiteddybear.com","www.aiteddybear.com","api.aiteddybear.com","ai-tiddy-bear-v-xuqy.onrender.com"]
 
 # Child Safety & COPPA
 COPPA_COMPLIANCE_MODE=true

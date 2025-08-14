@@ -18,6 +18,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONHASHSEED=random \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_ROOT_USER_ACTION=ignore \
     PORT=8000 \
     PYTHONPATH="/app/src" \
     ENVIRONMENT=production \
