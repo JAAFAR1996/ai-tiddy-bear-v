@@ -512,7 +512,7 @@ async def get_child_profile(child_id: str, db: AsyncSession) -> Optional[Dict[st
 
 @router.post("/pair/claim", response_model=DeviceTokenResponse)
 async def claim_device(
-    req: Request,
+    request: Request,
     response: Response,
     claim_request: ClaimRequest = Body(...),
     config = ConfigDep,
@@ -533,9 +533,9 @@ async def claim_device(
     - Comprehensive request validation
     
     Args:
-        request: Device claim request with HMAC signature
-        req: FastAPI request object for IP tracking
+        request: FastAPI request object for IP tracking
         response: FastAPI response object for headers
+        claim_request: Device claim request with HMAC signature
         db: Database session
         
     Returns:
@@ -545,7 +545,7 @@ async def claim_device(
         HTTPException: Various error conditions (401, 403, 404, 409, 503)
     """
     correlation_id = str(uuid4())
-    client_ip = req.client.host if req.client else "unknown"
+    client_ip = request.client.host if request.client else "unknown"
     
     try:
         logger.info(
@@ -672,8 +672,8 @@ async def claim_device(
 
 @router.post("/token/refresh", response_model=RefreshResponse)
 async def refresh_device_token(
-    request: RefreshRequest,
-    req: Request,
+    refresh_request: RefreshRequest,
+    request: Request,
     response: Response,
     token_manager: SimpleTokenManager = Depends(get_token_manager)
 ):
@@ -681,21 +681,21 @@ async def refresh_device_token(
     Refresh device access token using valid refresh token
     
     Args:
-        request: Refresh token request
-        req: FastAPI request object
+        refresh_request: Refresh token request
+        request: FastAPI request object
         response: FastAPI response object
         
     Returns:
         RefreshResponse: New access token
     """
     correlation_id = str(uuid4())
-    client_ip = req.client.host if req.client else "unknown"
+    client_ip = request.client.host if request.client else "unknown"
     
     try:
         logger.debug(f"Device token refresh attempt - IP: {client_ip}, ID: {correlation_id}")
         
         # Decode and validate refresh token
-        payload = await token_manager.decode_token(request.refresh_token)
+        payload = await token_manager.decode_token(refresh_request.refresh_token)
         
         if payload.get("type") != "device_refresh":
             raise HTTPException(
