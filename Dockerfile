@@ -51,9 +51,13 @@ COPY --chown=appuser:appuser alembic.ini .
 COPY --chown=appuser:appuser migrations/ ./migrations/
 COPY --chown=appuser:appuser scripts/ ./scripts/
 
-# FS prep & perms (including migration script)
-RUN chmod 0755 /app/entrypoint.sh && \
-    chmod +x /app/scripts/migrate-and-start.sh && \
+# Fix line endings and permissions for shell scripts (CRLF → LF, remove BOM)
+RUN sed -i '1s/^\xef\xbb\xbf//' /app/scripts/*.sh && \
+    sed -i 's/\r$//' /app/scripts/*.sh && \
+    sed -i '1s/^\xef\xbb\xbf//' /app/entrypoint.sh && \
+    sed -i 's/\r$//' /app/entrypoint.sh && \
+    chmod 0755 /app/entrypoint.sh && \
+    chmod +x /app/scripts/*.sh && \
     mkdir -p /app/logs /app/uploads /app/temp /app/data /app/secure_storage && \
     chown -R appuser:appuser /app && \
     chmod 750 /app/logs /app/uploads /app/temp /app/data && \
