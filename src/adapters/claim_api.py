@@ -34,9 +34,9 @@ from src.application.dependencies import get_config_from_state, ConfigDep
 # Basic logger setup first
 logger = logging.getLogger(__name__)
 
-# Database integration
+# Database integration - production-grade DI
 try:
-    from src.infrastructure.database.database_manager import get_db
+    from src.application.dependencies import DatabaseConnectionDep
     from src.infrastructure.database.models import User, Child
 except ImportError as e:
     logger.warning(f"Database imports not available: {e}")
@@ -44,6 +44,7 @@ except ImportError as e:
     async def get_db():
         """Fallback database session"""
         return None
+    DatabaseConnectionDep = Depends(get_db)
 
 # Logging and monitoring
 try:
@@ -511,7 +512,7 @@ async def claim_device(
     req: Request,
     response: Response,
     config = ConfigDep,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = DatabaseConnectionDep,
     token_manager: SimpleTokenManager = Depends(get_token_manager)
 ):
     """
@@ -755,7 +756,7 @@ async def refresh_device_token(
 @router.get("/device/status/{device_id}")
 async def get_device_status(
     device_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = DatabaseConnectionDep,
     current_user: dict = Depends(security),
     config = Depends(get_config_from_state)
 ):

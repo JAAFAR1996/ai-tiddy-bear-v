@@ -35,7 +35,6 @@ from src.infrastructure.monitoring.conversation_service_metrics import (
     MetricLevel,
 )
 from src.infrastructure.database.models import Interaction as InteractionModel
-from src.infrastructure.database.database_manager import get_db
 
 
 class MessageType(Enum):

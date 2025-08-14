@@ -23,7 +23,7 @@ from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.infrastructure.security.auth import get_current_user
-from src.infrastructure.database.database_manager import get_db
+from src.application.dependencies import DatabaseConnectionDep
 from src.infrastructure.logging.production_logger import get_logger
 from src.infrastructure.database.models import (
     User,
@@ -275,7 +275,7 @@ class DashboardStatsResponse(BaseModel):
 @router.get("/children", response_model=List[ChildResponse])
 async def get_children(
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = DatabaseConnectionDep,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
@@ -442,7 +442,7 @@ async def get_child_interactions(
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = DatabaseConnectionDep,
 ):
     """Get interactions for a specific child with comprehensive authorization and business logic."""
     try:
@@ -589,7 +589,7 @@ async def get_safety_alerts(
     resolved: Optional[bool] = Query(default=None),
     severity: Optional[str] = Query(default=None),
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = DatabaseConnectionDep,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
@@ -769,7 +769,7 @@ async def get_safety_alerts(
 async def resolve_safety_alert(
     alert_id: str,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = DatabaseConnectionDep,
 ):
     """Mark a safety alert as resolved."""
     try:
@@ -912,7 +912,7 @@ async def resolve_safety_alert(
 
 @router.get("/stats", response_model=DashboardStatsResponse)
 async def get_dashboard_stats(
-    current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    current_user: dict = Depends(get_current_user), db: AsyncSession = DatabaseConnectionDep
 ):
     """Get comprehensive dashboard statistics with full business logic."""
     # تحقق صريح من الدور
@@ -1126,7 +1126,7 @@ async def create_safety_report(
     child_id: str,
     report_data: CreateSafetyReportRequest,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = DatabaseConnectionDep,
 ):
     """Create a new safety report for a child with full business logic validation."""
     try:
@@ -1199,7 +1199,7 @@ async def create_safety_report(
 async def create_child(
     child_data: ChildCreateRequest,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = DatabaseConnectionDep,
 ):
     """Create a new child with full COPPA compliance validation."""
     try:
@@ -1328,7 +1328,7 @@ async def update_child(
     child_id: str,
     child_data: ChildUpdateRequest,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = DatabaseConnectionDep,
 ):
     """Update child information with full validation and audit logging."""
 
@@ -1499,7 +1499,7 @@ async def update_child(
 async def delete_child(
     child_id: str,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = DatabaseConnectionDep,
     hard_delete: bool = Query(False, description="Perform hard delete (permanent)"),
 ):
     """Delete or soft-delete child with full audit trail and COPPA compliance."""
@@ -1633,7 +1633,7 @@ async def delete_child(
 async def restore_child(
     child_id: str,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = DatabaseConnectionDep,
 ):
     """Restore a soft-deleted child within the recovery window."""
     try:

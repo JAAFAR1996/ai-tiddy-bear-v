@@ -37,6 +37,7 @@ from fastapi import Request
 from ..config.config_manager_provider import get_config_manager
 from ..logging import get_logger, audit_logger, performance_logger
 from ..monitoring import get_metrics_collector
+from ...core.exceptions import ConfigurationError
 
 # Type definitions
 DatabaseOperation = Callable[..., Any]
@@ -485,8 +486,21 @@ class DatabaseNode:
 class DatabaseManager:
     """Production database manager with high availability."""
 
-    def __init__(self, config_manager):
-        self.config_manager = config_manager
+    def __init__(self, *, config=None, sessionmaker=None, config_manager=None):
+        """Initialize DatabaseManager with DI support.
+        
+        Args:
+            config: ProductionConfig instance from app.state (preferred)
+            sessionmaker: async_sessionmaker instance (preferred) 
+            config_manager: Legacy config manager (fallback only)
+        """
+        self._config = config
+        self._sessionmaker = sessionmaker
+        # No fallback to global config manager - require explicit injection
+        if not config:
+            raise RuntimeError(
+                "DatabaseManager requires injected ProductionConfig (no global config manager)"
+            )
         self.logger = get_logger("database_manager")
         self.metrics_collector = get_metrics_collector()
 
@@ -495,23 +509,81 @@ class DatabaseManager:
         self.replica_nodes: List[DatabaseNode] = []
         self.backup_nodes: List[DatabaseNode] = []
 
-        # Configuration
+        # Configuration - use DI config if available
         self.retry_config = RetryConfig(
-            max_attempts=self.config_manager.get_int("DATABASE_MAX_RETRIES", 3),
-            base_delay=self.config_manager.get_float("DATABASE_RETRY_DELAY", 1.0),
-            max_delay=self.config_manager.get_float("DATABASE_MAX_RETRY_DELAY", 60.0),
+            max_attempts=self.get_config_value("DATABASE_MAX_RETRIES", 3),
+            base_delay=self.get_config_value("DATABASE_RETRY_DELAY", 1.0),
+            max_delay=self.get_config_value("DATABASE_MAX_RETRY_DELAY", 60.0),
         )
 
         # Health monitoring
         self.health_check_task: Optional[asyncio.Task] = None
-        self.health_check_interval = self.config_manager.get_int(
-            "DATABASE_HEALTH_CHECK_INTERVAL", 30
+        self.health_check_interval = self.get_config_value("DATABASE_HEALTH_CHECK_INTERVAL", 30)
+
+        # Load balancing for read operations  
+        self.read_strategy = self.get_config_value("DATABASE_READ_STRATEGY", "round_robin")
+
+    def get_config(self):
+        """Get configuration using DI (production-grade)."""
+        if self._config is not None:
+            return self._config
+        # Fallback to legacy config manager
+        if hasattr(self.config_manager, 'get_config'):
+            return self.config_manager.get_config()
+        raise ConfigurationError(
+            "DatabaseManager requires injected ProductionConfig (no global config manager)",
+            context={"component": "DatabaseManager"}
         )
 
-        # Load balancing for read operations
-        self.read_strategy = self.config_manager.get(
-            "DATABASE_READ_STRATEGY", "round_robin"
-        )
+    def get_config_value(self, key: str, default=None):
+        """Get config value using DI or fallback."""
+        if self._config is not None:
+            return getattr(self._config, key, default)
+        # Legacy fallback
+        if hasattr(self.config_manager, 'get'):
+            return self.config_manager.get(key, default)
+        elif hasattr(self.config_manager, 'get_int') and isinstance(default, int):
+            return self.config_manager.get_int(key, default)
+        elif hasattr(self.config_manager, 'get_float') and isinstance(default, float):
+            return self.config_manager.get_float(key, default)
+        return default
+
+    def _ensure_sessionmaker(self):
+        """Ensure sessionmaker is available."""
+        if self._sessionmaker is None:
+            # Try to create one from config
+            config = self.get_config()
+            if hasattr(config, 'DATABASE_URL'):
+                from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+                engine = create_async_engine(config.DATABASE_URL, pool_pre_ping=True)
+                self._sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
+            else:
+                raise ConfigurationError("No sessionmaker provided and cannot create from config")
+        return self._sessionmaker
+
+    @asynccontextmanager
+    async def get_connection(self):
+        """Get database connection using DI sessionmaker (production-grade with session lifecycle)."""
+        SessionLocal = self._ensure_sessionmaker()
+        async with SessionLocal() as session:
+            try:
+                yield session
+                # commit() عند النجاح
+                await session.commit()
+            except Exception:
+                # rollback() عند الاستثناء
+                await session.rollback()
+                raise
+            finally:
+                # إغلاق الجلسة دائماً
+                await session.close()
+
+    # Legacy compatibility
+    session = get_connection
+
+    def _post_init_setup(self):
+        """Complete initialization after DI setup."""
+        # Replica management 
         self.current_replica_index = 0
 
         # Metrics reporting
@@ -1026,9 +1098,12 @@ def get_database_manager() -> DatabaseManager:
     """Get or create database manager instance."""
     global database_manager
     if database_manager is None:
-        from ..config.config_manager_provider import get_config_manager
-        config_manager = get_config_manager()
-        database_manager = DatabaseManager(config_manager)
+        # In production, DatabaseManager should always be injected via DI
+        # This fallback is only for development/testing
+        raise RuntimeError(
+            "DatabaseManager not initialized. Use dependency injection via "
+            "app.state.db_adapter or DatabaseConnectionDep."
+        )
     return database_manager
 
 
