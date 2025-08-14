@@ -53,9 +53,9 @@ COPY --chown=appuser:appuser scripts/ ./scripts/
 # FS prep & perms (including migration script)
 RUN chmod 0755 /app/entrypoint.sh && \
     chmod +x /app/scripts/migrate-and-start.sh && \
-    mkdir -p /app/{logs,uploads,temp,data,secure_storage} && \
+    mkdir -p /app/logs /app/uploads /app/temp /app/data /app/secure_storage && \
     chown -R appuser:appuser /app && \
-    chmod 750 /app/{logs,uploads,temp,data} && \
+    chmod 750 /app/logs /app/uploads /app/temp /app/data && \
     chmod 700 /app/secure_storage && \
     find /app -type f -name "*.pyc" -delete && \
     find /app -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
