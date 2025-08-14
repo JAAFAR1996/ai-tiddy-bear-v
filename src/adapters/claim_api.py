@@ -512,9 +512,9 @@ async def get_child_profile(child_id: str, db: AsyncSession) -> Optional[Dict[st
 
 @router.post("/pair/claim", response_model=DeviceTokenResponse)
 async def claim_device(
-    claim_request: ClaimRequest = Body(...),
     req: Request,
     response: Response,
+    claim_request: ClaimRequest = Body(...),
     config = ConfigDep,
     db: AsyncSession = DatabaseConnectionDep,
     token_manager: SimpleTokenManager = Depends(get_token_manager)
