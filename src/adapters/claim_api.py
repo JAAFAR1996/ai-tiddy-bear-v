@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Depends, Request, Response, status
+from fastapi import APIRouter, HTTPException, Depends, Request, Response, status, Body
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, Field, validator
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -512,7 +512,7 @@ async def get_child_profile(child_id: str, db: AsyncSession) -> Optional[Dict[st
 
 @router.post("/pair/claim", response_model=DeviceTokenResponse)
 async def claim_device(
-    request: ClaimRequest,
+    claim_request: ClaimRequest = Body(...),
     req: Request,
     response: Response,
     config = ConfigDep,
@@ -549,24 +549,24 @@ async def claim_device(
     
     try:
         logger.info(
-            f"Device claim attempt - Device: {request.device_id[:8]}..., "
-            f"Child: {request.child_id[:8]}..., IP: {client_ip}, ID: {correlation_id}"
+            f"Device claim attempt - Device: {claim_request.device_id[:8]}..., "
+            f"Child: {claim_request.child_id[:8]}..., IP: {client_ip}, ID: {correlation_id}"
         )
         
         # Step 1: Anti-replay protection
-        await verify_nonce_once(request.nonce, config.REDIS_URL)
+        await verify_nonce_once(claim_request.nonce, config.REDIS_URL)
         
         # Step 2: Device validation
-        device_record = await get_device_record(request.device_id, db, config)
+        device_record = await get_device_record(claim_request.device_id, db, config)
         if not device_record:
-            logger.warning(f"Device not found: {request.device_id} (IP: {client_ip})")
+            logger.warning(f"Device not found: {claim_request.device_id} (IP: {client_ip})")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Device not registered or not found"
             )
         
         if not device_record.get("enabled", False):
-            logger.warning(f"Device disabled: {request.device_id} (IP: {client_ip})")
+            logger.warning(f"Device disabled: {claim_request.device_id} (IP: {client_ip})")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Device is disabled or suspended"
@@ -574,16 +574,16 @@ async def claim_device(
         
         # Step 3: HMAC signature verification
         is_valid_hmac = verify_device_hmac(
-            request.device_id,
-            request.child_id,
-            request.nonce,
-            request.hmac_hex,
+            claim_request.device_id,
+            claim_request.child_id,
+            claim_request.nonce,
+            claim_request.hmac_hex,
             device_record["oob_secret_hex"]
         )
         
         if not is_valid_hmac:
             logger.warning(
-                f"Invalid HMAC signature - Device: {request.device_id[:8]}..., IP: {client_ip}"
+                f"Invalid HMAC signature - Device: {claim_request.device_id[:8]}..., IP: {client_ip}"
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -591,9 +591,9 @@ async def claim_device(
             )
         
         # Step 4: Child profile validation
-        child_profile = await get_child_profile(request.child_id, db)
+        child_profile = await get_child_profile(claim_request.child_id, db)
         if not child_profile:
-            logger.warning(f"Child profile not found: {request.child_id} (IP: {client_ip})")
+            logger.warning(f"Child profile not found: {claim_request.child_id} (IP: {client_ip})")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Child profile not found or inactive"
@@ -604,8 +604,8 @@ async def claim_device(
         
         # Step 6: Issue JWT tokens
         access_token, refresh_token, expires_in = await issue_device_tokens(
-            request.device_id,
-            request.child_id,
+            claim_request.device_id,
+            claim_request.child_id,
             device_session_id,
             token_manager
         )
@@ -626,11 +626,11 @@ async def claim_device(
         await coppa_audit.log_event(
             event_type="device_claimed",
             user_id=child_profile.get("parent_id"),
-            child_id=request.child_id,
-            device_id=request.device_id,
+            child_id=claim_request.child_id,
+            device_id=claim_request.device_id,
             details={
                 "device_model": device_record.get("model"),
-                "firmware_version": request.firmware_version,
+                "firmware_version": claim_request.firmware_version,
                 "client_ip": client_ip,
                 "correlation_id": correlation_id
             },
@@ -644,8 +644,8 @@ async def claim_device(
         response.headers["X-COPPA-Compliant"] = "true"
         
         logger.info(
-            f"Device claim successful - Device: {request.device_id[:8]}..., "
-            f"Child: {request.child_id[:8]}..., Session: {device_session_id[:8]}..."
+            f"Device claim successful - Device: {claim_request.device_id[:8]}..., "
+            f"Child: {claim_request.child_id[:8]}..., Session: {device_session_id[:8]}..."
         )
         
         return DeviceTokenResponse(
@@ -661,7 +661,7 @@ async def claim_device(
         raise
     except Exception as e:
         logger.error(
-            f"Device claim failed - Device: {request.device_id[:8]}..., "
+            f"Device claim failed - Device: {claim_request.device_id[:8]}..., "
             f"Error: {e}, ID: {correlation_id}"
         )
         raise HTTPException(
