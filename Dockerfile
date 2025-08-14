@@ -43,12 +43,16 @@ RUN pip install --upgrade pip && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /var/cache/apt/*
 
-# app code (يكفي مرة واحدة)
+# app code + Alembic files for database migrations
 COPY --chown=appuser:appuser src/ ./src
 COPY --chown=appuser:appuser entrypoint.sh .
+COPY --chown=appuser:appuser alembic.ini .
+COPY --chown=appuser:appuser migrations/ ./migrations/
+COPY --chown=appuser:appuser scripts/ ./scripts/
 
-# FS prep & perms
+# FS prep & perms (including migration script)
 RUN chmod 0755 /app/entrypoint.sh && \
+    chmod +x /app/scripts/migrate-and-start.sh && \
     mkdir -p /app/{logs,uploads,temp,data,secure_storage} && \
     chown -R appuser:appuser /app && \
     chmod 750 /app/{logs,uploads,temp,data} && \
