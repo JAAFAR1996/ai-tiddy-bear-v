@@ -89,7 +89,17 @@ echo "   - Database Host: ${db_host:-unknown}"
 echo "   - Database Name: ${db_name:-unknown}"
 echo "   - Environment: ${ENVIRONMENT:-production}"
 
-log_info "3/5 Testing database connectivity..."
+log_info "3/5 Testing database connectivity and psycopg2 availability..."
+
+# Check if psycopg2 is available for Alembic
+log_info "Verifying psycopg2-binary installation..."
+if python3 -c "import psycopg2; print('psycopg2 version:', psycopg2.__version__)" 2>/dev/null; then
+    log_success "psycopg2-binary is available for Alembic"
+else
+    log_error "psycopg2-binary not found! Alembic migrations will fail."
+    log_error "This should not happen if requirements.txt was properly installed."
+    exit 1
+fi
 
 # Database ping test
 log_info "Attempting to connect to database..."
@@ -176,8 +186,8 @@ echo ""
 log_info "Starting AI Teddy Bear Application Server..."
 echo "=============================================="
 
-# Server configuration
-WORKERS=${WEB_CONCURRENCY:-2}
+# Server configuration - reduced memory usage for Render 512MB plan
+WORKERS=${WEB_CONCURRENCY:-1}  # Reduced from 2 to 1 for memory constraints
 PORT=${PORT:-8000}
 TIMEOUT=${WORKER_TIMEOUT:-120}
 
