@@ -62,13 +62,14 @@ RUN chmod 0755 /app/entrypoint.sh && \
 
 USER appuser
 
-# صحّة (استخدم مسارك الفعلي)
-HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=3 \
-  CMD curl -fsS http://localhost:${PORT:-8000}/api/v1/core/health || exit 1
+# Health check with extended timeout for migration period
+HEALTHCHECK --interval=30s --timeout=120s --start-period=180s --retries=3 \
+  CMD curl -fsS http://localhost:${PORT:-8000}/health || exit 1
 
 EXPOSE 8000
 
-ENTRYPOINT ["dumb-init","--","/app/entrypoint.sh"]
+# Use flexible entrypoint that supports command passthrough
+ENTRYPOINT ["dumb-init", "--", "/app/entrypoint.sh"]
 
-ENV WEB_CONCURRENCY=1
-CMD ["sh","-lc","gunicorn -k uvicorn.workers.UvicornWorker src.main:app --workers ${WEB_CONCURRENCY:-1} --bind 0.0.0.0:${PORT:-8000} --timeout 120 --graceful-timeout 30 --keep-alive 2 --worker-tmp-dir /dev/shm --max-requests 1000 --max-requests-jitter 50 --access-logfile - --error-logfile -"]
+# Default command: run migrations and start server
+CMD ["bash", "/app/scripts/migrate-and-start.sh"]
