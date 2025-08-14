@@ -81,7 +81,7 @@ class ErrorHandler:
         # Simplified logging based on exception type
         if isinstance(exc, ConfigurationError):
             # Configuration errors should return 503 Service Unavailable
-            self.logger.critical("Configuration error", extra=log_data)
+            self.logger.critical("Configuration error", extra=log_data, exc_info=True)
             return JSONResponse(
                 status_code=503,
                 content={

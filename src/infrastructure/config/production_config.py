@@ -125,6 +125,23 @@ class ProductionConfig(BaseSettings):
     )
 
     # ===========================================
+    # METRICS SECURITY
+    # ===========================================
+    METRICS_USERNAME: str = Field(
+        "metrics", description="Username for metrics endpoint basic auth"
+    )
+    METRICS_PASSWORD: Optional[str] = Field(
+        None, description="Password for metrics endpoint (production only)"
+    )
+    METRICS_API_TOKEN: Optional[str] = Field(
+        None, description="API token for metrics endpoint (alternative to basic auth)"
+    )
+    METRICS_INTERNAL_NETWORKS: List[str] = Field(
+        default_factory=lambda: ["10.", "172.16.", "192.168.", "127.0.0.1"],
+        description="Internal networks allowed to access metrics without auth"
+    )
+
+    # ===========================================
     # CHILD SAFETY & COPPA COMPLIANCE
     # ===========================================
     COPPA_COMPLIANCE_MODE: bool = Field(

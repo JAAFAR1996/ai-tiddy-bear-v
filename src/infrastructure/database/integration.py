@@ -39,7 +39,7 @@ from ..logging import get_logger, audit_logger, performance_logger, security_log
 
 
 logger = get_logger("database_integration")
-config_manager = get_config_manager()
+# Config will be injected via DI pattern - no global access
 
 
 # Database lifespan manager

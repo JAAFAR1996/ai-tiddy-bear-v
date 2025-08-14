@@ -203,7 +203,7 @@ class DatabaseConnectionManager:
 
         try:
             # Debug: Print DATABASE_URL to verify format
-            print(f"🔍 DATABASE_URL: {self.config.DATABASE_URL}")
+            print(f"DEBUG DATABASE_URL: {self.config.DATABASE_URL}")
 
             # تطبيق منطق التنظيف للـ URL
             url = _normalize_asyncpg_url(self.config.DATABASE_URL)

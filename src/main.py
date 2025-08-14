@@ -529,6 +529,12 @@ async def lifespan(app: FastAPI):
             
             # الآن فقط سجّل الراوترات عبر RouteManager (بعد تهيئة DB)
             setup_routes()
+            
+            # Register metrics API
+            from src.adapters import metrics_api
+            app.include_router(metrics_api.router)
+            logger.info("✅ Metrics API registered")
+            
             logger.info("✅ All routers registered via RouteManager")
             
         logger.info(
@@ -561,6 +567,14 @@ async def lifespan(app: FastAPI):
             logger.info("✅ Database connections closed")
         except Exception as e:
             logger.warning(f"Database shutdown warning: {e}")
+    
+    # Close database engine
+    if hasattr(app.state, 'db_engine') and app.state.db_engine:
+        try:
+            await app.state.db_engine.dispose()
+            logger.info("✅ Database engine disposed")
+        except Exception as e:
+            logger.warning(f"Database engine shutdown warning: {e}")
     
     # Close Redis connections
     if redis_client:
@@ -612,6 +626,27 @@ def create_app() -> FastAPI:
     app.state.config = config
     app.state.config_ready = True  # ESP32 endpoints can work immediately
     app.state.ready = False        # Full system readiness set in lifespan
+    
+    # 3.5) Database bootstrap (production-grade and safe)
+    try:
+        from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+        from src.infrastructure.database.database_manager import DatabaseManager
+        
+        # Ensure async format for DATABASE_URL
+        database_url = config.DATABASE_URL
+        if database_url.startswith("postgresql://") and "+asyncpg" not in database_url:
+            database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        
+        engine = create_async_engine(database_url, pool_pre_ping=True, future=True)
+        SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+        app.state.db_engine = engine  # Store engine for cleanup
+        app.state.db_sessionmaker = SessionLocal
+        app.state.db_adapter = DatabaseManager(config=config, sessionmaker=SessionLocal)
+        logger.info("✅ Database adapter initialized with DI pattern")
+    except Exception as e:
+        logger.warning(f"Database bootstrap failed, will use fallback: {e}")
+        app.state.db_adapter = None
+        app.state.db_engine = None
     
     # 4) Add all middleware before startup
     if not os.environ.get("PYTEST_CURRENT_TEST"):
@@ -1033,15 +1068,14 @@ async def routes_health_check(
 if __name__ == "__main__":
     import uvicorn
 
-    # Initialize configuration if not already done
-    if not config:
-        from src.infrastructure.config.config_provider import get_config
-        setup_application(get_config())
-
-    # Get configuration from environment with defaults
-    host = config.HOST if config else "0.0.0.0"
-    port = config.PORT if config else 8000
-    environment = config.ENVIRONMENT if config else "development"
+    # Configuration is already loaded in create_app() and stored in app.state.config
+    # No global config access in production - use app.state.config via DI
+    
+    # Get configuration from app.state.config (if available) with safe defaults
+    app_config = getattr(app.state, "config", None)
+    host = app_config.HOST if app_config else "0.0.0.0"
+    port = app_config.PORT if app_config else 8000
+    environment = app_config.ENVIRONMENT if app_config else "development"
 
     # Security validation for host binding
     if environment == "production" and host == "0.0.0.0":

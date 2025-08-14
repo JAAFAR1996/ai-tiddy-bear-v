@@ -48,19 +48,19 @@ class HealthCheckResult:
 class DatabaseHealthChecker:
     """Comprehensive database health checker."""
     
-    def __init__(self):
-        self.config_manager = get_config_manager()
+    def __init__(self, config=None):
+        self.config = config  # Inject config via DI
         self.logger = get_logger("database_health_checker")
         
-        # Health check configuration
-        self.connection_timeout = self.config_manager.get_float("HEALTH_CHECK_CONNECTION_TIMEOUT", 5.0)
-        self.query_timeout = self.config_manager.get_float("HEALTH_CHECK_QUERY_TIMEOUT", 10.0)
-        self.max_acceptable_latency = self.config_manager.get_float("HEALTH_CHECK_MAX_LATENCY", 100.0)  # ms
-        self.critical_error_threshold = self.config_manager.get_int("HEALTH_CHECK_ERROR_THRESHOLD", 5)
+        # Health check configuration with safe defaults
+        self.connection_timeout = getattr(config, "HEALTH_CHECK_CONNECTION_TIMEOUT", 5.0) if config else 5.0
+        self.query_timeout = getattr(config, "HEALTH_CHECK_QUERY_TIMEOUT", 10.0) if config else 10.0
+        self.max_acceptable_latency = getattr(config, "HEALTH_CHECK_MAX_LATENCY", 100.0) if config else 100.0
+        self.critical_error_threshold = getattr(config, "HEALTH_CHECK_ERROR_THRESHOLD", 5) if config else 5
         
         # COPPA compliance checks
-        self.coppa_compliance_enabled = self.config_manager.get_bool("COPPA_COMPLIANCE_ENABLED", True)
-        self.child_data_retention_days = self.config_manager.get_int("CHILD_DATA_RETENTION_DAYS", 90)
+        self.coppa_compliance_enabled = getattr(config, "COPPA_COMPLIANCE_ENABLED", True) if config else True
+        self.child_data_retention_days = getattr(config, "CHILD_DATA_RETENTION_DAYS", 90) if config else 90
     
     async def run_comprehensive_health_check(self) -> Dict[str, HealthCheckResult]:
         """Run all health checks and return comprehensive results."""

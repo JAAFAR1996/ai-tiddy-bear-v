@@ -47,8 +47,7 @@ from ..logging import get_logger, security_logger
 # Base model with common fields
 Base = declarative_base()
 
-# Encryption setup
-config_manager = get_config_manager()
+# Encryption setup - config injected at runtime, not at import time
 logger = get_logger("database_models")
 
 # Initialize encryption (in production, use proper key management)

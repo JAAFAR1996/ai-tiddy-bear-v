@@ -78,12 +78,17 @@ class ServiceRegistry:
                 raise RuntimeError(
                     "[ServiceRegistry] Production config must be provided explicitly. No global/implicit config allowed."
                 )
-        # Accept either dict or ProductionConfig
-        if isinstance(config, dict):
-            self.config = ProductionConfig(**config)
-        elif isinstance(config, ProductionConfig):
+        # Only accept ProductionConfig (no dict conversion - maintains single source of truth)
+        if isinstance(config, ProductionConfig):
             self.config = config
         else:
+            # In production, config must be ProductionConfig instance from app.state.config
+            if os.getenv("ENVIRONMENT", "development") == "production":
+                raise RuntimeError(
+                    "[ServiceRegistry] Config must be ProductionConfig instance from app.state.config. "
+                    "No dict conversion allowed in production."
+                )
+            # Development fallback only
             self.config = config or {}
 
         # Strict config validation (fail-fast)

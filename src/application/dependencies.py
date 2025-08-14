@@ -149,6 +149,19 @@ MessageRepositoryDep = Depends(get_message_repository)
 def get_config_from_state(request) -> "ProductionConfig":
     """Get configuration from app.state (production-grade)"""
     from fastapi import Request, HTTPException
+    import logging, os
+    
+    # DIAGNOSTIC LOG
+    diag = {
+        "has_app_state_config": hasattr(request.app.state, "config"),
+        "config_is_none": getattr(request.app.state, "config", None) is None,
+        "config_type": type(getattr(request.app.state, "config", None)).__name__,
+        "config_ready_flag": getattr(request.app.state, "config_ready", None),
+        "ready_flag": getattr(request.app.state, "ready", None),
+        "pid": os.getpid(),
+    }
+    logging.getLogger("diag.config_dep").warning("CFG_DEP %s", diag)
+    
     config = getattr(request.app.state, "config", None)
     if config is None:
         # Service is still initializing - return 503 instead of 500
@@ -221,6 +234,28 @@ def get_admin_security_manager_from_state(app) -> "AdminSecurityManager":
     if token_manager is None:
         raise RuntimeError("Token manager not ready")
     return AdminSecurityManager(token_manager=token_manager)
+
+# ========================= DATABASE DEPENDENCY (PRODUCTION-GRADE) =========================
+
+async def get_database_connection_from_state(request):
+    """Get database connection using config from app.state (production-grade)"""
+    from fastapi import Request, HTTPException
+    
+    # Get db_adapter from app.state (set during startup)
+    db_adapter = getattr(request.app.state, "db_adapter", None)
+    if db_adapter is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Database adapter not ready - service initializing",
+            headers={"Retry-After": "5"}
+        )
+    
+    # Use the production database adapter's connection method
+    async with db_adapter.get_connection() as conn:
+        yield conn
+
+# FastAPI dependency annotation
+DatabaseConnectionDep = Depends(get_database_connection_from_state)
 
 # ========================= GENERIC DEPENDENCY HELPER =========================
 

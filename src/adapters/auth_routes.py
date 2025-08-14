@@ -25,7 +25,7 @@ from src.infrastructure.security.auth import (
     get_current_user,
     AuthenticationError,
 )
-from src.infrastructure.database.database_manager import get_db
+from src.application.dependencies import DatabaseConnectionDep
 from src.infrastructure.logging.production_logger import get_logger
 from src.application.dependencies import get_token_manager_from_state, TokenManagerDep
 from src.infrastructure.monitoring.audit import coppa_audit
@@ -82,7 +82,7 @@ class UserResponse(BaseModel):
 async def login(
     request: LoginRequest, 
     req: Request, 
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = DatabaseConnectionDep,
     token_manager: TokenManager = TokenManagerDep
 ):
     """
@@ -172,7 +172,7 @@ async def login(
 
 
 @router.post("/register", response_model=UserResponse)
-async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register(request: RegisterRequest, db: AsyncSession = DatabaseConnectionDep):
     """
     Parent registration with COPPA compliance:
     - Age verification (parents must be 18+)
