@@ -387,31 +387,14 @@ async def lifespan(app: FastAPI):
     app.state.ready = False
     logger.info("🚀 Starting AI Teddy Bear API...")
 
-    # CRITICAL: Load config FIRST before anything else
-    try:
-        config = load_config()  # Direct synchronous load
-        app.state.config = config  # Set IMMEDIATELY in app state
-        app.state.config_ready = True  # Mark config as ready for ESP32 pairing
-        logger.info("✅ Configuration loaded and set in app.state")
-        logger.info("🔧 Config ready - ESP32 pairing endpoint available")
-        
-        # Add config-dependent middleware now that config is loaded
-        if not os.environ.get("PYTEST_CURRENT_TEST") and not getattr(app.state, "cors_added", False):
-            from fastapi.middleware.cors import CORSMiddleware
-            from fastapi.middleware.trustedhost import TrustedHostMiddleware
-            app.add_middleware(TrustedHostMiddleware, allowed_hosts=config.ALLOWED_HOSTS)
-            app.add_middleware(
-                CORSMiddleware,
-                allow_origins=config.CORS_ALLOWED_ORIGINS,
-                allow_methods=["*"],
-                allow_headers=["*"],
-            )
-            app.state.cors_added = True
-            logger.info("🛡️ CORS and TrustedHost middleware added")
-            
-    except Exception as e:
-        logger.critical(f"🚨 CRITICAL: Failed to load configuration: {e}")
-        raise RuntimeError(f"Configuration loading failed: {e}")
+    # Config already loaded in create_app() - verify it's available
+    config = getattr(app.state, "config", None)
+    if not config:
+        logger.critical("🚨 CRITICAL: Config not found in app.state")
+        raise RuntimeError("Config not found in app.state")
+    
+    logger.info("✅ Configuration verified in app.state")
+    logger.info("🔧 Config ready - ESP32 pairing endpoint available")
 
     # Additional validation for production-grade setup
     try:
@@ -588,36 +571,68 @@ async def lifespan(app: FastAPI):
     logger.info("✅ Shutdown complete")
 
 
-# Initialize FastAPI app with enhanced API documentation
-app = FastAPI(
-    title="AI Teddy Bear API",
-    description="Child-safe AI conversations with enterprise security and COPPA compliance",
-    version="1.0.0",
-    lifespan=lifespan,
-    docs_url=(
-        "/docs" if os.environ.get("ENVIRONMENT") != "production" else None
-    ),  # Disable docs in production
-    redoc_url="/redoc" if os.environ.get("ENVIRONMENT") != "production" else None,
-    openapi_url=(
-        "/openapi.json" if os.environ.get("ENVIRONMENT") != "production" else None
-    ),
-    contact={
-        "name": "AI Teddy Bear Support",
-        "url": "https://aiteddybear.com/support",
-        "email": "support@aiteddybear.com",
-    },
-    license_info={
-        "name": "Proprietary",
-        "url": "https://aiteddybear.com/license",
-    },
-    servers=[
-        {"url": "https://api.aiteddybear.com", "description": "Production server"},
-        {
-            "url": "https://staging-api.aiteddybear.com",
-            "description": "Staging server",
+def create_app() -> FastAPI:
+    """Create FastAPI app with production-grade App Factory pattern."""
+    # 1) Load config early and synchronously
+    from src.infrastructure.config.production_config import load_config
+    config = load_config()
+    
+    # 2) Create FastAPI app with lifespan
+    app = FastAPI(
+        title="AI Teddy Bear API",
+        description="Child-safe AI conversations with enterprise security and COPPA compliance",
+        version="1.0.0",
+        lifespan=lifespan,
+        docs_url=(
+            "/docs" if config.ENVIRONMENT != "production" else None
+        ),  # Disable docs in production
+        redoc_url="/redoc" if config.ENVIRONMENT != "production" else None,
+        openapi_url=(
+            "/openapi.json" if config.ENVIRONMENT != "production" else None
+        ),
+        contact={
+            "name": "AI Teddy Bear Support",
+            "url": "https://aiteddybear.com/support", 
+            "email": "support@aiteddybear.com",
         },
-    ],
-)
+        license_info={
+            "name": "Proprietary",
+            "url": "https://aiteddybear.com/license",
+        },
+        servers=[
+            {"url": "https://api.aiteddybear.com", "description": "Production server"},
+            {
+                "url": "https://staging-api.aiteddybear.com",
+                "description": "Staging server",
+            },
+        ],
+    )
+    
+    # 3) Store config and readiness flags
+    app.state.config = config
+    app.state.config_ready = True  # ESP32 endpoints can work immediately
+    app.state.ready = False        # Full system readiness set in lifespan
+    
+    # 4) Add all middleware before startup
+    if not os.environ.get("PYTEST_CURRENT_TEST"):
+        from fastapi.middleware.cors import CORSMiddleware
+        from fastapi.middleware.trustedhost import TrustedHostMiddleware
+        
+        app.add_middleware(SecurityHeadersMiddleware)
+        app.add_middleware(RequestValidationMiddleware)
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=config.ALLOWED_HOSTS)
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=config.CORS_ALLOWED_ORIGINS,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+        app.add_middleware(ReadinessGate)
+    
+    return app
+
+# Create the app instance
+app = create_app()
 
 # Production-grade: all config access via app.state + DI pattern
 
@@ -644,13 +659,7 @@ setup_error_handlers(app, debug=(os.environ.get("ENVIRONMENT") != "production"))
 # UNIFIED CONFIGURATION SYSTEM
 
 
-# Setup middleware if not in testing environment
-if not os.environ.get("PYTEST_CURRENT_TEST"):
-    app.add_middleware(SecurityHeadersMiddleware)
-    app.add_middleware(RequestValidationMiddleware)
-    # Note: CORS and TrustedHost middleware will be added in lifespan after config loads
-    # Add ReadinessGate as the last middleware (outermost - executes first)
-    app.add_middleware(ReadinessGate)
+# Middleware is now added in create_app() function
 
 # ================================
 # API ROUTES
