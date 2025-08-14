@@ -257,6 +257,38 @@ async def get_database_connection_from_state(request):
 # FastAPI dependency annotation
 DatabaseConnectionDep = Depends(get_database_connection_from_state)
 
+# ========================= ENTERPRISE DATABASE & TRANSACTION DEPENDENCIES =========================
+
+async def get_enterprise_db_manager_from_state(request):
+    """Get enterprise database manager from app.state (production-grade)"""
+    from fastapi import Request, HTTPException
+    
+    ent_db = getattr(request.app.state, "ent_db", None)
+    if ent_db is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Enterprise database manager not ready - service initializing",
+            headers={"Retry-After": "10"}
+        )
+    return ent_db
+
+async def get_transaction_manager_from_state(request):
+    """Get transaction manager from app.state (production-grade)"""
+    from fastapi import Request, HTTPException
+    
+    tx_manager = getattr(request.app.state, "tx_manager", None)
+    if tx_manager is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Transaction manager not ready - service initializing",
+            headers={"Retry-After": "10"}
+        )
+    return tx_manager
+
+# FastAPI dependency annotations
+EnterpriseDbDep = Depends(get_enterprise_db_manager_from_state)
+TransactionManagerDep = Depends(get_transaction_manager_from_state)
+
 # ========================= GENERIC DEPENDENCY HELPER =========================
 
 
