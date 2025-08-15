@@ -386,6 +386,7 @@ def register_all_routers(app: FastAPI) -> RouteManager:
             prefix="/api/dashboard",
             tags=["Dashboard"],
             require_auth=True,
+            allow_overlap=True,  # Intentional overlap with /api base
         )
         logger.info("✅ Dashboard router registered")
     except ImportError as e:
@@ -406,6 +407,7 @@ def register_all_routers(app: FastAPI) -> RouteManager:
             prefix="/api/v1/core",
             tags=["Core API"],
             require_auth=True,
+            allow_overlap=True,  # Intentional overlap with /api/v1 base
         )
         logger.info("✅ Core API router registered")
     except ImportError as e:
@@ -473,6 +475,7 @@ def register_all_routers(app: FastAPI) -> RouteManager:
             prefix="/api/v1",
             tags=["Device Claiming"],
             require_auth=False,
+            allow_overlap=True,  # Base prefix, intentional overlap with sub-routers
         )
         logger.info("✅ Device claim router registered")
     except ImportError as e:
@@ -527,6 +530,7 @@ def register_all_routers(app: FastAPI) -> RouteManager:
             prefix="/api/v1/premium",
             tags=["Premium"],
             require_auth=True,
+            allow_overlap=True,  # Intentional overlap with /api/v1 base
         )
         logger.info("✅ Premium subscriptions router registered")
     except ImportError as e:
@@ -544,6 +548,7 @@ def register_all_routers(app: FastAPI) -> RouteManager:
             prefix="/api/v1/payments",
             tags=["payments"],
             require_auth=True,
+            allow_overlap=True,  # Intentional overlap with /api/v1 base
         )
         logger.info("✅ Payment system router registered")
     except ImportError as e:
@@ -558,7 +563,7 @@ def register_all_routers(app: FastAPI) -> RouteManager:
         route_manager.register_router(
             router=iraqi_payment_router,
             router_name="iraqi_payment_integration",
-            prefix="/api/v1/iraqi-payments",
+            prefix="/api/v1/payments/iraqi",  # Changed to be sub-path of payments
             tags=["iraqi-payments"],
             require_auth=True,
         )
