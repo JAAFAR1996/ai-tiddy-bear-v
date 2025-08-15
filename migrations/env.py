@@ -5,12 +5,15 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 
 # --- Production: Read DATABASE_URL from environment and inject into config ---
-db_url = os.getenv("DATABASE_URL")
+# Use MIGRATIONS_DATABASE_URL if available (sync driver), otherwise fallback to DATABASE_URL
+db_url = os.getenv("MIGRATIONS_DATABASE_URL") or os.getenv("DATABASE_URL")
 if not db_url:
     raise RuntimeError("DATABASE_URL not set in environment")
 
-# Convert postgresql:// to postgresql+psycopg2:// for Alembic compatibility
-if db_url.startswith("postgresql://"):
+# Convert to sync driver for migrations (asyncpg → psycopg2)
+if db_url.startswith("postgresql+asyncpg://"):
+    sync_db_url = db_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+elif db_url.startswith("postgresql://"):
     sync_db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
 elif db_url.startswith("postgres://"):
     sync_db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)

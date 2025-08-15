@@ -727,6 +727,15 @@ def include_api_routes():
         # Store route manager in app state for monitoring endpoints
         app.state.route_manager = route_manager
         logger.info("✅ All routers registered successfully using RouteManager")
+        
+        # Production assertion: Verify critical routes are registered
+        routes = {route.path for route in app.routes if hasattr(route, 'path')}
+        critical_routes = ["/api/v1/pair/claim", "/health", "/api/auth/login"]
+        missing_routes = [r for r in critical_routes if r not in routes]
+        if missing_routes:
+            logger.critical(f"❌ Critical routes missing: {missing_routes}")
+            raise RuntimeError(f"Server cannot start: Missing critical routes: {missing_routes}")
+        logger.info(f"✅ Critical routes verified: {critical_routes}")
 
         # Start auto healthcheck in production/staging
         env = os.environ.get("ENV", "production").lower()
@@ -744,11 +753,14 @@ def include_api_routes():
 
 
 def _fallback_router_registration():
-    """Fallback router registration method (original implementation)."""
-    logger.info("🔄 Using fallback router registration...")
-
+    """Fallback router registration method - DISABLED in production."""
     logger.critical(
-        "❌ Fallback router registration is DISABLED in production mode. All routers must be registered via RouteManager only."
+        "❌ Fallback router registration is DISABLED. Fix RouteManager errors."
+    )
+    # Production safety: Fail fast if critical routes are missing
+    raise RuntimeError(
+        "Cannot start server: RouteManager failed and fallback is disabled. "
+        "Check claim_api.py syntax and route registration."
     )
 
 
