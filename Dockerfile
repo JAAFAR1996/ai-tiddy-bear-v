@@ -24,7 +24,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     ENVIRONMENT=production \
     COPPA_COMPLIANCE_MODE=1 \
     CHILD_SAFETY_STRICT=1
- 
+
+# Install ffmpeg for audio processing (lightweight, required for pydub)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ffmpeg && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # non-root user
 RUN groupadd -r -g 1000 appuser && useradd -r -u 1000 -g appuser -s /bin/false -c "Application User" appuser

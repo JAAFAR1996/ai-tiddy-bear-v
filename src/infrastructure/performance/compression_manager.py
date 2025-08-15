@@ -15,7 +15,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from PIL import Image
-from pydub import AudioSegment
+
+# Import pydub for audio processing (ffmpeg installed in Docker)
+try:
+    from pydub import AudioSegment
+    AUDIO_PROCESSING_AVAILABLE = True
+except ImportError:
+    logger.warning("pydub not available - audio compression disabled")
+    AudioSegment = None
+    AUDIO_PROCESSING_AVAILABLE = False
 
 # Import shared audio format for base compatibility
 
@@ -370,6 +378,10 @@ class AudioOptimizer:
 
         original_size = get_file_size(str(input_path))
 
+        if not AUDIO_PROCESSING_AVAILABLE or AudioSegment is None:
+            logger.warning("Audio processing not available - skipping audio compression")
+            return None
+            
         try:
             # Load audio
             audio = AudioSegment.from_file(str(input_path))
