@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Depends, Request, Response, status, Body
+from fastapi import APIRouter, HTTPException, Depends, Request, Response, status
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, Field, validator
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -512,11 +512,11 @@ async def get_child_profile(child_id: str, db: AsyncSession) -> Optional[Dict[st
 
 @router.post("/claim", response_model=DeviceTokenResponse)
 async def claim_device(
-    claim_request: ClaimRequest = Body(...),  # Explicitly mark as body parameter
-    http_req: Request = None,            # FastAPI Request (optional)
-    response: Response = None,           # FastAPI Response (optional)
-    db: AsyncSession = DatabaseConnectionDep,  # Dependencies with defaults
-    config = ConfigDep
+    claim_request: ClaimRequest,                # يُعتبر Body تلقائياً
+    http_req: Request,                          # بدون قيمة افتراضية
+    response: Response,                         # بدون قيمة افتراضية
+    db: AsyncSession = DatabaseConnectionDep,   # Dependencies فقط هنا
+    config = ConfigDep,
 ):
     """
     ESP32 device claiming endpoint with comprehensive security

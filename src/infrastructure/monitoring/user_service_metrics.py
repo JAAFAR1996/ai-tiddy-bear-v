@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 from enum import Enum
 import uuid
+from fastapi import Request
 
 # Prometheus metrics
 from prometheus_client import (
@@ -639,7 +640,7 @@ class MetricsMiddleware:
     def __init__(self, metrics: UserServiceMetrics):
         self.metrics = metrics
 
-    async def __call__(self, request, call_next):
+    async def __call__(self, request: Request, call_next):
         """Process request with metrics collection."""
         operation = f"{request.method}_{request.url.path.replace('/', '_')}"
 
