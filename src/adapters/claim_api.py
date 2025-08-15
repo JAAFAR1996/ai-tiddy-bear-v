@@ -95,7 +95,7 @@ except ImportError:
         pass
 
 logger = get_logger(__name__, "claim_api")
-router = APIRouter(tags=["Device Claiming"])
+router = APIRouter(prefix="/pair", tags=["Device Claiming"])
 security = HTTPBearer()
 # No module-level instantiation - use dependency injection
 # device_manager removed to avoid import-time config access
@@ -510,7 +510,7 @@ async def get_child_profile(child_id: str, db: AsyncSession) -> Optional[Dict[st
 
 # API Endpoints
 
-@router.post("/pair/claim", response_model=DeviceTokenResponse)
+@router.post("/claim", response_model=DeviceTokenResponse)
 async def claim_device(
     claim_request: ClaimRequest = Body(..., embed=False),
     http_req: Request,
