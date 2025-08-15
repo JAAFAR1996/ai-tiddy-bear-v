@@ -9,7 +9,7 @@ and proper dependency inversion.
 """
 
 from typing import TypeVar, Type, TYPE_CHECKING
-from fastapi import Depends
+from fastapi import Depends, Request
 
 # Import the injector instance
 from src.infrastructure.container import get_injector
@@ -146,9 +146,9 @@ MessageRepositoryDep = Depends(get_message_repository)
 
 # ========================= PRODUCTION CONFIG & AUTH DEPENDENCIES =========================
 
-def get_config_from_state(request) -> "ProductionConfig":
+def get_config_from_state(request: Request) -> "ProductionConfig":
     """Get configuration from app.state (production-grade)"""
-    from fastapi import Request, HTTPException
+    from fastapi import HTTPException
     import logging, os
     
     # DIAGNOSTIC LOG
@@ -172,7 +172,7 @@ def get_config_from_state(request) -> "ProductionConfig":
         )
     return config
 
-def get_token_manager_from_state(request) -> "TokenManager":
+def get_token_manager_from_state(request: Request) -> "TokenManager":
     """Get TokenManager from app.state (production-grade)"""
     from fastapi import Request, HTTPException
     token_manager = getattr(request.app.state, "token_manager", None)
@@ -180,7 +180,7 @@ def get_token_manager_from_state(request) -> "TokenManager":
         raise HTTPException(status_code=503, detail="Token manager not ready")
     return token_manager
 
-def get_security_service_from_state(request) -> "SecurityService":
+def get_security_service_from_state(request: Request) -> "SecurityService":
     """Get SecurityService from app.state (production-grade)"""
     from fastapi import Request, HTTPException
     security_service = getattr(request.app.state, "security_service", None)
@@ -188,7 +188,7 @@ def get_security_service_from_state(request) -> "SecurityService":
         raise HTTPException(status_code=503, detail="Security service not ready")
     return security_service
 
-def get_advanced_jwt_from_state(request) -> "AdvancedJWTManager":
+def get_advanced_jwt_from_state(request: Request) -> "AdvancedJWTManager":
     """Get AdvancedJWTManager from app.state (production-grade)"""
     from fastapi import Request, HTTPException
     advanced_jwt = getattr(request.app.state, "advanced_jwt", None)
@@ -196,7 +196,7 @@ def get_advanced_jwt_from_state(request) -> "AdvancedJWTManager":
         raise HTTPException(status_code=503, detail="Advanced JWT manager not ready")
     return advanced_jwt
 
-def get_db_adapter_from_state(request) -> "ProductionDatabaseAdapter":
+def get_db_adapter_from_state(request: Request) -> "ProductionDatabaseAdapter":
     """Get ProductionDatabaseAdapter from app.state (production-grade)"""
     from fastapi import Request, HTTPException
     db_adapter = getattr(request.app.state, "db_adapter", None)
@@ -204,7 +204,7 @@ def get_db_adapter_from_state(request) -> "ProductionDatabaseAdapter":
         raise HTTPException(status_code=503, detail="Database adapter not ready")
     return db_adapter
 
-def get_payment_system_from_state(request) -> "PaymentSystemIntegration":
+def get_payment_system_from_state(request: Request) -> "PaymentSystemIntegration":
     """Get PaymentSystemIntegration from app.state (production-grade)"""
     from fastapi import Request, HTTPException
     payment_system = getattr(request.app.state, "payment_system", None)
@@ -237,9 +237,9 @@ def get_admin_security_manager_from_state(app) -> "AdminSecurityManager":
 
 # ========================= DATABASE DEPENDENCY (PRODUCTION-GRADE) =========================
 
-async def get_database_connection_from_state(request):
+async def get_database_connection_from_state(request: Request):
     """Get database connection using config from app.state (production-grade)"""
-    from fastapi import Request, HTTPException
+    from fastapi import HTTPException
     
     # Get db_adapter from app.state (set during startup)
     db_adapter = getattr(request.app.state, "db_adapter", None)
@@ -259,7 +259,7 @@ DatabaseConnectionDep = Depends(get_database_connection_from_state)
 
 # ========================= ENTERPRISE DATABASE & TRANSACTION DEPENDENCIES =========================
 
-async def get_enterprise_db_manager_from_state(request):
+async def get_enterprise_db_manager_from_state(request: Request):
     """Get enterprise database manager from app.state (production-grade)"""
     from fastapi import Request, HTTPException
     
@@ -272,7 +272,7 @@ async def get_enterprise_db_manager_from_state(request):
         )
     return ent_db
 
-async def get_transaction_manager_from_state(request):
+async def get_transaction_manager_from_state(request: Request):
     """Get transaction manager from app.state (production-grade)"""
     from fastapi import Request, HTTPException
     
