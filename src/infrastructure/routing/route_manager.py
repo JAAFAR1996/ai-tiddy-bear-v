@@ -435,6 +435,21 @@ def register_all_routers(app: FastAPI) -> RouteManager:
             f"ESP32 public router is required but not found: {e}",
             context={"config_key": "ESP32_PUBLIC_ROUTER", "router_name": "esp32_public"}
         )
+    
+    # 4b2. Device Claim Router - ESP32 device authentication
+    try:
+        from src.adapters.claim_api import router as claim_router
+
+        route_manager.register_router(
+            router=claim_router,
+            router_name="device_claim",
+            prefix="/api/v1",
+            tags=["Device Claiming"],
+            require_auth=False,
+        )
+        logger.info("✅ Device claim router registered")
+    except ImportError as e:
+        logger.warning(f"⚠️ Device claim router not available: {e}")
 
     # 4c. ESP32 WebSocket Router - Production WebSocket endpoints
     try:
