@@ -1256,6 +1256,16 @@ class ProductionDatabaseAdapter(IDatabaseAdapter):
             raise ValueError("ProductionDatabaseAdapter requires config parameter - no global access in production")
         
         self._initialized = False
+    
+    @property
+    def engine(self):
+        """Expose async engine for compatibility."""
+        return self.connection_manager.async_engine if self.connection_manager else None
+    
+    @property
+    def async_sessionmaker(self):
+        """Expose async sessionmaker for compatibility."""
+        return self.connection_manager.async_session_factory if self.connection_manager else None
 
     async def initialize(self):
         """Initialize database connections."""
@@ -1272,6 +1282,18 @@ class ProductionDatabaseAdapter(IDatabaseAdapter):
 
         logger.info("Database tables created successfully")
 
+    async def get_async_session(self):
+        """Get async session for database operations.
+        
+        Standard interface for getting database sessions.
+        Delegates to the connection manager's session factory.
+        
+        Yields:
+            AsyncSession: Database session for async operations
+        """
+        async with self.connection_manager.get_async_session() as session:
+            yield session
+    
     async def health_check(self) -> bool:
         """Check database health."""
         return await self.connection_manager.health_check()
