@@ -465,21 +465,22 @@ def register_all_routers(app: FastAPI) -> RouteManager:
             context={"config_key": "ESP32_PUBLIC_ROUTER", "router_name": "esp32_public"}
         )
     
-    # 4b2. Device Claim Router - ESP32 device authentication
+    # 4b2. Device Claim Router - WITH AUTO-REGISTRATION
     try:
         from src.adapters.claim_api import router as claim_router
+        logger.info("✅ Using claim router with AUTO-REGISTRATION enabled for production")
 
         route_manager.register_router(
             router=claim_router,
             router_name="device_claim",
-            prefix="/api/v1",
+            prefix="/api/v1",  # Base prefix (claim endpoint is at /api/v1/pair/claim)
             tags=["Device Claiming"],
-            require_auth=False,
-            allow_overlap=True,  # Base prefix, intentional overlap with sub-routers
+            require_auth=False,  # Uses HMAC authentication
+            allow_overlap=True,  # Allow overlap with other v1 endpoints
         )
-        logger.info("✅ Device claim router registered")
+        logger.info("✅ Device claim router registered with auto-registration")
     except ImportError as e:
-        logger.warning(f"⚠️ Device claim router not available: {e}")
+        logger.critical(f"❌ Device claim router not available: {e}")
 
     # 4c. ESP32 WebSocket Router - Production WebSocket endpoints
     try:
