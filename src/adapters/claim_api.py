@@ -512,9 +512,9 @@ async def get_child_profile(child_id: str, db: AsyncSession) -> Optional[Dict[st
 
 @router.post("/pair/claim", response_model=DeviceTokenResponse)
 async def claim_device(
-    request: Request,
+    claim_request: ClaimRequest = Body(..., embed=False),
+    http_req: Request,
     response: Response,
-    claim_request: ClaimRequest = Body(...),
     db: AsyncSession = DatabaseConnectionDep,
     config = ConfigDep
 ):
@@ -543,7 +543,7 @@ async def claim_device(
         HTTPException: Various error conditions (401, 403, 404, 409, 503)
     """
     correlation_id = str(uuid4())
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = http_req.client.host if http_req.client else "unknown"
     
     try:
         logger.info(
@@ -675,7 +675,7 @@ async def claim_device(
 @router.post("/token/refresh", response_model=RefreshResponse)
 async def refresh_device_token(
     refresh_request: RefreshRequest,
-    request: Request,
+    http_req: Request,
     response: Response,
     token_manager: SimpleTokenManager = Depends(get_token_manager)
 ):
@@ -684,14 +684,14 @@ async def refresh_device_token(
     
     Args:
         refresh_request: Refresh token request
-        request: FastAPI request object
+        http_req: FastAPI request object
         response: FastAPI response object
         
     Returns:
         RefreshResponse: New access token
     """
     correlation_id = str(uuid4())
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = http_req.client.host if http_req.client else "unknown"
     
     try:
         logger.debug(f"Device token refresh attempt - IP: {client_ip}, ID: {correlation_id}")
