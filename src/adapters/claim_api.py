@@ -512,10 +512,10 @@ async def get_child_profile(child_id: str, db: AsyncSession) -> Optional[Dict[st
 
 @router.post("/claim", response_model=DeviceTokenResponse)
 async def claim_device(
-    http_req: Request,
-    response: Response,
-    claim_request: ClaimRequest = Body(..., embed=False),
-    db: AsyncSession = DatabaseConnectionDep,
+    claim_request: ClaimRequest,  # Body parameter first (no default)
+    http_req: Request,            # FastAPI Request
+    response: Response,           # FastAPI Response
+    db: AsyncSession = DatabaseConnectionDep,  # Dependencies with defaults
     config = ConfigDep
 ):
     """
