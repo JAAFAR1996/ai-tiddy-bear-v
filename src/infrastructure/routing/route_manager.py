@@ -49,6 +49,7 @@ class RouteManager:
         prefix: Optional[
             str
         ] = None,  # Kept for backward compatibility, but not required
+        allow_overlap: bool = False,  # Allow intentional prefix overlaps (e.g., /api/v1/esp32 and /api/v1/esp32/private)
     ) -> None:
         """
         Register a router with comprehensive conflict detection and unified security.
@@ -61,9 +62,12 @@ class RouteManager:
             dependencies: FastAPI dependencies
             require_auth: Whether to require authentication for all routes
             skip_conflict_check: Skip conflict checking (use with caution)
+            allow_overlap: Allow intentional prefix overlaps (e.g., /api/v1/esp32 and /api/v1/esp32/private)
+                          When True, overlapping prefixes will only generate warnings instead of errors.
+                          Use this when you intentionally want more specific routes to be registered before general ones.
 
         Raises:
-            RouteConflictError: If route conflicts are detected
+            RouteConflictError: If route conflicts are detected (unless allow_overlap=True for prefix overlaps)
             ValueError: If router parameters are invalid
         """
 
@@ -160,7 +164,7 @@ class RouteManager:
 
         # Pre-registration conflict check
         if not skip_conflict_check:
-            self._check_prefix_conflicts(prefix, router_name)
+            self._check_prefix_conflicts(prefix, router_name, allow_overlap)
             self._check_route_conflicts(router, router_name, normalized_prefix)
 
         # Add unified authentication if required
@@ -223,12 +227,18 @@ class RouteManager:
                 f"Failed to register router '{router_name}': {str(e)}"
             ) from e
 
-    def _check_prefix_conflicts(self, prefix: Optional[str], router_name: str) -> None:
-        """Check for prefix conflicts with detailed analysis."""
+    def _check_prefix_conflicts(self, prefix: Optional[str], router_name: str, allow_overlap: bool = False) -> None:
+        """Check for prefix conflicts with detailed analysis.
+        
+        Args:
+            prefix: The prefix to check
+            router_name: Name of the router being registered
+            allow_overlap: If True, overlapping prefixes generate warnings instead of errors
+        """
         if not prefix:
             return
 
-        # Direct prefix conflict
+        # Direct prefix conflict - always an error
         if prefix in self.registered_prefixes:
             raise RouteConflictError(
                 f"Prefix '{prefix}' already registered. "
@@ -238,9 +248,19 @@ class RouteManager:
         # Check for overlapping prefixes
         for existing_prefix in self.registered_prefixes:
             if self._prefixes_overlap(prefix, existing_prefix):
-                logger.warning(
-                    f"⚠️ Potential prefix overlap detected: '{prefix}' vs '{existing_prefix}'"
+                overlap_msg = (
+                    f"Prefix overlap detected: '{prefix}' overlaps with '{existing_prefix}'. "
+                    f"Router '{router_name}' may intercept requests intended for other routers."
                 )
+                
+                if allow_overlap:
+                    # When overlap is intentional (e.g., ESP32 routes), just warn
+                    logger.warning(f"⚠️ [Intentional Overlap] {overlap_msg}")
+                    logger.info(f"   ℹ️ This overlap is allowed (allow_overlap=True). Ensure more specific routes are registered first.")
+                else:
+                    # For unintentional overlaps, log warning but don't fail
+                    logger.warning(f"⚠️ [Potential Issue] {overlap_msg}")
+                    logger.warning(f"   💡 Tip: If this overlap is intentional, use allow_overlap=True when registering the router.")
 
     def _prefixes_overlap(self, prefix1: str, prefix2: str) -> bool:
         """Check if two prefixes have problematic overlap."""
@@ -396,7 +416,10 @@ def register_all_routers(app: FastAPI) -> RouteManager:
             context={"config_key": "CORE_API_ROUTER", "router_name": "core_api"}
         )
 
-    # 4a. ESP32 Private Router - Authentication required (register first to avoid prefix overlap)
+    # 4a. ESP32 Private Router - Authentication required 
+    # IMPORTANT: Register MORE SPECIFIC routes first to ensure proper routing precedence
+    # The /api/v1/esp32/private prefix is intentionally more specific than /api/v1/esp32
+    # This ensures authenticated routes are matched before public routes
     try:
         from src.adapters.esp32_router import esp32_private
 
@@ -407,7 +430,7 @@ def register_all_routers(app: FastAPI) -> RouteManager:
             tags=["ESP32-Private"],
             require_auth=True,
         )
-        logger.info("✅ ESP32 private router registered")
+        logger.info("✅ ESP32 private router registered (specific routes first)")
     except ImportError as e:
         logger.critical(f"❌ Failed to load ESP32 private router: {e}")
         from src.core.exceptions import ConfigurationError
@@ -416,7 +439,10 @@ def register_all_routers(app: FastAPI) -> RouteManager:
             context={"config_key": "ESP32_PRIVATE_ROUTER", "router_name": "esp32_private"}
         )
 
-    # 4b. ESP32 Public Router - No authentication required (register after private)
+    # 4b. ESP32 Public Router - No authentication required
+    # IMPORTANT: Register GENERAL routes after specific ones
+    # The /api/v1/esp32 prefix is intentionally less specific
+    # This ensures it acts as a catch-all for non-private ESP32 routes
     try:
         from src.adapters.esp32_router import esp32_public
 
@@ -426,8 +452,9 @@ def register_all_routers(app: FastAPI) -> RouteManager:
             prefix="/api/v1/esp32",
             tags=["ESP32-Public"],
             require_auth=False,
+            allow_overlap=True,  # Intentional overlap with /api/v1/esp32/private
         )
-        logger.info("✅ ESP32 public router registered")
+        logger.info("✅ ESP32 public router registered (general routes second, overlap allowed)")
     except ImportError as e:
         logger.critical(f"❌ Failed to load ESP32 public router: {e}")
         from src.core.exceptions import ConfigurationError

@@ -13,6 +13,7 @@ from pathlib import Path
 import hashlib
 from dataclasses import dataclass, asdict
 from enum import Enum
+from fastapi import Request
 
 from ..logging.production_logger import AuditLogger
 
@@ -461,7 +462,7 @@ class COPPAAuditLogger:
             print(f"[Audit Alert] Failed to schedule admin alert: {e}")
 
 
-def get_user_context_from_request(request) -> Dict[str, Any]:
+def get_user_context_from_request(request: Request) -> Dict[str, Any]:
     """Extract user context from request for audit logging."""
 
     context = {
