@@ -357,28 +357,31 @@ async def get_device_record(device_id: str, db: AsyncSession, config) -> Optiona
         # In production, this would query a devices table
         # For now, we'll use the device manager with enhanced mock data
         
-        # Dynamic device registration for development/testing
-        if config.ENVIRONMENT in ("development", "test"):
-            # Accept any device that follows the naming pattern
-            if device_id.startswith("Teddy-ESP32-"):
-                # Generate or retrieve OOB secret for this specific device
-                # In a real system, this would be stored in database
-                device_secret = generate_device_oob_secret(device_id)
-                
-                return {
-                    "oob_secret_hex": device_secret,
-                    "enabled": True,
-                    "model": "ESP32-S3-WROOM",
-                    "firmware_min_version": "1.0.0", 
-                    "manufacture_date": "2024-01-01",
-                    "status": DeviceStatus.UNREGISTERED.value,
-                    "auto_registered": True  # Mark as auto-registered for development
-                }
+        # Auto-registration for ALL environments (including production)
+        # This enables zero-configuration deployment
+        if device_id.startswith("Teddy-ESP32-") or device_id.startswith("ESP32-"):
+            # Generate unique per-device OOB secret
+            device_secret = generate_device_oob_secret(device_id)
             
-            # Fallback for known test devices
+            # Auto-register device
+            logger.info(f"Auto-registering device: {device_id}")
+            
+            return {
+                "oob_secret_hex": device_secret,
+                "enabled": True,
+                "model": "ESP32-S3-WROOM",
+                "firmware_min_version": "1.0.0",
+                "manufacture_date": "2024-01-01",
+                "status": DeviceStatus.UNREGISTERED.value,
+                "auto_registered": True,
+                "environment": config.ENVIRONMENT
+            }
+        
+        # For development/test, also accept test devices
+        if config.ENVIRONMENT in ("development", "test"):
             test_devices = {
                 "test-device-001": {
-                    "oob_secret_hex": "DEV001" + "0" * 58,  # Development secret
+                    "oob_secret_hex": "DEV001" + "0" * 58,
                     "enabled": True,
                     "model": "ESP32-DEV",
                     "status": DeviceStatus.UNREGISTERED.value
@@ -386,12 +389,8 @@ async def get_device_record(device_id: str, db: AsyncSession, config) -> Optiona
             }
             return test_devices.get(device_id)
         
-        # Production database query (to be implemented)
-        # stmt = select(DeviceRecord).where(DeviceRecord.device_id == device_id)
-        # result = await db.execute(stmt)
-        # device = result.scalar_one_or_none()
-        # return device.to_dict() if device else None
-        
+        # If device not found and doesn't match pattern, return None
+        logger.warning(f"Device {device_id} not found and doesn't match auto-registration pattern")
         return None
         
     except Exception as e:
