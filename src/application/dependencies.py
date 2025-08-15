@@ -250,9 +250,9 @@ async def get_database_connection_from_state(request):
             headers={"Retry-After": "5"}
         )
     
-    # Use the production database adapter's connection method
-    async with db_adapter.get_connection() as conn:
-        yield conn
+    # Use the production database adapter's async session method
+    async for session in db_adapter.get_async_session():
+        yield session
 
 # FastAPI dependency annotation
 DatabaseConnectionDep = Depends(get_database_connection_from_state)
