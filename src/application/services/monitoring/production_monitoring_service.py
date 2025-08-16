@@ -15,8 +15,8 @@ from dataclasses import dataclass
 from enum import Enum
 import uuid
 
-from src.application.services.notification.notification_service import (
-    get_notification_service,
+from src.application.services.notification.notification_service_main import (
+    ProductionNotificationService,
 )
 
 # get_config import removed; config must be passed explicitly
@@ -111,10 +111,6 @@ class ProductionMonitoringService:
         self._alert_handlers = []
         self._initialize_service()
 
-
-# Explicit factory
-def create_production_monitoring_service(config) -> ProductionMonitoringService:
-    return ProductionMonitoringService(config)
 
     def _initialize_service(self):
         """Initialize the monitoring service."""
@@ -799,6 +795,23 @@ def create_production_monitoring_service(config) -> ProductionMonitoringService:
 
         return alert_id
 
+    async def create_alert(
+        self,
+        alert_type: str,
+        level: MonitoringLevel,
+        title: str,
+        message: str,
+        details: Dict[str, Any] = None,
+    ) -> str:
+        """Public interface to create monitoring alert."""
+        return await self._create_alert(
+            alert_type=alert_type,
+            level=level,
+            title=title,
+            message=message,
+            details=details or {}
+        )
+
     async def _resolve_alerts_by_type(self, alert_type: str) -> None:
         """Resolve all alerts of specific type."""
         for alert in self._alerts.values():
@@ -872,5 +885,11 @@ async def get_monitoring_service() -> ProductionMonitoringService:
     """Get singleton monitoring service instance."""
     global _monitoring_service_instance
     if _monitoring_service_instance is None:
-        _monitoring_service_instance = ProductionMonitoringService()
+        # Pass a default config if none provided
+        _monitoring_service_instance = ProductionMonitoringService(config={})
     return _monitoring_service_instance
+
+# Explicit factory
+def create_production_monitoring_service(config) -> ProductionMonitoringService:
+    """Create a new monitoring service instance with configuration."""
+    return ProductionMonitoringService(config)
