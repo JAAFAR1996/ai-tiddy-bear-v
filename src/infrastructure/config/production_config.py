@@ -386,6 +386,25 @@ class ProductionConfig(BaseSettings):
             "content_filtering": self.CONTENT_FILTER_STRICT,
         }
 
+    # ===========================================
+    # FEATURE FLAGS (with safe production defaults)
+    # ===========================================
+    ENABLE_IDEMPOTENCY: bool = Field(
+        False, description="Enable idempotent request handling"
+    )
+    DISABLE_IDEMPOTENCY_ON_REDIS_FAILURE: bool = Field(
+        True, description="Continue operation if Redis fails"
+    )
+    ENABLE_AUTO_REGISTER: bool = Field(
+        False, description="Auto-register unknown ESP32 devices"
+    )
+    FAIL_OPEN_ON_REDIS_ERROR: bool = Field(
+        False, description="Fail open (allow) or closed (deny) on Redis errors"
+    )
+    NORMALIZE_IDS_IN_HMAC: bool = Field(
+        False, description="Normalize device/child IDs before HMAC verification"
+    )
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

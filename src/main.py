@@ -396,12 +396,8 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Feature flags applied to configuration")
     except Exception as e:
         logger.warning(f"Failed to apply feature flags: {e}")
-        # Set defaults if feature flags fail
-        config.ENABLE_IDEMPOTENCY = False
-        config.DISABLE_IDEMPOTENCY_ON_REDIS_FAILURE = True
-        config.ENABLE_AUTO_REGISTER = False
-        config.FAIL_OPEN_ON_REDIS_ERROR = False
-        config.NORMALIZE_IDS_IN_HMAC = False
+        # Don't set attributes on Pydantic Model that don't exist.
+        # Code relies on getattr(config, "<FLAG>", default) safely.
     
     logger.info("✅ Configuration verified in app.state")
     logger.info("🔧 Config ready - ESP32 pairing endpoint available")

@@ -49,7 +49,12 @@ def apply_feature_flags_to_config(config: Any) -> Any:
     flags = get_feature_flags()
     
     for key, value in flags.items():
-        setattr(config, key, value)
+        if hasattr(config, key):
+            setattr(config, key, value)
+        else:
+            # Skip attributes that don't exist in the config model
+            # This prevents AttributeError on Pydantic models
+            pass
     
     # Log configuration (without exposing sensitive data)
     import logging
@@ -58,11 +63,11 @@ def apply_feature_flags_to_config(config: Any) -> Any:
     logger.info(
         "Feature flags configured",
         extra={
-            "ENABLE_IDEMPOTENCY": config.ENABLE_IDEMPOTENCY,
-            "DISABLE_IDEMPOTENCY_ON_REDIS_FAILURE": config.DISABLE_IDEMPOTENCY_ON_REDIS_FAILURE,
-            "ENABLE_AUTO_REGISTER": config.ENABLE_AUTO_REGISTER,
-            "FAIL_OPEN_ON_REDIS_ERROR": config.FAIL_OPEN_ON_REDIS_ERROR,
-            "NORMALIZE_IDS_IN_HMAC": config.NORMALIZE_IDS_IN_HMAC,
+            "ENABLE_IDEMPOTENCY": getattr(config, "ENABLE_IDEMPOTENCY", False),
+            "DISABLE_IDEMPOTENCY_ON_REDIS_FAILURE": getattr(config, "DISABLE_IDEMPOTENCY_ON_REDIS_FAILURE", True),
+            "ENABLE_AUTO_REGISTER": getattr(config, "ENABLE_AUTO_REGISTER", False),
+            "FAIL_OPEN_ON_REDIS_ERROR": getattr(config, "FAIL_OPEN_ON_REDIS_ERROR", False),
+            "NORMALIZE_IDS_IN_HMAC": getattr(config, "NORMALIZE_IDS_IN_HMAC", False),
             "environment": getattr(config, "ENVIRONMENT", "unknown")
         }
     )
