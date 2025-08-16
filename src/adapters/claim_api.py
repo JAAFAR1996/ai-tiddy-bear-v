@@ -27,7 +27,7 @@ from fastapi import APIRouter, HTTPException, Depends, Request, Response, status
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, Field, validator
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, func, cast, String
 from sqlalchemy.orm import selectinload
 
 # Core infrastructure imports  
@@ -301,8 +301,8 @@ async def verify_nonce_once(nonce: str, redis_url: str, device_id: str = None, c
             # Fallback to global nonce (less secure)
             nonce_key = f"device_nonce:{nonce}"
         
-        # Atomic check-and-set with expiration
-        is_new = await redis_client.set(nonce_key, "used", ex=900, nx=True)  # 15 min expiry
+        # Atomic check-and-set with expiration (aligned with idempotency cache)
+        is_new = await redis_client.set(nonce_key, "used", ex=300, nx=True)  # 5 min expiry (same as idempotency)
         
         if not is_new:
             logger.warning("Nonce replay attack detected", 
@@ -668,19 +668,38 @@ async def get_child_profile(child_id: str, db: AsyncSession) -> Optional[Dict[st
     Get child profile data for device configuration
     
     Args:
-        child_id: Child identifier
+        child_id: Child identifier (UUID string or hashed_identifier)
         db: Database session
         
     Returns:
         Dict with child profile or None if not found
     """
     try:
-        # Query child from database
+        import uuid
+        from datetime import datetime
+        
+        # Try UUID first, then hashed_identifier
+        id_conditions = []
+        
+        # 1. Try as UUID
+        try:
+            child_uuid = uuid.UUID(child_id)
+            id_conditions.append(Child.id == child_uuid)
+        except (ValueError, AttributeError):
+            pass
+        
+        # 2. Try as hashed_identifier (case-insensitive)
+        id_conditions.append(
+            func.lower(Child.hashed_identifier) == child_id.lower()
+        )
+        
+        # Query with both conditions (OR)
         stmt = select(Child).where(
             and_(
-                Child.id == child_id,
+                or_(*id_conditions),
                 Child.is_deleted == False,
-                Child.is_active == True
+                Child.is_active == True,  # Now exists!
+                Child.parental_consent == True  # COPPA requirement
             )
         ).options(selectinload(Child.parent))
         
@@ -688,21 +707,23 @@ async def get_child_profile(child_id: str, db: AsyncSession) -> Optional[Dict[st
         child = result.scalar_one_or_none()
         
         if not child:
+            logger.debug(f"Child not found with id: {mask_sensitive(child_id)}")
             return None
-            
-        # Return sanitized child profile for device
+        
+        # Return profile with existing fields only
         return {
             "id": str(child.id),
-            "name": child.display_name or child.name,
-            "age": child.age,
-            "language": child.language_preference or "en",
-            "voice_settings": child.voice_settings or {},
-            "safety_settings": child.safety_settings or {},
+            "name": child.name,
+            "age": child.age,  # Use actual age field from table
+            "language": "en",  # Default - field doesn't exist
+            "voice_settings": {},  # Default - field doesn't exist
+            "safety_settings": child.safety_settings,  # Use actual JSON field
             "parent_id": str(child.parent_id) if child.parent_id else None
         }
         
     except Exception as e:
-        logger.error("Error retrieving child profile", extra={"child_id": child_id, "error": str(e)})
+        logger.error("Error retrieving child profile", 
+                    extra={"child_id": mask_sensitive(child_id), "error": str(e)})
         return None
 
 
