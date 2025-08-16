@@ -75,3 +75,66 @@ class SafetyControls:
         except Exception as e:
             logger.error(f"Failed to update {setting} for child {child_id}: {e}")
             raise SafetyControlsError(f"Failed to update setting: {str(e)}")
+
+    async def create_safety_alert(self, alert_data: dict) -> dict:
+        """Create a safety alert for administrators and parents."""
+        try:
+            # Validate required alert data fields
+            required_fields = ["alert_id", "alert_type", "priority", "message"]
+            missing_fields = [field for field in required_fields if field not in alert_data]
+            if missing_fields:
+                raise SafetyControlsError(f"Missing required alert fields: {missing_fields}")
+            
+            # Validate alert_id is a UUID
+            alert_id = alert_data.get("alert_id", "")
+            if alert_id:
+                self._validate_uuid(alert_id, "alert_id")
+            
+            # Validate incident_id if provided
+            incident_id = alert_data.get("incident_id")
+            if incident_id:
+                self._validate_uuid(incident_id, "incident_id")
+            
+            # Validate priority level
+            valid_priorities = ["low", "medium", "high", "urgent", "critical", "emergency"]
+            priority = alert_data.get("priority", "").lower()
+            if priority not in valid_priorities:
+                raise SafetyControlsError(f"Invalid priority level: {priority}. Must be one of {valid_priorities}")
+            
+            # Validate alert type
+            valid_alert_types = [
+                "content_violation", "inappropriate_interaction", "safety_concern",
+                "human_review_required", "emergency_escalation", "coppa_violation"
+            ]
+            alert_type = alert_data.get("alert_type", "")
+            if alert_type not in valid_alert_types:
+                raise SafetyControlsError(f"Invalid alert type: {alert_type}. Must be one of {valid_alert_types}")
+            
+            # Log the alert creation
+            logger.info(f"Creating safety alert: {alert_id} - {alert_type} - {priority}")
+            
+            # Create alert through safety service
+            alert_result = await self.safety_service.create_safety_alert({
+                "alert_id": alert_id,
+                "incident_id": incident_id,
+                "alert_type": alert_type,
+                "priority": priority,
+                "message": alert_data.get("message", ""),
+                "severity_level": alert_data.get("severity_level", priority),
+                "child_id": alert_data.get("child_id"),
+                "timestamp": alert_data.get("timestamp"),
+                "additional_data": alert_data.get("additional_data", {}),
+                "requires_immediate_action": priority in ["urgent", "critical", "emergency"],
+                "requires_parent_notification": True,
+                "requires_admin_notification": priority in ["urgent", "critical", "emergency"],
+            })
+            
+            logger.info(f"Safety alert {alert_id} created successfully")
+            return alert_result
+            
+        except SafetyControlsError:
+            # Re-raise SafetyControlsError as-is
+            raise
+        except Exception as e:
+            logger.error(f"Failed to create safety alert {alert_data.get('alert_id', 'unknown')}: {e}")
+            raise SafetyControlsError(f"Failed to create safety alert: {str(e)}")

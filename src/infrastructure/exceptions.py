@@ -1,4 +1,16 @@
 from src.core.exceptions import *  # re-export كل شيء من المصدر الموحّد
+from src.core.repositories import DatabaseConnectionError  # Import missing exception
+
+# Additional database exceptions
+class DatabaseTimeoutError(DatabaseError):
+    """Database operation timed out."""
+    error_code = "database_timeout"
+    status_code = 504
+
+class ThrottlingError(RateLimitExceeded):
+    """Request was throttled due to rate limits."""
+    error_code = "throttling_error"
+    status_code = 429
 
 # ✅ Alias خلفي للحفاظ على التوافق مع الكود القديم
 AIServiceError = (

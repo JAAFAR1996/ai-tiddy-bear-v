@@ -7,6 +7,8 @@ Provides comprehensive child safety monitoring and content filtering.
 import re
 import logging
 import hashlib
+from enum import Enum
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 from uuid import UUID, uuid4
@@ -35,6 +37,51 @@ from src.infrastructure.database.models import (
 from src.infrastructure.logging import get_logger, security_logger
 
 logger = logging.getLogger(__name__)
+
+
+class ViolationType(Enum):
+    """Types of content violations."""
+    INAPPROPRIATE_LANGUAGE = "inappropriate_language"
+    PERSONAL_INFO_REQUEST = "personal_info_request"
+    VIOLENCE = "violence"
+    ADULT_CONTENT = "adult_content"
+    HARMFUL_CONTENT = "harmful_content"
+    BULLYING = "bullying"
+    SCARY_CONTENT = "scary_content"
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class ValidationResult:
+    """Result of content validation."""
+    is_safe: bool
+    risk_level: str = "unknown"
+    violations: List[ViolationType] = None
+    reasons: List[str] = None
+    confidence: float = 0.0
+    # Additional properties for backward compatibility
+    is_valid: bool = None
+    confidence_score: float = None
+    violation_type: ViolationType = None
+    blocked_words: List[str] = None
+    reason: str = None
+    
+    def __post_init__(self):
+        if self.violations is None:
+            self.violations = []
+        if self.reasons is None:
+            self.reasons = []
+        if self.blocked_words is None:
+            self.blocked_words = []
+        # Set compatibility properties
+        if self.is_valid is None:
+            self.is_valid = self.is_safe
+        if self.confidence_score is None:
+            self.confidence_score = self.confidence
+        if self.reason is None and self.reasons:
+            self.reason = "; ".join(self.reasons)
+        if self.violation_type is None and self.violations:
+            self.violation_type = self.violations[0]
 
 
 def get_database_manager():
@@ -71,6 +118,13 @@ class ChildSafetyService(IChildSafetyService):
         self.emergency_alert_threshold = getattr(
             config, "emergency_alert_threshold", 0.9
         )
+        
+        # Initialize forbidden words list
+        self.forbidden_words = {
+            "inappropriate": ["bad", "stupid", "hate", "kill", "hurt", "fight"],
+            "personal_info": ["password", "address", "phone", "email", "home", "school"],
+            "adult_content": ["adult", "mature", "inappropriate"],
+        }
 
         # Cache for recent safety checks (performance optimization)
         self._safety_cache = {}

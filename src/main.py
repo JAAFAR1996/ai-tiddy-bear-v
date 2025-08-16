@@ -127,12 +127,7 @@ try:
     from src.api.openapi_config import custom_openapi_schema
 except Exception:
     custom_openapi_schema = None
-try:
-    from src.adapters.database_production import initialize_production_database
-except Exception:
-
-    async def initialize_production_database(config=None):
-        return None
+# initialize_production_database already imported above
 
 
 # UNIFIED CONFIGURATION SYSTEM
@@ -335,7 +330,7 @@ async def rate_limit_dependency(request: Request, rate: str = "30/minute"):
         # Re-raise HTTP exceptions (rate limit exceeded)
         raise
     except Exception as e:
-        logger.error(f"Rate limiting error: {e}")
+        logger.error("Rate limiting error", extra={"error": str(e)})
         # In case of error, allow request but log the issue
         return True
 
@@ -364,7 +359,7 @@ config = None  # متغير عالمي للتهيئة الآمنة
 
 # --- rate limiting factory (robust import) ---
 try:
-    from src.infrastructure.rate_limiting.service import create_rate_limiting_service
+    from src.infrastructure.rate_limiting.rate_limiter import create_rate_limiting_service
 except Exception:
 
     class _NoopRateLimiter:
@@ -393,6 +388,21 @@ async def lifespan(app: FastAPI):
         logger.critical("🚨 CRITICAL: Config not found in app.state")
         raise RuntimeError("Config not found in app.state")
     
+    # Apply feature flags to config at startup
+    try:
+        from src.infrastructure.config.feature_flags import apply_feature_flags_to_config
+        config = apply_feature_flags_to_config(config)
+        app.state.config = config  # Update app.state with flagged config
+        logger.info("✅ Feature flags applied to configuration")
+    except Exception as e:
+        logger.warning(f"Failed to apply feature flags: {e}")
+        # Set defaults if feature flags fail
+        config.ENABLE_IDEMPOTENCY = False
+        config.DISABLE_IDEMPOTENCY_ON_REDIS_FAILURE = True
+        config.ENABLE_AUTO_REGISTER = False
+        config.FAIL_OPEN_ON_REDIS_ERROR = False
+        config.NORMALIZE_IDS_IN_HMAC = False
+    
     logger.info("✅ Configuration verified in app.state")
     logger.info("🔧 Config ready - ESP32 pairing endpoint available")
 
@@ -402,7 +412,7 @@ async def lifespan(app: FastAPI):
         if not validation_results["valid"] and config.ENVIRONMENT == "production":
             raise RuntimeError("Invalid production configuration")
     except Exception as e:
-        logger.warning(f"Configuration validation warning: {e}")
+        logger.warning("Configuration validation warning", extra={"error": str(e)})
         # Continue in development, but log the warning
 
     # مرر config صراحةً لكل دالة تحتاجه
@@ -447,7 +457,7 @@ async def lifespan(app: FastAPI):
             required_vars = ['JWT_SECRET_KEY', 'REDIS_URL', 'DATABASE_URL', 'OPENAI_API_KEY']
             missing = [var for var in required_vars if not getattr(config, var, None)]
             if missing:
-                logger.critical(f"🚨 STARTUP FAILURE: Missing required config: {missing}")
+                logger.critical("🚨 STARTUP FAILURE: Missing required config", extra={"missing_keys": missing})
                 raise RuntimeError(f"STARTUP FAILURE: Missing required config: {missing}")
             
             # Create services with explicit config injection
@@ -468,7 +478,7 @@ async def lifespan(app: FastAPI):
                     await advanced_jwt.set_redis_client(redis_jwt)
                     logger.info("✅ AdvancedJWTManager Redis connected")
                 except Exception as e:
-                    logger.warning(f"AdvancedJWTManager Redis setup failed: {e}")
+                    logger.warning("AdvancedJWTManager Redis setup failed", extra={"error": str(e)})
             
             # Create database adapter with explicit config injection
             from src.adapters.database_production import (
@@ -518,7 +528,7 @@ async def lifespan(app: FastAPI):
                 )
 
             except Exception as e:
-                logger.error(f"❌ Failed to implement admin security: {e}")
+                logger.error("❌ Failed to implement admin security", extra={"error": str(e)})
                 if config.ENVIRONMENT == "production":
                     logger.critical(
                         "🚨 CRITICAL: Cannot start production without admin security"
@@ -566,7 +576,7 @@ async def lifespan(app: FastAPI):
             await app.state.db_adapter.close()
             logger.info("✅ Database connections closed")
         except Exception as e:
-            logger.warning(f"Database shutdown warning: {e}")
+            logger.warning("Database shutdown warning", extra={"error": str(e)})
     
     # Close database engine
     if hasattr(app.state, 'db_engine') and app.state.db_engine:
@@ -574,7 +584,7 @@ async def lifespan(app: FastAPI):
             await app.state.db_engine.dispose()
             logger.info("✅ Database engine disposed")
         except Exception as e:
-            logger.warning(f"Database engine shutdown warning: {e}")
+            logger.warning("Database engine shutdown warning", extra={"error": str(e)})
     
     # Close Redis connections
     if redis_client:
@@ -634,7 +644,13 @@ def create_app() -> FastAPI:
         
         # Ensure async format for DATABASE_URL
         database_url = config.DATABASE_URL
-        if database_url.startswith("postgresql://") and "+asyncpg" not in database_url:
+        # Handle case where database_url might be a FieldInfo object
+        if hasattr(database_url, 'default'):
+            database_url = database_url.default
+        elif not isinstance(database_url, str):
+            database_url = str(database_url)
+        
+        if database_url and database_url.startswith("postgresql://") and "+asyncpg" not in database_url:
             database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
         
         engine = create_async_engine(database_url, pool_pre_ping=True, future=True)
@@ -652,13 +668,13 @@ def create_app() -> FastAPI:
             app.state.tx_manager = TransactionManager(config=config, sessionmaker=SessionLocal)
             logger.info("✅ Enterprise Database and Transaction managers initialized with DI")
         except Exception as e:
-            logger.warning(f"Enterprise managers initialization failed: {e}")
+            logger.warning("Enterprise managers initialization failed", extra={"error": str(e)})
             app.state.ent_db = None
             app.state.tx_manager = None
         
         logger.info("✅ Database adapter initialized with DI pattern")
     except Exception as e:
-        logger.warning(f"Database bootstrap failed, will use fallback: {e}")
+        logger.warning("Database bootstrap failed, will use fallback", extra={"error": str(e)})
         app.state.db_adapter = None
         app.state.db_engine = None
     
@@ -733,7 +749,7 @@ def include_api_routes():
         critical_routes = ["/api/v1/pair/claim", "/health", "/api/auth/login"]
         missing_routes = [r for r in critical_routes if r not in routes]
         if missing_routes:
-            logger.critical(f"❌ Critical routes missing: {missing_routes}")
+            logger.critical("❌ Critical routes missing", extra={"missing_routes": missing_routes})
             raise RuntimeError(f"Server cannot start: Missing critical routes: {missing_routes}")
         logger.info(f"✅ Critical routes verified: {critical_routes}")
 

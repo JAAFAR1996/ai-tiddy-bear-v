@@ -151,6 +151,48 @@ class ProductionAIProviderFactory:
         self.logger.info("ProductionAIProviderFactory initialized with providers: " + 
                         ", ".join(self.providers.keys()))
     
+    def get_provider(self, provider_name: str = None, api_key: str = None) -> AIProvider:
+        """
+        Get a provider instance for immediate use.
+        
+        Args:
+            provider_name: Optional provider name (if None, gets best available)
+            api_key: Optional API key override
+            
+        Returns:
+            AIProvider instance
+            
+        Raises:
+            AIProviderError: If no suitable provider is available
+        """
+        if provider_name:
+            # Specific provider requested
+            if provider_name not in self.provider_instances:
+                if provider_name not in self.providers:
+                    raise AIProviderError(f"Unknown provider: {provider_name}")
+                
+                # Try to initialize if not available
+                config = self.providers[provider_name]
+                if not config.enabled:
+                    raise AIProviderError(f"Provider {provider_name} is disabled")
+                
+                if provider_name not in self.provider_instances:
+                    raise AIProviderError(f"Provider {provider_name} failed to initialize")
+            
+            return self.provider_instances[provider_name]
+        else:
+            # Get best available provider
+            try:
+                import asyncio
+                loop = asyncio.get_event_loop()
+                _, provider = loop.run_until_complete(self.get_best_provider())
+                return provider
+            except RuntimeError:
+                # No event loop, use first available provider
+                if not self.provider_instances:
+                    raise AIProviderError("No AI providers available")
+                return next(iter(self.provider_instances.values()))
+    
     def _load_provider_configs(self) -> None:
         """Load provider configurations from environment."""
         # OpenAI Configuration
@@ -712,3 +754,7 @@ async def get_provider(provider_name: str, api_key: str) -> AIProvider:
     else:
         # For now, fallback to OpenAI for other providers
         return ProductionOpenAIProvider(api_key=api_key)
+
+
+# Legacy compatibility alias
+AIProviderFactory = ProductionAIProviderFactory

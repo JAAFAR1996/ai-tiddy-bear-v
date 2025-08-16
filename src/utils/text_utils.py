@@ -4,8 +4,13 @@ Provides text analysis, filtering, and processing capabilities.
 """
 
 import re
+import logging
 from typing import Dict, Any, List, Optional
 from src.core.utils.text_filters import filter_inappropriate_content as core_filter_content
+
+def get_logger(name):
+    """Get logger instance."""
+    return logging.getLogger(name)
 
 
 class TextProcessor:
@@ -14,6 +19,7 @@ class TextProcessor:
     def __init__(self, max_text_length: int = 1000, child_safe_mode: bool = True):
         self.max_text_length = max_text_length
         self.child_safe_mode = child_safe_mode
+        self.logger = get_logger(__name__)
 
     def clean_text(self, text: str) -> str:
         """Clean and normalize text."""

@@ -163,3 +163,45 @@ class EncryptionService:
             return fernet.decrypt(encrypted_content.encode()).decode()
         except Exception as e:
             raise ValueError(f"Message decryption failed: {e}")
+    
+    def hash_data(self, data: str) -> str:
+        """Hash data using SHA-256 for secure storage."""
+        return hashlib.sha256(data.encode('utf-8')).hexdigest()
+
+
+# Global instance for backward compatibility
+_crypto_utils_instance = CryptoUtils()
+
+# Wrapper functions for legacy imports
+def encrypt_data(plaintext: str, key: bytes = None) -> Dict[str, str]:
+    """Encrypt data using global crypto utils instance."""
+    if key is None:
+        key = _crypto_utils_instance.generate_random_key()
+    return _crypto_utils_instance.encrypt_data(plaintext, key)
+
+def decrypt_data(encrypted_data: Dict[str, str], key: bytes) -> str:
+    """Decrypt data using global crypto utils instance."""
+    return _crypto_utils_instance.decrypt_data(encrypted_data, key)
+
+# Additional utility classes for compatibility
+class SecureVault:
+    """Secure vault for sensitive data encryption."""
+    
+    def __init__(self):
+        self.crypto = CryptoUtils()
+        
+    def encrypt(self, data: str) -> str:
+        """Encrypt data for secure storage."""
+        key = self.crypto.generate_random_key()
+        result = self.crypto.encrypt_data(data, key)
+        # Return combined format for simple usage
+        return f"{base64.b64encode(key).decode()}:{result['ciphertext']}"
+        
+    def decrypt(self, encrypted_data: str) -> str:
+        """Decrypt data from secure storage."""
+        try:
+            key_b64, ciphertext = encrypted_data.split(':', 1)
+            key = base64.b64decode(key_b64)
+            return self.crypto.decrypt_data({'ciphertext': ciphertext}, key)
+        except Exception:
+            return encrypted_data  # Return as-is if not encrypted

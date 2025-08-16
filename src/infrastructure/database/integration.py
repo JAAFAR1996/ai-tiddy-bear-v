@@ -18,7 +18,7 @@ from typing import Dict, Any, Optional, Generator, AsyncGenerator
 from datetime import datetime
 
 from fastapi import FastAPI, Depends, HTTPException, Request, Response
-from fastapi.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +30,7 @@ from . import (
     database_manager,
     transaction_manager,
     repository_manager,
+    TransactionType,
 )
 from .health_checks import run_database_health_check, get_database_health_summary
 from .models import User, Child, Conversation, Message
@@ -391,7 +392,7 @@ class DatabaseUsageExamples:
 
         # Child-safe transaction
         async with transaction_manager.transaction(
-            transaction_type=transaction_manager.TransactionType.CHILD_SAFE,
+            transaction_type=TransactionType.CHILD_SAFE,
             child_id="child-id-here",
             parent_consent=True,
         ) as tx:
@@ -407,7 +408,7 @@ class DatabaseUsageExamples:
 
         # Saga transaction for complex operations
         async with transaction_manager.transaction(
-            transaction_type=transaction_manager.TransactionType.SAGA
+            transaction_type=TransactionType.SAGA
         ) as saga_tx:
             # Add saga steps
             saga_tx.add_step(

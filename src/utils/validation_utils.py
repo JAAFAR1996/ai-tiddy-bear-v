@@ -105,6 +105,27 @@ class ValidationUtils:
 
         return {"valid": True, "sanitized_name": name}
 
+    def _contains_profanity(self, text: str) -> bool:
+        """Check if text contains profanity - simple implementation."""
+        # Basic profanity list - in production, use a more comprehensive service
+        profanity_words = {
+            "bad", "damn", "hell", "stupid", "idiot", "hate", "kill", 
+            "die", "death", "hurt", "pain", "ugly", "fat", "dumb"
+        }
+        
+        text_lower = text.lower()
+        words = text_lower.split()
+        
+        # Check for exact matches and partial matches
+        for word in words:
+            if word in profanity_words:
+                return True
+            for profane in profanity_words:
+                if profane in word:
+                    return True
+        
+        return False
+
 
 # دالة مستقلة لفحص قوة كلمة المرور
 def validate_password_strength(password: str) -> Dict[str, Any]:

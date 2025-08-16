@@ -195,6 +195,9 @@ class ChildDataTransaction:
 class TransactionManager:
     """Advanced transaction manager with distributed support."""
 
+    # Make TransactionType accessible as class attribute
+    TransactionType = TransactionType
+
     def __init__(self, *, config=None, sessionmaker=None, config_manager=None):
         self._config = config
         self._sessionmaker = sessionmaker
@@ -886,3 +889,18 @@ def get_transaction_manager() -> TransactionManager:
 def create_transaction_manager(config_manager) -> TransactionManager:
     """Explicit factory for TransactionManager. Always pass config_manager explicitly."""
     return TransactionManager(config_manager)
+
+
+def child_safe_transactional(child_id: str, parent_consent: bool = True):
+    """Decorator for child-safe transactional operations."""
+    def decorator(func):
+        async def wrapper(*args, **kwargs):
+            tx_manager = get_transaction_manager()
+            async with tx_manager.transaction(
+                transaction_type=TransactionType.CHILD_SAFE,
+                child_id=child_id,
+                parent_consent=parent_consent
+            ) as tx:
+                return await func(tx, *args, **kwargs)
+        return wrapper
+    return decorator

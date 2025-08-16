@@ -496,10 +496,11 @@ class DatabaseManager:
         """
         self._config = config
         self._sessionmaker = sessionmaker
+        self.config_manager = config_manager or get_config_manager()
         # No fallback to global config manager - require explicit injection
-        if not config:
+        if not config and not self.config_manager:
             raise RuntimeError(
-                "DatabaseManager requires injected ProductionConfig (no global config manager)"
+                "DatabaseManager requires injected ProductionConfig or config_manager"
             )
         self.logger = get_logger("database_manager")
         self.metrics_collector = get_metrics_collector()

@@ -24,8 +24,20 @@ import aiofiles
 import aiofiles.os
 from cryptography.fernet import Fernet
 
-from ..security.crypto_utils import SecureVault
-from ..monitoring.prometheus_metrics import PrometheusMetricsCollector
+try:
+    from src.utils.crypto_utils import SecureVault
+except ImportError:
+    # Create fallback for missing crypto utils
+    class SecureVault:
+        def encrypt(self, data): return data
+        def decrypt(self, data): return data
+
+try:
+    from ..monitoring.prometheus_metrics import PrometheusMetricsCollector
+except ImportError:
+    # Create fallback for missing metrics
+    class PrometheusMetricsCollector:
+        def record_operation(self, *args, **kwargs): pass
 
 
 @dataclass

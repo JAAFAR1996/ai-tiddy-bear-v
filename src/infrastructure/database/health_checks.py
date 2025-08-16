@@ -19,8 +19,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from .database_manager import database_manager, DatabaseConnectionState
-from .transaction_manager import transaction_manager
-from .migrations import migration_manager
+from . import transaction_manager, migration_manager
 from ..config.config_manager_provider import get_config_manager
 from ..logging import get_logger, audit_logger, security_logger
 

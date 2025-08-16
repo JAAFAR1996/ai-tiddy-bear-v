@@ -812,8 +812,12 @@ async def tts_health_check():
 async def audio_prometheus_metrics():
     """Prometheus metrics endpoint specifically for audio pipeline."""
     try:
-        from src.infrastructure.monitoring.prometheus_metrics import prometheus_metrics
-        from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+        try:
+            from src.infrastructure.monitoring.prometheus_metrics import prometheus_metrics
+            from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+        except ImportError:
+            logger.warning("Prometheus metrics not available - fallback to basic metrics")
+            return {"status": "basic_metrics_only", "prometheus_available": False}
 
         # Get only audio-related metrics
         audio_metrics = []

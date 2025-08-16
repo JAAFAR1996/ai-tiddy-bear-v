@@ -200,7 +200,11 @@ class EmailAlertChannel(AlertChannel):
         try:
             import aiosmtplib
             from email.message import EmailMessage
+        except ImportError:
+            logger.warning("aiosmtplib not available - email alerts disabled")
+            return False
 
+        try:
             msg = EmailMessage()
             msg["From"] = self.smtp_config["from_email"]
             msg["To"] = ", ".join(self.recipients)

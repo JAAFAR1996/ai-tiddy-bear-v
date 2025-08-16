@@ -158,7 +158,7 @@ class BaseRepository(Generic[T], ABC):
         )
 
     @classmethod
-    async def create(
+    async def create_repository(
         cls,
         model_class: Type[T],
         config_manager,
@@ -1792,4 +1792,40 @@ def create_conversation_repository(
     """Explicit factory for ConversationRepository."""
     return ConversationRepository(
         config_manager, database_manager, transaction_manager, cache_manager
+    )
+
+
+def get_child_repository() -> ChildRepository:
+    """Get ChildRepository instance (legacy compatibility)."""
+    from ..config.config_manager_provider import get_config_manager
+    from .database_manager import get_database_manager
+    from .transaction_manager import get_transaction_manager
+    
+    config_manager = get_config_manager()
+    database_manager = get_database_manager()
+    transaction_manager = get_transaction_manager()
+    
+    return ChildRepository(
+        config_manager=config_manager,
+        database_manager=database_manager,
+        transaction_manager=transaction_manager,
+        cache_manager=None
+    )
+
+
+def get_conversation_repository() -> ConversationRepository:
+    """Get ConversationRepository instance (legacy compatibility)."""
+    from ..config.config_manager_provider import get_config_manager
+    from .database_manager import get_database_manager
+    from .transaction_manager import get_transaction_manager
+    
+    config_manager = get_config_manager()
+    database_manager = get_database_manager()
+    transaction_manager = get_transaction_manager()
+    
+    return ConversationRepository(
+        config_manager=config_manager,
+        database_manager=database_manager,
+        transaction_manager=transaction_manager,
+        cache_manager=None
     )

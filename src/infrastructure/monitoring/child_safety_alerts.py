@@ -50,6 +50,13 @@ class ChildSafetyViolationType(Enum):
     UNSAFE_CHALLENGE = "unsafe_challenge"
     LOCATION_SHARING = "location_sharing"
     PHOTO_REQUEST = "photo_request"
+    TECHNICAL_FAILURE = "technical_failure"
+    SUSPICIOUS_BEHAVIOR = "suspicious_behavior"
+    ACCOUNT_FLAGGED = "account_flagged"
+    DATA_PRIVACY_VIOLATION = "data_privacy_violation"
+    UNAUTHORIZED_DATA_ACCESS = "unauthorized_data_access"
+    SELF_HARM = "self_harm"
+    UNSAFE_INTERACTION = "unsafe_interaction"
 
 
 class COPPAViolationType(Enum):
@@ -66,6 +73,8 @@ class COPPAViolationType(Enum):
     VOICE_RECORDING_WITHOUT_CONSENT = "voice_recording_without_consent"
     BIOMETRIC_DATA_COLLECTION = "biometric_data_collection"
     EDUCATIONAL_RECORDS_ACCESS = "educational_records_access"
+    MISSING_PARENTAL_CONSENT = "missing_parental_consent"
+    UNAUTHORIZED_DATA_DISCLOSURE = "unauthorized_data_disclosure"
 
 
 class SafetyAlertPriority(Enum):
@@ -74,6 +83,7 @@ class SafetyAlertPriority(Enum):
     MEDIUM = "medium"
     HIGH = "high"
     URGENT = "urgent"
+    CRITICAL = "critical"  # Ensure this exists
     EMERGENCY = "emergency"
 
 
@@ -138,6 +148,18 @@ class ChildSafetyMonitor:
         # Incident storage
         self.active_incidents: Dict[str, ChildSafetyIncident] = {}
         self.coppa_incidents: Dict[str, COPPAComplianceIncident] = {}
+        
+        # History tracking for compliance
+        self.incident_history: List[Dict[str, Any]] = []
+        self.compliance_incidents: List[Dict[str, Any]] = []
+        
+        # Configuration
+        self.config = {
+            "alert_threshold": 0.85,
+            "notification_enabled": True,
+            "emergency_contacts": True,
+            "compliance_reporting": True
+        }
         
         # Content pattern detection
         self.violation_patterns = self._load_violation_patterns()
@@ -974,7 +996,7 @@ class ChildSafetyMonitor:
         self.logger.info(f"NOTIFYING PARENT: {incident.parent_id}")
         
         try:
-            from src.application.services.notification.notification_service import (
+            from src.application.services.notification.notification_service_main import (
                 ProductionNotificationService, NotificationChannel, NotificationPriority, NotificationRequest,
                 NotificationRecipient, NotificationTemplate, NotificationType
             )
@@ -1696,7 +1718,13 @@ Risk Level: {'HIGH' if breached_incidents > 0 else 'MEDIUM' if pending_incidents
                 body=executive_summary
             )
             
-            self.logger.info(f"Weekly COPPA report generated: {compliance_rate:.1f}% compliance rate, {total_incidents} incidents")
+            self.logger.info("Weekly COPPA report generated", extra={
+                "compliance_rate": f"{compliance_rate:.1f}%",
+                "total_incidents": total_incidents
+            })
+            
+        except Exception as e:
+            self.logger.error("Error generating COPPA report", extra={"error": str(e)})
             
         try:
             # Import mobile app report service if available, otherwise use backend reporting
@@ -1707,7 +1735,7 @@ Risk Level: {'HIGH' if breached_incidents > 0 else 'MEDIUM' if pending_incidents
                 # Fallback to backend reporting system
                 report_service = None
             
-            from src.application.services.notification.notification_service import ProductionNotificationService
+            from src.application.services.notification.notification_service_main import ProductionNotificationService
             
             # Initialize services
             notification_service = ProductionNotificationService()
@@ -1850,7 +1878,9 @@ Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC
                     subject="URGENT: Weekly COPPA Report Generation Failed",
                     body=f"The weekly COPPA compliance report failed to generate.\n\nError: {str(e)}\n\nImmediate manual review required."
                 )
-            except Exception as notify_e:\n                self.logger.error(f\"Exception sending failure notification to admin: {notify_e}\", exc_info=True)\n                # Continue - this is fallback notification only, main error already logged above
+            except Exception as notify_e:
+                self.logger.error(f"Exception sending failure notification to admin: {notify_e}", exc_info=True)
+                # Continue - this is fallback notification only, main error already logged above
     
     def get_incident_stats(self) -> Dict[str, Any]:
         """Get incident statistics."""

@@ -27,6 +27,7 @@ from .transaction_manager import (
     TransactionManager,
     get_transaction_manager,
     create_transaction_manager,
+    child_safe_transactional,
     TransactionType,
     IsolationLevel,
     TransactionConfig,
@@ -56,6 +57,10 @@ from .repository import (
     UserRepository,
     ChildRepository,
     ConversationRepository,
+    RepositoryManager,
+    create_repository_manager,
+    create_child_repository,
+    create_conversation_repository,
     RepositoryError,
     ValidationError,
     PermissionError,
@@ -78,6 +83,28 @@ from .migrations import (
 __version__ = "1.0.0"
 __author__ = "AI Teddy Bear Development Team"
 
+# Create repository manager instance (will be injected with config)
+repository_manager = None  # Initialized through DI
+
+# Transaction manager instance
+transaction_manager = get_transaction_manager()
+
+# Repository factory functions
+async def get_child_repository():
+    """Get child repository instance."""
+    from ..config.config_manager_provider import get_config_manager
+    config_manager = get_config_manager()
+    return create_child_repository(config_manager)
+
+async def get_conversation_repository():
+    """Get conversation repository instance."""
+    from ..config.config_manager_provider import get_config_manager
+    config_manager = get_config_manager()
+    return create_conversation_repository(config_manager)
+
+# Migration manager instance
+migration_manager = get_migration_manager()
+
 # Export all components
 __all__ = [
     # Database Manager
@@ -92,6 +119,11 @@ __all__ = [
     "DatabaseConnectionState",
     "DatabaseRole",
     # Transaction Manager
+    "transaction_manager",
+    "TransactionManager",
+    "get_transaction_manager",
+    "create_transaction_manager",
+    "child_safe_transactional",
     "TransactionType",
     "IsolationLevel",
     "TransactionConfig",
@@ -114,16 +146,23 @@ __all__ = [
     "schedule_child_data_cleanup",
     # Repository
     "repository_manager",
+    "RepositoryManager",
+    "create_repository_manager",
+    "get_child_repository",
+    "get_conversation_repository",
     "BaseRepository",
     "UserRepository",
     "ChildRepository",
     "ConversationRepository",
+    "create_child_repository",
+    "create_conversation_repository",
     "RepositoryError",
     "ValidationError",
     "PermissionError",
     "NotFoundError",
     # Migrations
     "migration_manager",
+    "get_migration_manager",
     "run_migrations",
     "migrate_database",
     "rollback_database",

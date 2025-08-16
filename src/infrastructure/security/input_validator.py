@@ -18,7 +18,7 @@ import mimetypes
 from typing import Any, Dict, List, Optional, Union, Callable, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal, InvalidOperation
 import bleach
 import magic
@@ -391,7 +391,7 @@ class AdvancedInputValidator:
                 extra={
                     "original_value": safe_value,
                     "violations": safe_violations,
-                    "timestamp": datetime.now(datetime.timezone.utc).isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
             )
 
