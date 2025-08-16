@@ -1653,6 +1653,73 @@ class EnterpriseDisasterRecoveryManager:
         # This would integrate with your service discovery/routing system
         self.logger.info(f"Routing updated: {source_tier.value} -> {target_tier.value}")
 
+    async def _validate_failover_consistency(self, target_tier: DatabaseTier):
+        """Validate data consistency after failover operation."""
+        
+        target_pool = self._get_pool_by_tier(target_tier)
+        if not target_pool:
+            raise Exception(f"Target pool {target_tier.value} not available for consistency validation")
+        
+        try:
+            async with target_pool.acquire_connection() as conn:
+                # Validate database connectivity
+                await conn.fetchval("SELECT 1")
+                
+                # Check data integrity for critical child safety tables
+                if target_tier == DatabaseTier.CHILD_SAFE:
+                    # Validate child-specific data consistency
+                    child_count = await conn.fetchval("SELECT COUNT(*) FROM child_profiles WHERE deleted_at IS NULL")
+                    parent_count = await conn.fetchval("SELECT COUNT(*) FROM parent_consent WHERE status = 'active'")
+                    
+                    if child_count is None or parent_count is None:
+                        raise Exception("Child safety data consistency check failed: NULL count")
+                        
+                    self.logger.info(f"Child safety data validated: {child_count} children, {parent_count} active consents")
+                
+                # Check transaction log consistency
+                try:
+                    latest_transaction = await conn.fetchval("SELECT MAX(id) FROM transaction_log")
+                    if latest_transaction is not None:
+                        # Validate that the latest transaction is not corrupted
+                        transaction_check = await conn.fetchval(
+                            "SELECT status FROM transaction_log WHERE id = $1", 
+                            latest_transaction
+                        )
+                        if transaction_check not in ['committed', 'completed']:
+                            self.logger.warning(f"Last transaction {latest_transaction} has status: {transaction_check}")
+                except Exception as e:
+                    # Transaction log might not exist, log but don't fail
+                    self.logger.warning(f"Transaction log check failed: {e}")
+                
+                # Validate replication lag if applicable
+                if target_tier in [DatabaseTier.REPLICA, DatabaseTier.BACKUP]:
+                    try:
+                        # Check replication status
+                        replication_lag = await conn.fetchval("SELECT EXTRACT(EPOCH FROM (now() - pg_last_xact_replay_timestamp()))")
+                        if replication_lag is not None and replication_lag > 30:  # 30 seconds threshold
+                            self.logger.warning(f"High replication lag detected: {replication_lag}s")
+                        else:
+                            self.logger.info(f"Replication lag is acceptable: {replication_lag}s")
+                    except Exception as e:
+                        # Replication metrics might not be available
+                        self.logger.warning(f"Replication lag check failed: {e}")
+                
+                # Check for any orphaned connections or locks
+                active_locks = await conn.fetchval("SELECT COUNT(*) FROM pg_locks WHERE NOT granted")
+                if active_locks > 0:
+                    self.logger.warning(f"{active_locks} ungranted locks found after failover")
+                
+                # Validate that connection pool is healthy
+                pool_health = await target_pool.health_check()
+                if not pool_health.get("healthy", False):
+                    raise Exception(f"Pool health check failed after consistency validation")
+                
+                self.logger.info(f"Failover consistency validation passed for {target_tier.value}")
+                
+        except Exception as e:
+            self.logger.error(f"Failover consistency validation failed for {target_tier.value}: {e}")
+            raise Exception(f"Data consistency validation failed: {e}")
+
     async def _post_failover_validation(self, target_tier: DatabaseTier):
         """Validate system state after failover."""
 

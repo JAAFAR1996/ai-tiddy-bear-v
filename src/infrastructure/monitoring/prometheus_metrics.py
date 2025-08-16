@@ -24,6 +24,7 @@ import asyncio
 from typing import Optional, Callable
 from enum import Enum
 
+# Production deployment requires prometheus_client - NO FALLBACKS ALLOWED
 from prometheus_client import (
     Counter,
     Histogram,
@@ -92,7 +93,7 @@ class PrometheusMetrics:
         self._init_system_metrics()
         self._init_audio_metrics()
 
-        self.logger.info("Prometheus metrics initialized")
+        self.logger.info("Prometheus metrics initialized - production grade")
 
     def _init_http_metrics(self):
         """Initialize HTTP-related metrics."""
@@ -908,6 +909,93 @@ class PrometheusMetrics:
             severity="info" if result == "pass" else "warning",
         ).inc()
 
+    def record_deployment_success(
+        self,
+        environment: str,
+        execution_time: float,
+        downtime: float = 0.0,
+        version: str = "unknown",
+        deployment_type: str = "standard",
+    ):
+        """Record successful deployment metrics."""
+        # Record deployment success as a business metric
+        self.child_interactions_total.labels(
+            interaction_type="deployment_success",
+            age_group="system",
+            language="system",
+            safety_status="safe",
+        ).inc()
+        
+        # Record deployment duration
+        self.http_request_duration_seconds.labels(
+            method="DEPLOY",
+            endpoint=f"/deployment/{environment}",
+            status_code="200",
+        ).observe(execution_time)
+        
+        # Record as audit log entry
+        self.audit_log_entries_total.labels(
+            event_type="deployment_success",
+            user_type="system",
+            severity="info",
+        ).inc()
+        
+        self.logger.info(
+            "Deployment success recorded",
+            environment=environment,
+            execution_time=execution_time,
+            downtime=downtime,
+            version=version,
+            deployment_type=deployment_type,
+        )
+
+    def record_deployment_failure(
+        self,
+        environment: str,
+        error_message: str,
+        error_type: str = "deployment_error",
+        severity: str = "high",
+    ):
+        """Record deployment failure metrics."""
+        # Record deployment failure as security violation
+        self.security_violations_total.labels(
+            violation_type="deployment_failure",
+            severity=severity,
+            source_ip="system",
+            action_taken="rollback",
+        ).inc()
+        
+        # Record as HTTP error
+        self.http_errors_total.labels(
+            error_type=error_type,
+            endpoint=f"/deployment/{environment}",
+            method="DEPLOY",
+        ).inc()
+        
+        # Record deployment failure as failed HTTP request
+        self.http_requests_total.labels(
+            method="DEPLOY",
+            endpoint=f"/deployment/{environment}",
+            status_code="500",
+            user_type="system",
+            region="local",
+        ).inc()
+        
+        # Record as audit log entry
+        self.audit_log_entries_total.labels(
+            event_type="deployment_failure",
+            user_type="system",
+            severity="error",
+        ).inc()
+        
+        self.logger.error(
+            "Deployment failure recorded",
+            environment=environment,
+            error_message=error_message[:200],  # Truncate long error messages
+            error_type=error_type,
+            severity=severity,
+        )
+
     def get_metrics(self) -> str:
         """Get all metrics in Prometheus format."""
         return generate_latest(self.registry).decode()
@@ -1216,6 +1304,93 @@ class AIMetricsCollector:
             cost_estimate=cost_estimate,
         )
 
+    def record_deployment_success(
+        self,
+        environment: str,
+        execution_time: float,
+        downtime: float = 0.0,
+        version: str = "unknown",
+        deployment_type: str = "standard",
+    ):
+        """Record successful deployment metrics."""
+        # Record deployment success as a business metric
+        self.metrics.child_interactions_total.labels(
+            interaction_type="deployment_success",
+            age_group="system",
+            language="system",
+            safety_status="safe",
+        ).inc()
+        
+        # Record deployment duration
+        self.metrics.http_request_duration_seconds.labels(
+            method="DEPLOY",
+            endpoint=f"/deployment/{environment}",
+            status_code="200",
+        ).observe(execution_time)
+        
+        # Record as audit log entry
+        self.metrics.audit_log_entries_total.labels(
+            event_type="deployment_success",
+            user_type="system",
+            severity="info",
+        ).inc()
+        
+        self.logger.info(
+            "Deployment success recorded",
+            environment=environment,
+            execution_time=execution_time,
+            downtime=downtime,
+            version=version,
+            deployment_type=deployment_type,
+        )
+
+    def record_deployment_failure(
+        self,
+        environment: str,
+        error_message: str,
+        error_type: str = "deployment_error",
+        severity: str = "high",
+    ):
+        """Record deployment failure metrics."""
+        # Record deployment failure as security violation
+        self.metrics.security_violations_total.labels(
+            violation_type="deployment_failure",
+            severity=severity,
+            source_ip="system",
+            action_taken="rollback",
+        ).inc()
+        
+        # Record as HTTP error
+        self.metrics.http_errors_total.labels(
+            error_type=error_type,
+            endpoint=f"/deployment/{environment}",
+            method="DEPLOY",
+        ).inc()
+        
+        # Record deployment failure as failed HTTP request
+        self.metrics.http_requests_total.labels(
+            method="DEPLOY",
+            endpoint=f"/deployment/{environment}",
+            status_code="500",
+            user_type="system",
+            region="local",
+        ).inc()
+        
+        # Record as audit log entry
+        self.metrics.audit_log_entries_total.labels(
+            event_type="deployment_failure",
+            user_type="system",
+            severity="error",
+        ).inc()
+        
+        self.logger.error(
+            "Deployment failure recorded",
+            environment=environment,
+            error_message=error_message[:200],  # Truncate long error messages
+            error_type=error_type,
+            severity=severity,
+        )
+
     def record_tts_request(
         self,
         provider: str,
@@ -1233,7 +1408,7 @@ class AIMetricsCollector:
         cached_str = "cached" if cached else "fresh"
         
         # Record TTS request
-        self.tts_requests_total.labels(
+        self.metrics.tts_requests_total.labels(
             provider=provider,
             voice_id=voice_id,
             language=language,
@@ -1242,14 +1417,14 @@ class AIMetricsCollector:
         ).inc()
 
         # Record processing duration
-        self.tts_processing_duration_seconds.labels(
+        self.metrics.tts_processing_duration_seconds.labels(
             provider=provider,
             voice_id=voice_id,
             model=model,
         ).observe(duration)
 
         # Record character count
-        self.tts_characters_processed_total.labels(
+        self.metrics.tts_characters_processed_total.labels(
             provider=provider,
             language=language,
             content_type=content_type,
@@ -1257,14 +1432,14 @@ class AIMetricsCollector:
 
         # Record cost
         if cost_usd > 0:
-            self.tts_cost_total_usd.labels(
+            self.metrics.tts_cost_total_usd.labels(
                 provider=provider,
                 model=model,
             ).inc(cost_usd)
 
         # Record cache operation
         cache_result = "hit" if cached else "miss"
-        self.tts_cache_operations_total.labels(
+        self.metrics.tts_cache_operations_total.labels(
             operation="get",
             result=cache_result,
         ).inc()
@@ -1290,7 +1465,7 @@ class AIMetricsCollector:
     ):
         """Record audio validation metrics."""
         # Record validation check
-        self.audio_validation_checks_total.labels(
+        self.metrics.audio_validation_checks_total.labels(
             format=audio_format,
             result=result,
             error_type=error_type,
@@ -1298,7 +1473,7 @@ class AIMetricsCollector:
 
         # Record quality score if available
         if quality_score > 0:
-            self.audio_quality_score.labels(
+            self.metrics.audio_quality_score.labels(
                 content_type="user_input",
                 age_group=age_group,
             ).observe(quality_score)
@@ -1324,7 +1499,7 @@ class AIMetricsCollector:
         age_group = self._get_age_group(child_age)
 
         # Record safety check
-        self.audio_safety_checks_total.labels(
+        self.metrics.audio_safety_checks_total.labels(
             check_type=check_type,
             result=result,
             child_age_group=age_group,
@@ -1333,7 +1508,7 @@ class AIMetricsCollector:
         # Record violations
         for violation in violations:
             severity = "high" if "violent" in violation.lower() or "inappropriate" in violation.lower() else "medium"
-            self.audio_safety_violations_total.labels(
+            self.metrics.audio_safety_violations_total.labels(
                 violation_type=violation[:50],  # Truncate long violation descriptions
                 severity=severity,
                 action_taken=action_taken,
@@ -1358,14 +1533,14 @@ class AIMetricsCollector:
     ):
         """Record STT request metrics."""
         # Record STT request
-        self.stt_requests_total.labels(
+        self.metrics.stt_requests_total.labels(
             provider=provider,
             language=language,
             status=status,
         ).inc()
 
         # Record processing duration
-        self.stt_processing_duration_seconds.labels(
+        self.metrics.stt_processing_duration_seconds.labels(
             provider=provider,
             language=language,
         ).observe(duration)
@@ -1400,14 +1575,14 @@ class AIMetricsCollector:
             duration_bucket = "extended"
 
         # Record session
-        self.child_audio_sessions_total.labels(
+        self.metrics.child_audio_sessions_total.labels(
             age_group=age_group,
             session_type=session_type,
             duration_bucket=duration_bucket,
         ).inc()
 
         # Record engagement duration
-        self.child_audio_engagement_duration_seconds.labels(
+        self.metrics.child_audio_engagement_duration_seconds.labels(
             age_group=age_group,
             content_type=content_type,
         ).observe(duration_seconds)
@@ -1428,7 +1603,7 @@ class AIMetricsCollector:
         error_message: str = "",
     ):
         """Record audio processing error."""
-        self.audio_errors_total.labels(
+        self.metrics.audio_errors_total.labels(
             error_type=error_type,
             component=component,
             severity=severity,
@@ -1449,7 +1624,7 @@ class AIMetricsCollector:
         region: str = "default",
     ):
         """Update TTS provider health score."""
-        self.tts_provider_health_score.labels(
+        self.metrics.tts_provider_health_score.labels(
             provider=provider,
             region=region,
         ).set(health_score)
@@ -1463,7 +1638,7 @@ class AIMetricsCollector:
 
     def update_tts_cache_hit_ratio(self, hit_ratio: float):
         """Update TTS cache hit ratio."""
-        self.tts_cache_hit_ratio.set(hit_ratio)
+        self.metrics.tts_cache_hit_ratio.set(hit_ratio)
 
     def _get_age_group(self, age: int) -> str:
         """Get age group string from age."""
@@ -1605,3 +1780,65 @@ class MetricsMiddleware(PrometheusMiddleware):
     def _get_user_type(self, request: Request) -> str:
         """Determine user type for metrics (legacy compatibility)."""
         return self._extract_user_type(request)
+
+
+class PrometheusMetricsCollector:
+    """
+    Legacy compatibility class for PrometheusMetricsCollector.
+    Wrapper around PrometheusMetrics for backward compatibility.
+    """
+    
+    def __init__(self, registry: Optional[CollectorRegistry] = None):
+        """Initialize with optional registry."""
+        self.prometheus_metrics = PrometheusMetrics(registry=registry)
+        self.logger = FallbackLogger("prometheus_metrics_collector")
+        
+    def record_request(self, method: str, endpoint: str, status_code: int, duration: float):
+        """Record HTTP request metrics."""
+        self.prometheus_metrics.record_http_request(
+            method=method,
+            endpoint=endpoint,
+            status_code=status_code,
+            duration=duration
+        )
+        
+    def record_provider_call(self, provider: str, operation: str, status: str, duration: float):
+        """Record provider call metrics."""
+        self.prometheus_metrics.record_provider_request(
+            provider_id=provider,
+            provider_type="external_api",
+            operation=operation,
+            status=status,
+            duration=duration
+        )
+        
+    def record_database_operation(self, operation: str, table: str, duration: float, status: str = "success"):
+        """Record database operation metrics."""
+        self.prometheus_metrics.record_database_query(
+            database_name="main",
+            query_type=operation,
+            table_name=table,
+            duration=duration,
+            status=status
+        )
+        
+    def record_cache_operation(self, cache_name: str, operation: str, result: str):
+        """Record cache operation metrics."""
+        self.prometheus_metrics.record_cache_operation(
+            cache_name=cache_name,
+            operation=operation,
+            result=result,
+            duration=0.001  # Default minimal duration
+        )
+        
+    def get_metrics(self) -> str:
+        """Get metrics in Prometheus format."""
+        return self.prometheus_metrics.get_metrics()
+        
+    def get_content_type(self) -> str:
+        """Get content type for metrics."""
+        return self.prometheus_metrics.get_content_type()
+
+
+# Legacy global instance for backward compatibility
+prometheus_metrics_collector = PrometheusMetricsCollector()

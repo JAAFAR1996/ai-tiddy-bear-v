@@ -16,7 +16,7 @@ import json
 import hashlib
 import logging
 import ipaddress
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List
 
 from .crypto_utils import EncryptionService
@@ -149,8 +149,8 @@ class SecurityUtils:
             "user_id": user_data["user_id"],
             "email": user_data.get("email"),
             "role": user_data.get("role"),
-            "iat": datetime.now(datetime.timezone.utc),
-            "exp": datetime.now(datetime.timezone.utc) + timedelta(hours=self.token_expiry_hours),
+            "iat": datetime.now(timezone.utc),
+            "exp": datetime.now(timezone.utc) + timedelta(hours=self.token_expiry_hours),
         }
         # Return a simple JSON-based session (not secure for production)
         import json
@@ -171,7 +171,7 @@ class SecurityUtils:
                 if isinstance(payload["exp"], str)
                 else datetime.fromtimestamp(payload["exp"])
             )
-            if exp_time < datetime.now(datetime.timezone.utc):
+            if exp_time < datetime.now(timezone.utc):
                 return {"valid": False, "error": "Token expired"}
             return {
                 "valid": True,
@@ -211,7 +211,7 @@ class SecurityUtils:
         safe_details = {k: html.escape(str(v).replace('\n', '').replace('\r', '')[:200]) for k, v in (details or {}).items()}
         
         log_entry = {
-            "timestamp": datetime.now(datetime.timezone.utc).isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "event_type": safe_event_type,
             "details": safe_details,
             "severity": self._get_event_severity(event_type),

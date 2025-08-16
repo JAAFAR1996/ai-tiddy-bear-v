@@ -15,8 +15,8 @@ import logging
 import json
 import smtplib
 from datetime import datetime, timedelta
-from email.mime.text import MimeText
-from email.mime.multipart import MimeMultipart
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from typing import Dict, List, Optional, Set, Any, Union
 from dataclasses import dataclass, asdict
 from enum import Enum

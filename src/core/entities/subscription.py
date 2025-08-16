@@ -53,6 +53,7 @@ class NotificationType(Enum):
     """Real-time notification types."""
 
     SAFETY_ALERT = "safety_alert"
+    CHILD_SAFETY_ALERT = "child_safety_alert"
     BEHAVIOR_CONCERN = "behavior_concern"
     USAGE_LIMIT = "usage_limit"
     PREMIUM_FEATURE = "premium_feature"
@@ -63,8 +64,10 @@ class NotificationPriority(Enum):
     """Notification priority levels."""
 
     LOW = "low"
+    NORMAL = "normal"
     MEDIUM = "medium"
     HIGH = "high"
+    URGENT = "urgent"
     CRITICAL = "critical"
 
 

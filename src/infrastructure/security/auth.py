@@ -247,7 +247,7 @@ class UserAuthenticator:
         """Authenticate user with email and password (production, async with enhanced security)."""
         from sqlalchemy import text
         from sqlalchemy.exc import SQLAlchemyError
-        from src.infrastructure.persistence.database.production_config import (
+        from src.infrastructure.config.production_config import (
             initialize_database,
         )
 

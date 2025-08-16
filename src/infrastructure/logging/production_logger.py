@@ -193,6 +193,29 @@ class AuditLogger:
 
         self.logger.info("Audit event", extra=event_data)
 
+    def audit(self, message: str, **kwargs):
+        """Log audit event - compatibility method."""
+        event_data = {"message": message}
+        event_data.update(kwargs)
+        self.log_event(event_data)
+
+    def log_child_safety_action(self, action_type: str, child_id: str, details: dict, **kwargs):
+        """Log child safety action - specialized method."""
+        event_data = {
+            "action_type": action_type,
+            "child_id_hash": self._hash_child_id(child_id),
+            "details": details,
+            "safety_related": True,
+            "coppa_relevant": True
+        }
+        event_data.update(kwargs)
+        self.log_event(event_data)
+
+    def _hash_child_id(self, child_id: str) -> str:
+        """Hash child ID for privacy protection."""
+        import hashlib
+        return hashlib.sha256(child_id.encode()).hexdigest()[:8]
+
 
 class SecurityLogger:
     """Specialized logger for security events."""
@@ -223,6 +246,10 @@ class SecurityLogger:
 
         self.logger.addHandler(handler)
         self.logger.propagate = False
+
+    def info(self, message: str, **kwargs):
+        """Log security info."""
+        self.logger.info(message, extra=kwargs)
 
     def warning(self, message: str, **kwargs):
         """Log security warning."""

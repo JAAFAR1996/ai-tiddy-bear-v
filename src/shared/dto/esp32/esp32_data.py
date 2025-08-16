@@ -1,5 +1,6 @@
 from datetime import datetime
 from uuid import UUID
+from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -56,3 +57,13 @@ class ESP32EdgeAIResultDTO(BaseModel):
     result_value: str
     confidence: float | None = None
     raw_output: str | None = None
+
+
+class ESP32Data(BaseModel):
+    """Generic ESP32 communication data container."""
+    device_id: UUID
+    timestamp: datetime
+    message_type: str
+    payload: Dict[str, Any]
+    status: Optional[str] = None
+    error: Optional[str] = None

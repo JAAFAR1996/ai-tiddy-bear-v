@@ -248,6 +248,28 @@ class AgeFilter:
         # Fallback for edge cases
         return AgeCategory.PRETEEN
     
+    def validate_child_age(self, child_age: Any) -> Dict[str, Any]:
+        """
+        Validate child age for COPPA compliance.
+        
+        Args:
+            child_age: Age value to validate (any type)
+            
+        Returns:
+            Dict with 'is_valid' boolean and optional 'reason' string
+        """
+        if not self._is_valid_age(child_age):
+            return {
+                'is_valid': False,
+                'reason': f"Age {child_age} is outside COPPA compliance range ({self.MIN_AGE}-{self.MAX_AGE})"
+            }
+        
+        return {
+            'is_valid': True,
+            'age_category': self._get_age_category(child_age).value,
+            'complexity_level': self.COMPLEXITY_MAPPING[self._get_age_category(child_age)].value
+        }
+    
     def _check_complexity_match(
         self, 
         content_complexity: str, 

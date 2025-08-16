@@ -417,6 +417,30 @@ class MetricsCollector:
         compliance_ratio = max(0, (total_events - violations) / total_events)
         return compliance_ratio * 100.0
 
+    def gauge(self, name: str, value: float, labels: Optional[Dict[str, str]] = None) -> None:
+        """Set gauge metric value."""
+        try:
+            # Get or create gauge from registry
+            gauge_metric = self.registry.get_gauge(name, f"Gauge metric: {name}")
+            if labels:
+                gauge_metric.labels(**labels).set(value)
+            else:
+                gauge_metric.set(value)
+        except Exception as e:
+            logger.warning(f"Failed to set gauge metric {name}: {e}")
+
+    def counter(self, name: str, value: Union[int, float] = 1, labels: Optional[Dict[str, str]] = None) -> None:
+        """Increment counter metric."""
+        try:
+            # Get or create counter from registry
+            counter_metric = self.registry.get_counter(name, f"Counter metric: {name}")
+            if labels:
+                counter_metric.labels(**labels).inc(value)
+            else:
+                counter_metric.inc(value)
+        except Exception as e:
+            logger.warning(f"Failed to increment counter metric {name}: {e}")
+
     def get_prometheus_metrics(self) -> str:
         """Get Prometheus-formatted metrics."""
         return generate_latest(self.registry).decode("utf-8")

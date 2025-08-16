@@ -40,7 +40,7 @@ import redis.asyncio as redis
 from redis.asyncio import Redis
 
 # Internal imports  
-from src.infrastructure.logging.structlog_logger import StructlogLogger
+from src.infrastructure.logging.structured_logger import StructuredLogger
 
 logger = logging.getLogger(__name__)
 

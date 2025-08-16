@@ -569,6 +569,22 @@ class FallbackLogger:
             # This would send logs to external system
             self._log_buffer.clear()
             self._last_flush = time.time()
+    
+    def info(self, message: str, *args, **kwargs):
+        """Standard info logging method."""
+        self.logger.info(message, *args, **kwargs)
+    
+    def error(self, message: str, *args, **kwargs):
+        """Standard error logging method."""
+        self.logger.error(message, *args, **kwargs)
+    
+    def warning(self, message: str, *args, **kwargs):
+        """Standard warning logging method."""
+        self.logger.warning(message, *args, **kwargs)
+    
+    def debug(self, message: str, *args, **kwargs):
+        """Standard debug logging method."""
+        self.logger.debug(message, *args, **kwargs)
 
 
 # Global logger instance

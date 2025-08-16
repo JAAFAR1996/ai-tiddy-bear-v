@@ -35,7 +35,7 @@ from prometheus_client import (
 )
 
 # Internal imports
-from src.infrastructure.logging.structlog_logger import StructlogLogger
+from src.infrastructure.logging.structured_logger import StructuredLogger
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ class UserServiceMetrics:
         from src.infrastructure.monitoring.metrics_registry import get_metrics_registry
 
         self.registry = get_metrics_registry()
-        self.logger = StructlogLogger("user_service_metrics", component="monitoring")
+        self.logger = StructuredLogger("user_service_metrics", component="monitoring")
 
         # Initialize all metrics
         self._init_performance_metrics()
@@ -607,7 +607,7 @@ class UserServiceMetrics:
             "service": self.service_name,
             "uptime_seconds": uptime_seconds,
             "metrics_collected": True,
-            "prometheus_registry": len(self.registry._collector_to_names),
+            "prometheus_registry_collectors": len(list(self.registry._collector_to_names)) if hasattr(self.registry, '_collector_to_names') else 0,
             "timestamp": datetime.utcnow().isoformat(),
         }
 

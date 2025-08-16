@@ -15,7 +15,7 @@ import os
 from typing import Dict, Any, Optional, List
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response, BackgroundTasks
-from fastapi.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 import redis.asyncio as redis
 
 from .production_event_bus_advanced import ProductionEventBus, BackendType, EventPriority

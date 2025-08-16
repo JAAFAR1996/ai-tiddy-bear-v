@@ -377,9 +377,9 @@ class ProductionConfig(BaseSettings):
                     len(self.COPPA_ENCRYPTION_KEY) >= 32,
                 ]
             ),
-            "database_configured": self.DATABASE_URL.startswith("postgresql://"),
-            "redis_configured": self.REDIS_URL.startswith("redis"),
-            "openai_configured": self.OPENAI_API_KEY.startswith("sk-"),
+            "database_configured": str(self.DATABASE_URL).startswith("postgresql://"),
+            "redis_configured": str(self.REDIS_URL).startswith("redis"),
+            "openai_configured": str(self.OPENAI_API_KEY).startswith("sk-"),
             "cors_origins_count": len(self.CORS_ALLOWED_ORIGINS),
             "production_ready": self.is_production and not self.DEBUG,
             "coppa_compliant": self.COPPA_COMPLIANCE_MODE,
@@ -666,6 +666,65 @@ class ConfigSource(str, Enum):
 
 
 # ===========================================
+# DATABASE CONFIGURATION HELPERS
+# ===========================================
+
+def get_database_config() -> Dict[str, Any]:
+    """Get database configuration dictionary for SQLAlchemy."""
+    config = get_config()
+    return {
+        "url": config.DATABASE_URL,
+        "pool_size": config.DATABASE_POOL_SIZE,
+        "max_overflow": config.DATABASE_MAX_OVERFLOW,
+        "pool_timeout": config.DATABASE_POOL_TIMEOUT,
+        "echo": config.DEBUG and config.LOG_LEVEL == "DEBUG",
+        "pool_pre_ping": True,  # Enables connection health checks
+        "pool_recycle": 3600,   # Recycle connections every hour
+    }
+
+def get_redis_config() -> Dict[str, Any]:
+    """Get Redis configuration dictionary."""
+    config = get_config()
+    return {
+        "url": config.REDIS_URL,
+        "pool_size": config.REDIS_POOL_SIZE,
+        "timeout": config.REDIS_TIMEOUT,
+        "retry_on_timeout": True,
+        "socket_keepalive": True,
+        "socket_keepalive_options": {},
+    }
+
+def get_security_config() -> Dict[str, Any]:
+    """Get security configuration dictionary."""
+    config = get_config()
+    return {
+        "secret_key": config.SECRET_KEY,
+        "jwt_secret_key": config.JWT_SECRET_KEY,
+        "coppa_encryption_key": config.COPPA_ENCRYPTION_KEY,
+        "jwt_algorithm": config.JWT_ALGORITHM,
+        "access_token_expire_minutes": config.ACCESS_TOKEN_EXPIRE_MINUTES,
+        "refresh_token_expire_days": config.REFRESH_TOKEN_EXPIRE_DAYS,
+        "cors_allowed_origins": config.CORS_ALLOWED_ORIGINS,
+        "allowed_hosts": config.ALLOWED_HOSTS,
+    }
+
+def initialize_database() -> None:
+    """Initialize database connection for production use."""
+    from src.infrastructure.database.database_manager import get_database_manager
+    
+    try:
+        db_config = get_database_config()
+        db_manager = get_database_manager()
+        # Initialize with production configuration
+        logger.info("Database initialized with production configuration")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        raise ConfigurationError(
+            f"Database initialization failed: {str(e)}",
+            context={"config_key": "DATABASE_INIT"}
+        )
+
+# ===========================================
 # EXPORTS
 # ===========================================
 
@@ -679,4 +738,8 @@ __all__ = [
     "create_env_template",
     "Environment",
     "ConfigSource",
+    "get_database_config",
+    "get_redis_config", 
+    "get_security_config",
+    "initialize_database",
 ]

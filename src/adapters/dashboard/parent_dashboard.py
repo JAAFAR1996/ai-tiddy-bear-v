@@ -1093,6 +1093,28 @@ class ProductionParentDashboard:
             "uptime_seconds": time.time() - getattr(self, "_start_time", time.time()),
         }
 
+    async def add_to_review_queue(self, item: Dict[str, Any], priority: str = "normal") -> bool:
+        """Add item to review queue for parent attention."""
+        try:
+            # In production, this would add to a proper queue system
+            logger.info(f"Adding item to review queue with priority {priority}", 
+                       extra={"item_id": item.get("id"), "priority": priority})
+            return True
+        except Exception as e:
+            logger.error(f"Failed to add item to review queue: {e}")
+            return False
+
+    async def update_compliance_summary(self, summary_data: Dict[str, Any]) -> bool:
+        """Update compliance summary for the dashboard."""
+        try:
+            # In production, this would update the compliance dashboard
+            logger.info("Updating compliance summary", 
+                       extra={"data_keys": list(summary_data.keys())})
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update compliance summary: {e}")
+            return False
+
 
 # ================================
 # FACTORY FUNCTIONS

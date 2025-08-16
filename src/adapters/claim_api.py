@@ -17,6 +17,8 @@ import hmac
 import hashlib
 import secrets
 import re
+import json
+import asyncio
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from uuid import uuid4
@@ -87,12 +89,27 @@ def get_token_manager(config = ConfigDep) -> SimpleTokenManager:
 # Device management
 try:
     from src.user_experience.device_pairing.pairing_manager import DevicePairingManager, DeviceStatus
+    # DeviceStatus is now a str Enum, so it's JSON serializable
+    DEVICE_STATUS_IMPORTED = True
 except ImportError:
-    # Create mock device status
+    # Create mock device status that matches the Enum interface
     class DeviceStatus:
         UNREGISTERED = "unregistered"
+        PAIRING_MODE = "pairing_mode"
+        PAIRED = "paired"
+        ACTIVE = "active"
+        OFFLINE = "offline"
+        ERROR = "error"
+        MAINTENANCE = "maintenance"
     class DevicePairingManager:
         pass
+    DEVICE_STATUS_IMPORTED = False
+
+def get_device_status_value(status):
+    """Get the string value of a device status, handling both Enum and mock cases"""
+    if hasattr(status, 'value'):
+        return status.value
+    return status
 
 logger = get_logger(__name__, "claim_api")
 router = APIRouter(prefix="/pair", tags=["Device Claiming"])
@@ -159,12 +176,12 @@ def generate_device_oob_secret(device_id: str) -> str:
         # Double hash for extra security
         final_hash = hashlib.sha256((device_hash + salt).encode('utf-8')).hexdigest()
         
-        logger.info(f"Generated OOB secret for device {device_id[:12]}... (deterministic)")
+        logger.info("Generated OOB secret for device (deterministic)", extra={"device_id_prefix": device_id[:12]})
         
         return final_hash.upper()  # Return as uppercase hex
         
     except Exception as e:
-        logger.error(f"Error generating OOB secret for {device_id}: {e}")
+        logger.error("Error generating OOB secret", extra={"device_id": device_id, "error": str(e)})
         # Fallback to random secret
         import secrets
         return secrets.token_hex(32).upper()
@@ -213,12 +230,17 @@ class ClaimRequest(BaseModel):
     @validator('nonce')
     def validate_nonce_format(cls, v):
         """Validate nonce is proper hex format"""
+        if not v:
+            raise ValueError("Nonce cannot be empty")
         if len(v) % 2 != 0:
             raise ValueError("Nonce must be even-length hex string")
         try:
             bytes.fromhex(v)
         except ValueError:
             raise ValueError("Nonce must be valid hex")
+        # Sanitize for logging safety
+        if len(v) > 128:  # Prevent excessively long nonces
+            raise ValueError("Nonce too long (max 128 chars)")
         return v.lower()
 
 
@@ -247,12 +269,15 @@ class RefreshResponse(BaseModel):
 
 # Core Security Functions
 
-async def verify_nonce_once(nonce: str, redis_url: str) -> None:
+async def verify_nonce_once(nonce: str, redis_url: str, device_id: str = None, child_id: str = None) -> None:
     """
     Verify nonce hasn't been used before (anti-replay protection)
     
     Args:
         nonce: Hex-encoded nonce string
+        redis_url: Redis connection URL
+        device_id: Optional device identifier for scoped nonce
+        child_id: Optional child identifier for scoped nonce
         
     Raises:
         HTTPException: If Redis unavailable or nonce already used
@@ -266,28 +291,158 @@ async def verify_nonce_once(nonce: str, redis_url: str) -> None:
                 detail="Nonce verification service unavailable"
             )
 
-        nonce_key = f"device_nonce:{nonce}"
+        # Create scoped nonce key if device/child provided
+        if device_id and child_id:
+            # Normalize for consistency
+            norm_device_id = device_id.strip().lower()
+            norm_child_id = child_id.strip().lower()
+            nonce_key = f"device_nonce:{norm_device_id}:{norm_child_id}:{nonce}"
+        else:
+            # Fallback to global nonce (less secure)
+            nonce_key = f"device_nonce:{nonce}"
         
         # Atomic check-and-set with expiration
         is_new = await redis_client.set(nonce_key, "used", ex=900, nx=True)  # 15 min expiry
         
         if not is_new:
-            logger.warning(f"Nonce replay attack detected: {nonce[:16]}...")
+            logger.warning("Nonce replay attack detected", 
+                          extra={
+                              "nonce_prefix": nonce[:16],
+                              "device_id": mask_sensitive(device_id) if device_id else "global"
+                          })
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Nonce already used - possible replay attack"
             )
             
-        logger.debug(f"Nonce verified and marked as used: {nonce[:16]}...")
+        logger.debug("Nonce verified and marked as used", extra={"nonce_prefix": nonce[:16]})
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Nonce verification failed: {e}")
+        logger.error("Nonce verification failed", extra={"error": str(e)})
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Nonce verification error"
         )
+
+
+def mask_sensitive(value: str, visible_chars: int = 4) -> str:
+    """Mask sensitive data for logging"""
+    if not value or len(value) <= visible_chars:
+        return "***MASKED***"
+    return f"{value[:visible_chars]}...***MASKED***"
+
+
+async def verify_nonce_idempotent(
+    nonce: str, 
+    device_id: str, 
+    child_id: str, 
+    hmac_hex: str, 
+    redis_url: str, 
+    config: Any
+) -> Optional[dict]:
+    """
+    Verify nonce with idempotency support
+    Returns cached response if same request, None if new
+    """
+    # Feature flag check
+    if not getattr(config, "ENABLE_IDEMPOTENCY", False):
+        # Use scoped nonce verification
+        await verify_nonce_once(nonce, redis_url, device_id, child_id)
+        return None
+    
+    try:
+        redis_client = await redis_manager.get_client(redis_url)
+        if not redis_client:
+            if getattr(config, "DISABLE_IDEMPOTENCY_ON_REDIS_FAILURE", False):
+                logger.warning("Redis unavailable - idempotency disabled")
+                return None
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Nonce verification service unavailable"
+            )
+
+        # Normalize identifiers
+        norm_device_id = device_id.strip().lower()
+        norm_child_id = child_id.strip().lower()
+        
+        # Create idempotency key
+        idempotency_key = f"claim:{norm_device_id}:{norm_child_id}:{nonce}:{hmac_hex}"
+        
+        # Check if exact request was processed before - handle bytes
+        cached_response = await redis_client.get(idempotency_key)
+        if cached_response:
+            if isinstance(cached_response, bytes):
+                cached_response = cached_response.decode('utf-8')
+            logger.info("Idempotent request - returning cached response", 
+                       extra={
+                           "device_id": mask_sensitive(norm_device_id), 
+                           "nonce": "***MASKED***", 
+                           "hmac": "***MASKED***"
+                       })
+            return json.loads(cached_response)
+        
+        # Check if nonce was used with different HMAC
+        nonce_key = f"nonce:{norm_device_id}:{norm_child_id}:{nonce}"
+        
+        # Atomic set-if-not-exists
+        was_set = await redis_client.set(nonce_key, hmac_hex, ex=300, nx=True)
+        
+        if not was_set:
+            # Nonce already used, check if with same HMAC
+            existing_hmac = await redis_client.get(nonce_key)
+            if isinstance(existing_hmac, bytes):
+                existing_hmac = existing_hmac.decode('utf-8')
+            if existing_hmac and existing_hmac != hmac_hex:
+                logger.warning("Nonce reuse with different HMAC", 
+                             extra={
+                                 "device_id": mask_sensitive(norm_device_id), 
+                                 "nonce": "***MASKED***"
+                             })
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Nonce already used with different signature"
+                )
+        
+        return None
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in nonce verification: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Verification service error"
+        )
+
+
+async def store_idempotent_response(
+    nonce: str, 
+    device_id: str, 
+    child_id: str, 
+    hmac_hex: str, 
+    response: dict, 
+    redis_url: str,
+    config: Any
+) -> None:
+    """Store response for idempotency"""
+    if not getattr(config, "ENABLE_IDEMPOTENCY", False):
+        return
+    
+    try:
+        redis_client = await redis_manager.get_client(redis_url)
+        if redis_client:
+            norm_device_id = device_id.strip().lower()
+            norm_child_id = child_id.strip().lower()
+            idempotency_key = f"claim:{norm_device_id}:{norm_child_id}:{nonce}:{hmac_hex}"
+            
+            # Store with 300 second TTL
+            await redis_client.set(idempotency_key, json.dumps(response), ex=300)
+            logger.debug("Stored idempotent response", 
+                        extra={"key": mask_sensitive(idempotency_key)})
+    except Exception as e:
+        logger.warning(f"Failed to store idempotent response: {e}")
 
 
 def verify_device_hmac(
@@ -295,7 +450,8 @@ def verify_device_hmac(
     child_id: str, 
     nonce: str, 
     hmac_hex: str, 
-    oob_secret_hex: str
+    oob_secret_hex: str,
+    config: Any = None
 ) -> bool:
     """
     Verify HMAC signature using device OOB secret
@@ -308,11 +464,17 @@ def verify_device_hmac(
         nonce: Cryptographic nonce (hex)
         hmac_hex: Provided HMAC signature (64 hex chars)
         oob_secret_hex: Device out-of-band secret (64 hex chars)
+        config: Optional config for feature flags
         
     Returns:
         bool: True if HMAC is valid
     """
     try:
+        # Apply normalization if feature flag is enabled
+        if config and getattr(config, "NORMALIZE_IDS_IN_HMAC", False):
+            device_id = device_id.strip().lower()
+            child_id = child_id.strip().lower()
+        
         # Convert OOB secret from hex to bytes
         oob_secret_bytes = bytes.fromhex(oob_secret_hex)
         
@@ -331,70 +493,107 @@ def verify_device_hmac(
         is_valid = hmac.compare_digest(expected_hmac, hmac_hex.lower())
         
         if is_valid:
-            logger.debug(f"HMAC verification successful for device {device_id[:8]}...")
+            logger.debug("HMAC verification successful", extra={"device_id_prefix": device_id[:8]})
         else:
-            logger.warning(f"HMAC verification failed for device {device_id[:8]}...")
+            logger.warning("HMAC verification failed", extra={"device_id_prefix": device_id[:8]})
             
         return is_valid
         
     except Exception as e:
-        logger.error(f"HMAC verification error: {e}")
+        logger.error("HMAC verification error", extra={"error": str(e)})
         return False
 
 
 async def get_device_record(device_id: str, db: AsyncSession, config) -> Optional[Dict[str, Any]]:
     """
-    Retrieve device record from database or device registry
+    Retrieve device record from database with auto-registration support
     
     Args:
         device_id: Device identifier
         db: Database session
+        config: Configuration object
         
     Returns:
         Dict with device record or None if not found
     """
+    # Normalize device_id for consistency
+    norm_device_id = device_id.strip().lower()
+    
     try:
-        # In production, this would query a devices table
-        # For now, we'll use the device manager with enhanced mock data
-        
-        # Auto-registration for ALL environments (including production)
-        # This enables zero-configuration deployment
-        if device_id.startswith("Teddy-ESP32-") or device_id.startswith("ESP32-"):
-            # Generate unique per-device OOB secret
-            device_secret = generate_device_oob_secret(device_id)
+        # First try to fetch from DB (if table exists)
+        try:
+            from sqlalchemy import text
+            result = await db.execute(
+                text("""
+                    SELECT device_id, status, is_active, oob_secret
+                    FROM devices 
+                    WHERE LOWER(device_id) = :device_id
+                """),
+                {"device_id": norm_device_id}
+            )
+            device = result.fetchone()
             
-            # Auto-register device
-            logger.info(f"Auto-registering device: {device_id}")
-            
-            return {
-                "oob_secret_hex": device_secret,
-                "enabled": True,
-                "model": "ESP32-S3-WROOM",
-                "firmware_min_version": "1.0.0",
-                "manufacture_date": "2024-01-01",
-                "status": DeviceStatus.UNREGISTERED.value,
-                "auto_registered": True,
-                "environment": config.ENVIRONMENT
-            }
-        
-        # For development/test, also accept test devices
-        if config.ENVIRONMENT in ("development", "test"):
-            test_devices = {
-                "test-device-001": {
-                    "oob_secret_hex": "DEV001" + "0" * 58,
-                    "enabled": True,
-                    "model": "ESP32-DEV",
-                    "status": DeviceStatus.UNREGISTERED.value
+            if device:
+                return {
+                    "device_id": device.device_id,
+                    "oob_secret_hex": device.oob_secret.hex() if device.oob_secret else None,
+                    "enabled": device.is_active,
+                    "status": device.status
                 }
-            }
-            return test_devices.get(device_id)
+        except Exception as db_error:
+            # Table might not exist, continue with auto-registration logic
+            logger.debug(f"DB query failed, checking auto-registration: {db_error}")
         
-        # If device not found and doesn't match pattern, return None
-        logger.warning(f"Device {device_id} not found and doesn't match auto-registration pattern")
-        return None
+        # Check if auto-registration is enabled
+        enable_auto_register = getattr(config, "ENABLE_AUTO_REGISTER", False)
+        
+        if not enable_auto_register:
+            logger.info(f"Auto-registration disabled: {mask_sensitive(norm_device_id)}")
+            return None
+        
+        # Check if device matches auto-registration pattern
+        if not (norm_device_id.startswith("teddy-esp32-") or norm_device_id.startswith("esp32-")):
+            logger.info(f"Device doesn't match pattern: {mask_sensitive(norm_device_id)}")
+            return None
+        
+        # Generate OOB secret for new device
+        oob_secret_hex = generate_device_oob_secret(norm_device_id)
+        
+        # Try to insert into DB (if table exists)
+        try:
+            from sqlalchemy import text
+            logger.info(f"Auto-registering device: {mask_sensitive(norm_device_id)}")
+            
+            # Store device_id in lowercase for consistency
+            await db.execute(
+                text("""
+                    INSERT INTO devices (device_id, status, is_active, oob_secret)
+                    VALUES (:device_id, :status, TRUE, decode(:oob_secret, 'hex'))
+                    ON CONFLICT (device_id) DO NOTHING
+                """),
+                {
+                    "device_id": norm_device_id,  # Store normalized
+                    "status": "unregistered",
+                    "oob_secret": oob_secret_hex
+                }
+            )
+            await db.commit()
+        except Exception as insert_error:
+            # Table might not exist, just return in-memory record
+            logger.debug(f"DB insert failed, returning in-memory: {insert_error}")
+        
+        # Return the device record
+        return {
+            "device_id": norm_device_id,
+            "oob_secret_hex": oob_secret_hex,
+            "enabled": True,
+            "status": DeviceStatus.UNREGISTERED,  # str Enum is JSON serializable
+            "auto_registered": True
+        }
         
     except Exception as e:
-        logger.error(f"Error retrieving device record for {device_id}: {e}")
+        logger.error(f"Error in get_device_record: {e}", 
+                    extra={"device_id": mask_sensitive(norm_device_id)})
         return None
 
 
@@ -452,12 +651,12 @@ async def issue_device_tokens(
         
         expires_in = int(access_token_expires.total_seconds())
         
-        logger.info(f"Device tokens issued: device={device_id[:8]}..., child={child_id[:8]}...")
+        logger.info("Device tokens issued", extra={"device_id_prefix": device_id[:8], "child_id_prefix": child_id[:8]})
         
         return access_token, refresh_token, expires_in
         
     except Exception as e:
-        logger.error(f"Token generation failed: {e}")
+        logger.error("Token generation failed", extra={"error": str(e)})
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Token generation failed"
@@ -503,7 +702,7 @@ async def get_child_profile(child_id: str, db: AsyncSession) -> Optional[Dict[st
         }
         
     except Exception as e:
-        logger.error(f"Error retrieving child profile {child_id}: {e}")
+        logger.error("Error retrieving child profile", extra={"child_id": child_id, "error": str(e)})
         return None
 
 
@@ -518,22 +717,23 @@ async def claim_device(
     config = ConfigDep,
 ):
     """
-    ESP32 device claiming endpoint with comprehensive security
+    ESP32 device claiming endpoint with idempotency and normalization
     
     This endpoint allows ESP32 devices to claim access to a child's profile
     using HMAC-based authentication with out-of-band secrets.
     
     Security Features:
     - HMAC-SHA256 authentication with device OOB secrets
+    - Idempotency support for retry safety
     - Anti-replay protection using Redis nonce tracking
+    - Device ID normalization for consistency
     - Rate limiting per device and IP
     - COPPA compliance auditing
-    - Comprehensive request validation
     
     Args:
         claim_request: Device claim request with HMAC signature
-        fastapi_request: FastAPI request object for IP tracking
-        fastapi_response: FastAPI response object for headers
+        http_req: FastAPI request object for IP tracking
+        response: FastAPI response object for headers
         
     Returns:
         DeviceTokenResponse: JWT tokens and device configuration
@@ -544,57 +744,101 @@ async def claim_device(
     correlation_id = str(uuid4())
     client_ip = http_req.client.host if http_req.client else "unknown"
     
+    # Normalize identifiers at the beginning
+    norm_device_id = claim_request.device_id.strip().lower()
+    norm_child_id = claim_request.child_id.strip().lower()
+    
     try:
         logger.info(
-            f"Device claim attempt - Device: {claim_request.device_id[:8]}..., "
-            f"Child: {claim_request.child_id[:8]}..., IP: {client_ip}, ID: {correlation_id}"
+            "Device claim attempt",
+            extra={
+                "device_id": mask_sensitive(norm_device_id),
+                "child_id": mask_sensitive(norm_child_id),
+                "ip": client_ip,
+                "correlation_id": correlation_id,
+                "nonce": "***MASKED***",
+                "hmac": "***MASKED***"
+            }
         )
         
-        # Token manager for JWT generation
-        token_manager = SimpleTokenManager(secret=config.JWT_SECRET_KEY)
+        # Step 1: Check idempotency
+        cached_response = await verify_nonce_idempotent(
+            claim_request.nonce,
+            norm_device_id,
+            norm_child_id,
+            claim_request.hmac_hex,
+            config.REDIS_URL,
+            config
+        )
         
-        # Now using injected db session directly
-        # Step 1: Anti-replay protection
-        await verify_nonce_once(claim_request.nonce, config.REDIS_URL)
-            
-        # Step 2: Device validation
-        device_record = await get_device_record(claim_request.device_id, db, config)
+        if cached_response:
+            # Return cached response for idempotent request
+            logger.info("Returning cached response",
+                       extra={
+                           "device_id": mask_sensitive(norm_device_id),
+                           "correlation_id": correlation_id
+                       })
+            response.headers["X-Correlation-Id"] = correlation_id
+            response.headers["X-Idempotent-Request"] = "true"
+            return DeviceTokenResponse(**cached_response)
+        
+        # Step 2: Device validation (uses normalized ID internally)
+        device_record = await get_device_record(norm_device_id, db, config)
         if not device_record:
-            logger.warning(f"Device not found: {claim_request.device_id} (IP: {client_ip})")
+            logger.warning("Device not found", 
+                          extra={
+                              "device_id": mask_sensitive(norm_device_id), 
+                              "client_ip": client_ip
+                          })
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Device not registered or not found"
             )
         
         if not device_record.get("enabled", False):
-            logger.warning(f"Device disabled: {claim_request.device_id} (IP: {client_ip})")
+            logger.warning("Device disabled", 
+                          extra={
+                              "device_id": mask_sensitive(norm_device_id), 
+                              "client_ip": client_ip
+                          })
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Device is disabled or suspended"
             )
         
-        # Step 3: HMAC signature verification
+        # Step 3: HMAC signature verification with ORIGINAL IDs
+        # Pass original values - normalization happens inside verify_device_hmac if flag is set
         is_valid_hmac = verify_device_hmac(
-            claim_request.device_id,
-            claim_request.child_id,
+            claim_request.device_id,  # Original case
+            claim_request.child_id,   # Original case
             claim_request.nonce,
             claim_request.hmac_hex,
-            device_record["oob_secret_hex"]
+            device_record["oob_secret_hex"],
+            config  # Pass config for NORMALIZE_IDS_IN_HMAC flag
         )
         
         if not is_valid_hmac:
             logger.warning(
-                f"Invalid HMAC signature - Device: {claim_request.device_id[:8]}..., IP: {client_ip}"
+                "Invalid HMAC signature",
+                extra={
+                    "device_id": mask_sensitive(norm_device_id),
+                    "ip": client_ip,
+                    "hmac": "***MASKED***"
+                }
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid device authentication signature"
             )
         
-        # Step 4: Child profile validation
-        child_profile = await get_child_profile(claim_request.child_id, db)
+        # Step 4: Child profile validation with normalized ID
+        child_profile = await get_child_profile(norm_child_id, db)
         if not child_profile:
-            logger.warning(f"Child profile not found: {claim_request.child_id} (IP: {client_ip})")
+            logger.warning("Child profile not found", 
+                          extra={
+                              "child_id": mask_sensitive(norm_child_id), 
+                              "client_ip": client_ip
+                          })
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Child profile not found or inactive"
@@ -603,10 +847,11 @@ async def claim_device(
         # Step 5: Generate device session
         device_session_id = str(uuid4())
         
-        # Step 6: Issue JWT tokens
+        # Step 6: Issue JWT tokens with normalized IDs
+        token_manager = SimpleTokenManager(secret=config.JWT_SECRET_KEY)
         access_token, refresh_token, expires_in = await issue_device_tokens(
-            claim_request.device_id,
-            claim_request.child_id,
+            norm_device_id,
+            norm_child_id,
             device_session_id,
             token_manager
         )
@@ -623,47 +868,74 @@ async def claim_device(
             "firmware_update_url": f"https://{config.HOST}/api/v1/esp32/firmware"
         }
         
-        # Step 8: COPPA audit logging
+        # Step 8: Build response data for idempotency storage
+        response_data = {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "expires_in": expires_in,
+            "device_session_id": device_session_id,
+            "child_profile": child_profile,
+            "device_config": device_config
+        }
+        
+        # Step 9: Store response for idempotency
+        await store_idempotent_response(
+            claim_request.nonce,
+            norm_device_id,
+            norm_child_id,
+            claim_request.hmac_hex,
+            response_data,
+            config.REDIS_URL,
+            config
+        )
+        
+        # Step 10: COPPA audit logging with masked data
         await coppa_audit.log_event(
             event_type="device_claimed",
             user_id=child_profile.get("parent_id"),
-            child_id=claim_request.child_id,
-            device_id=claim_request.device_id,
+            child_id=norm_child_id,
+            device_id=norm_device_id,
             details={
                 "device_model": device_record.get("model"),
                 "firmware_version": claim_request.firmware_version,
                 "client_ip": client_ip,
-                "correlation_id": correlation_id
+                "correlation_id": correlation_id,
+                "auto_registered": device_record.get("auto_registered", False)
             },
         )
         
-        # Step 9: Security headers
+        # Step 11: Security headers
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         response.headers["X-Child-Safe"] = "true"
         response.headers["X-COPPA-Compliant"] = "true"
+        response.headers["X-Correlation-Id"] = correlation_id
         
         logger.info(
-            f"Device claim successful - Device: {claim_request.device_id[:8]}..., "
-            f"Child: {claim_request.child_id[:8]}..., Session: {device_session_id[:8]}..."
+            "Device claim successful",
+            extra={
+                "device_id": mask_sensitive(norm_device_id),
+                "child_id": mask_sensitive(norm_child_id),
+                "session_id": device_session_id,
+                "correlation_id": correlation_id,
+                "access_token": "***MASKED***",
+                "refresh_token": "***MASKED***"
+            }
         )
             
-        return DeviceTokenResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            expires_in=expires_in,
-            device_session_id=device_session_id,
-            child_profile=child_profile,
-            device_config=device_config
-        )
+        return DeviceTokenResponse(**response_data)
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error(
-            f"Device claim failed - Device: {claim_request.device_id[:8]}..., "
-            f"Error: {e}, ID: {correlation_id}"
+            "Device claim failed",
+            extra={
+                "device_id": mask_sensitive(norm_device_id),
+                "error": str(e),
+                "correlation_id": correlation_id
+            }
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

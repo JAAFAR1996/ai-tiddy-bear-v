@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends
 from typing import Dict, Any
 
-from src.application.services.notification.notification_service import (
+from src.application.services.notification.notification_service_main import (
     ProductionNotificationService,
     create_production_notification_service
 )

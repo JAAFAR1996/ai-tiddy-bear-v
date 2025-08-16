@@ -20,8 +20,8 @@ import re
 logger = logging.getLogger(__name__)
 
 
-class DeviceStatus(Enum):
-    """حالة الجهاز"""
+class DeviceStatus(str, Enum):
+    """حالة الجهاز - JSON serializable"""
 
     UNREGISTERED = "unregistered"
     PAIRING_MODE = "pairing_mode"

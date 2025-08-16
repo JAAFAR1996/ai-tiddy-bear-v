@@ -895,6 +895,58 @@ class PhoneCallProvider(DeliveryProvider):
             "timestamp": datetime.utcnow().isoformat(),
         }
 
+    async def send_sms(
+        self,
+        notification_id: str,
+        recipient: NotificationRecipient,
+        template: NotificationTemplate,
+        priority: NotificationPriority,
+    ) -> Dict[str, Any]:
+        """Send SMS notification."""
+        if not recipient.phone:
+            return {
+                "status": NotificationStatus.FAILED.value,
+                "error": "No phone number provided",
+            }
+
+        # Check rate limiting
+        if not await self._rate_limiter.check_rate_limit(recipient.user_id, "sms"):
+            return {
+                "status": NotificationStatus.RATE_LIMITED.value,
+                "error": "SMS rate limit exceeded",
+            }
+
+        try:
+            # Implementation would use SMS provider (Twilio, AWS SNS, etc.)
+            self.logger.info(
+                f"Sending SMS to {recipient.phone[:4]}****",
+                extra={"notification_id": notification_id, "channel": "sms"},
+            )
+
+            # Update metrics
+            if NOTIFICATIONS_SENT:
+                NOTIFICATIONS_SENT.labels(channel="sms", status="sent").inc()
+
+            return {
+                "status": NotificationStatus.SENT.value,
+                "provider": "sms",
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+
+        except Exception as e:
+            self.logger.error(
+                f"Failed to send SMS: {str(e)}",
+                extra={"notification_id": notification_id},
+            )
+            
+            if NOTIFICATIONS_SENT:
+                NOTIFICATIONS_SENT.labels(channel="sms", status="failed").inc()
+            
+            return {
+                "status": NotificationStatus.FAILED.value,
+                "error": str(e),
+            }
+
 
 # Production Factory (outside class)
 def create_production_notification_service(

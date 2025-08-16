@@ -1,0 +1,85 @@
+{
+  "timestamp": "2025-08-15T14:31:43.527266",
+  "summary": {
+    "total_tests": 6,
+    "passed": 3,
+    "failed": 3,
+    "success_rate": 50.0
+  },
+  "results": [
+    {
+      "test_name": "Import Errors Fixed",
+      "success": false,
+      "message": "Failed imports: [\"src.adapters.api_routes: No module named 'asyncpg'\", \"src.infrastructure.container: No module named 'asyncpg'\", \"src.utils.crypto_utils: No module named 'bleach'\"]",
+      "details": {
+        "successful": [
+          "src.application.services.notification.notification_service_main -> aiosmtplib"
+        ]
+      },
+      "timestamp": "2025-08-15T14:31:42.485623"
+    },
+    {
+      "test_name": "Fallback Mechanisms",
+      "success": false,
+      "message": "Fallback mechanism test failed: No module named 'asyncpg'",
+      "details": {
+        "completed_tests": []
+      },
+      "timestamp": "2025-08-15T14:31:42.531999"
+    },
+    {
+      "test_name": "Crypto Utils Functions",
+      "success": true,
+      "message": "All crypto utils functions working correctly",
+      "details": {
+        "password_hashing": "\u2705",
+        "data_encryption": "\u2705",
+        "message_encryption": "\u2705",
+        "wrapper_functions": "\u2705"
+      },
+      "timestamp": "2025-08-15T14:31:42.926198"
+    },
+    {
+      "test_name": "Notification Service Methods",
+      "success": true,
+      "message": "Notification service methods working correctly",
+      "details": {
+        "methods_present": [
+          "send_notification",
+          "health_check",
+          "get_notification_history",
+          "get_delivery_analytics"
+        ],
+        "health_check": "\u2705",
+        "sms_provider": "\u2705"
+      },
+      "timestamp": "2025-08-15T14:31:42.939178"
+    },
+    {
+      "test_name": "Syntax and Structure",
+      "success": true,
+      "message": "All 7 files have correct syntax",
+      "details": {
+        "results": [
+          "\u2705 src/adapters/claim_api.py: Syntax OK",
+          "\u2705 src/main.py: Syntax OK",
+          "\u2705 src/infrastructure/monitoring/child_safety_alerts.py: Syntax OK",
+          "\u2705 src/adapters/api_routes.py: Syntax OK",
+          "\u2705 src/infrastructure/container.py: Syntax OK",
+          "\u2705 src/utils/crypto_utils.py: Syntax OK",
+          "\u2705 src/application/services/notification/notification_service_main.py: Syntax OK"
+        ]
+      },
+      "timestamp": "2025-08-15T14:31:43.004066"
+    },
+    {
+      "test_name": "Structured Logging Fixes",
+      "success": false,
+      "message": "Structured logging test failed: No module named 'asyncpg'",
+      "details": {
+        "error": "Traceback (most recent call last):\n  File \"/mnt/c/Users/jaafa/Desktop/ai teddy bear/test_production_fixes.py\", line 304, in test_structured_logging_fixes\n    from src.adapters.claim_api import router\n  File \"/mnt/c/Users/jaafa/Desktop/ai teddy bear/src/adapters/claim_api.py\", line 32, in <module>\n    from src.application.dependencies import ConfigDep\n  File \"/mnt/c/Users/jaafa/Desktop/ai teddy bear/src/application/dependencies.py\", line 15, in <module>\n    from src.infrastructure.container import get_injector\n  File \"/mnt/c/Users/jaafa/Desktop/ai teddy bear/src/infrastructure/container.py\", line 12, in <module>\n    from src.infrastructure.database.repository import UserRepository\n  File \"/mnt/c/Users/jaafa/Desktop/ai teddy bear/src/infrastructure/database/__init__.py\", line 13, in <module>\n    from .database_manager import (\n  File \"/mnt/c/Users/jaafa/Desktop/ai teddy bear/src/infrastructure/database/database_manager.py\", line 27, in <module>\n    import asyncpg\nModuleNotFoundError: No module named 'asyncpg'\n"
+      },
+      "timestamp": "2025-08-15T14:31:43.264469"
+    }
+  ]
+}
