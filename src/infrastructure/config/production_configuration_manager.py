@@ -105,8 +105,11 @@ class ProductionConfigurationManager:
         # Set up validation rules
         self._setup_validation_rules()
 
-        # Start configuration monitoring
-        asyncio.create_task(self._start_config_monitoring())
+        # Initialize monitoring task reference
+        self._monitoring_task = None
+        
+        # Start configuration monitoring in a production-safe way
+        self._start_monitoring_safely()
 
     def _load_base_configuration(self):
         """Load base configuration from files."""
@@ -503,6 +506,57 @@ class ProductionConfigurationManager:
         ]
 
         return recent_changes
+    
+    async def get_section(self, section_name: str) -> Dict[str, Any]:
+        """
+        Get a complete configuration section.
+        
+        Args:
+            section_name: The name of the configuration section to retrieve
+            
+        Returns:
+            Dictionary containing all configuration values in the section
+            
+        Examples:
+            - get_section("database") returns all database.* configuration
+            - get_section("security") returns all security.* configuration
+        """
+        try:
+            with self._config_lock:
+                section_config = {}
+                
+                # Look for exact section match first
+                if section_name in self._config_data:
+                    section_data = self._config_data[section_name]
+                    if isinstance(section_data, dict):
+                        section_config = section_data.copy()
+                    else:
+                        # If it's not a dict, return it as a single value
+                        return {section_name: section_data}
+                
+                # Also look for keys that start with section_name.
+                section_prefix = f"{section_name}."
+                for key, value in self._config_data.items():
+                    if key.startswith(section_prefix):
+                        # Extract the sub-key after the section name
+                        sub_key = key[len(section_prefix):]
+                        section_config[sub_key] = value
+                
+                # If no section found, try to get nested values
+                if not section_config:
+                    nested_value = self._get_nested_value(self._config_data, section_name)
+                    if nested_value is not None and isinstance(nested_value, dict):
+                        section_config = nested_value.copy()
+                
+                self.logger.debug(
+                    f"Retrieved configuration section '{section_name}' with {len(section_config)} items"
+                )
+                
+                return section_config
+                
+        except Exception as e:
+            self.logger.error(f"Failed to get configuration section '{section_name}': {str(e)}")
+            return {}
 
     # Helper Methods
 
@@ -587,8 +641,39 @@ class ProductionConfigurationManager:
             except Exception as e:
                 self.logger.error(f"Error in configuration watcher: {str(e)}")
 
+    def _start_monitoring_safely(self):
+        """Start configuration monitoring in a production-safe way."""
+        try:
+            # Check if we're in an async context
+            loop = asyncio.get_running_loop()
+            # If we have a running loop, start monitoring
+            self._monitoring_task = loop.create_task(self._start_config_monitoring())
+            self.logger.info("Configuration monitoring started")
+        except RuntimeError:
+            # No running event loop - this is expected during import/initialization
+            # Monitoring will be started later when the application starts
+            self.logger.debug("Configuration monitoring deferred - no event loop running")
+    
+    async def start_monitoring(self):
+        """Start configuration monitoring - call this when the application starts."""
+        if self._monitoring_task is None:
+            self._monitoring_task = asyncio.create_task(self._start_config_monitoring())
+            self.logger.info("Configuration monitoring started")
+    
+    async def stop_monitoring(self):
+        """Stop configuration monitoring gracefully."""
+        if self._monitoring_task and not self._monitoring_task.done():
+            self._monitoring_task.cancel()
+            try:
+                await self._monitoring_task
+            except asyncio.CancelledError:
+                pass
+            self.logger.info("Configuration monitoring stopped")
+
     async def _start_config_monitoring(self):
         """Start monitoring configuration files for changes."""
+        self.logger.info("Starting configuration file monitoring")
+        
         while True:
             try:
                 # Monitor configuration files for changes
@@ -610,6 +695,9 @@ class ProductionConfigurationManager:
 
                 await asyncio.sleep(30)  # Check every 30 seconds
 
+            except asyncio.CancelledError:
+                self.logger.info("Configuration monitoring cancelled")
+                break
             except Exception as e:
                 self.logger.error(f"Error in configuration monitoring: {str(e)}")
                 await asyncio.sleep(30)
@@ -649,6 +737,11 @@ class ProductionConfigurationManager:
                     if sensitive_key.lower() in key.lower():
                         data[key] = "***REDACTED***"
                         break
+
+    async def shutdown(self):
+        """Gracefully shutdown the configuration manager."""
+        await self.stop_monitoring()
+        self.logger.info("Configuration manager shutdown complete")
 
 
 # Service Factory

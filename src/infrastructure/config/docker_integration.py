@@ -17,7 +17,33 @@ from typing import Dict, Any, Optional, List, Union
 from dataclasses import dataclass
 from datetime import datetime
 
-from .configuration_manager import ConfigurationManager, ConfigSource, ConfigItem, Environment
+from .production_configuration_manager import (
+    ProductionConfigurationManager, 
+    ConfigEnvironment
+)
+
+# Type aliases for compatibility
+ConfigurationManager = ProductionConfigurationManager
+Environment = ConfigEnvironment
+
+# Mock classes for compatibility
+class ConfigSource:
+    ENVIRONMENT_VARIABLES = "environment_variables"
+    VAULT = "vault"
+    AWS_SECRETS_MANAGER = "aws_secrets_manager"
+    CONFIG_FILE = "config_file"
+    DEFAULT = "default"
+
+class ConfigItem:
+    def __init__(self, key, value, source, environment, sensitive=False, last_updated=None, validation=None):
+        self.key = key
+        self.value = value
+        self.source = source
+        self.environment = environment
+        self.sensitive = sensitive
+        self.last_updated = last_updated
+        self.validation = validation
+        self.encrypted = False
 from ..logging import get_logger, audit_logger
 
 @dataclass
@@ -161,6 +187,8 @@ class ContainerConfigurationManager(ConfigurationManager):
     """Extended configuration manager for containerized environments."""
     
     def __init__(self, environment: Optional[Environment] = None):
+        if environment is None:
+            environment = Environment.DEVELOPMENT
         super().__init__(environment)
         
         # Container-specific providers
@@ -178,18 +206,30 @@ class ContainerConfigurationManager(ConfigurationManager):
             )
         )
         
+        # Initialize missing attributes
+        self._config_items = {}
+        
+        # Initialize basic secret manager
+        class BasicSecretManager:
+            def encrypt(self, value: str) -> str:
+                # Basic encryption placeholder - in production use proper encryption
+                return f"encrypted_{value}"
+            
+            def decrypt(self, encrypted_value: str) -> str:
+                # Basic decryption placeholder
+                if encrypted_value.startswith("encrypted_"):
+                    return encrypted_value[10:]
+                return encrypted_value
+        
+        self.secret_manager = BasicSecretManager()
+        
         # Container metadata
         self.container_info = self._get_container_info()
         self.logger = get_logger("container_config_manager")
         
         self.logger.info(
-            f"Container configuration manager initialized",
-            metadata={
-                "environment": self.environment.value,
-                "container_runtime": self._detect_container_runtime(),
-                "orchestrator": self._detect_orchestrator(),
-                **self.container_info
-            }
+            f"Container configuration manager initialized - Environment: {self.environment.value}, "
+            f"Runtime: {self._detect_container_runtime()}, Orchestrator: {self._detect_orchestrator()}"
         )
     
     def _get_container_info(self) -> Dict[str, Any]:
@@ -257,6 +297,45 @@ class ContainerConfigurationManager(ConfigurationManager):
     async def _get_from_kubernetes_secrets(self, key: str) -> Optional[str]:
         """Get configuration from Kubernetes Secrets."""
         return await self.kubernetes.get_secret_value(key)
+    
+    def _get_validation_for_key(self, key: str):
+        """Get validation rule for a configuration key."""
+        # Use parent class validation rules if available
+        if hasattr(self, '_validation_rules') and key in self._validation_rules:
+            return self._validation_rules[key]
+        return None
+    
+    async def _get_from_env(self, key: str) -> Optional[str]:
+        """Get configuration from environment variables."""
+        return os.getenv(key)
+    
+    async def _get_from_vault(self, key: str) -> Optional[str]:
+        """Get configuration from Vault (placeholder implementation)."""
+        # Placeholder for Vault integration
+        return None
+    
+    async def _get_from_aws_secrets(self, key: str) -> Optional[str]:
+        """Get configuration from AWS Secrets Manager (placeholder implementation)."""
+        # Placeholder for AWS Secrets Manager integration
+        return None
+    
+    async def _get_from_file(self, key: str) -> Optional[str]:
+        """Get configuration from file."""
+        # Use parent class method if available
+        if hasattr(super(), 'get'):
+            try:
+                return await super().get(key)
+            except:
+                pass
+        return None
+    
+    def _get_default_value(self, key: str):
+        """Get default value for a configuration key."""
+        # Check validation rules for default values
+        validation = self._get_validation_for_key(key)
+        if validation and hasattr(validation, 'default'):
+            return validation.default
+        return None
     
     async def _load_config_item(self, key: str) -> Optional[ConfigItem]:
         """Load configuration item with container sources."""
