@@ -39,7 +39,8 @@ logger = logging.getLogger(__name__)
 # Database integration - production-grade DI
 try:
     from src.application.dependencies import DatabaseConnectionDep
-    from src.infrastructure.database.models import User, Child
+    from src.infrastructure.database.models import User, Child, Device, DeviceStatus
+    from src.services.device_service import DeviceService
 except ImportError as e:
     logger.warning(f"Database imports not available: {e}")
     # Create fallback dependency
@@ -62,6 +63,17 @@ except ImportError:
         async def log_event(self, **kwargs):
             logger.info(f"AUDIT: {kwargs}")
     coppa_audit = MockAudit()
+
+# ESP32 OOB Secret Generation for Auto-Registration  
+def generate_device_oob_secret(device_id: str) -> str:
+    """Generate deterministic but unique secret per device."""
+    import hashlib
+    
+    # نفس secret لنفس device_id، لكن مختلف بين devices
+    master_key = "TEDDY_BEAR_MASTER_KEY_2025"
+    combined = f"{master_key}_{device_id}"
+    
+    return hashlib.sha256(combined.encode()).hexdigest()
 
 # Token Manager with Dependency Injection (NO import-time config access)
 import jwt
@@ -803,29 +815,49 @@ async def claim_device(
             response.headers["X-Idempotent-Request"] = "true"
             return DeviceTokenResponse(**cached_response)
         
-        # Step 2: Device validation (uses normalized ID internally)
-        device_record = await get_device_record(norm_device_id, db, config)
-        if not device_record:
-            logger.warning("Device not found", 
-                          extra={
-                              "device_id": mask_sensitive(norm_device_id), 
-                              "client_ip": client_ip
-                          })
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Device not registered or not found"
-            )
+        # Step 2: Device validation using DeviceService with auto-registration
+        device = await DeviceService.get_device(norm_device_id, db)
+        if not device:
+            # Auto-registration for ESP32 devices
+            if norm_device_id.startswith(("teddy-esp32-", "esp32-")):
+                oob_secret = generate_device_oob_secret(norm_device_id)
+                device = await DeviceService.create_device(
+                    device_id=norm_device_id,
+                    oob_secret=oob_secret,
+                    firmware_version=getattr(claim_request, 'firmware_version', None),
+                    db=db
+                )
+                logger.info(f"Auto-registered device: {DeviceService.mask_sensitive(norm_device_id)}")
+            else:
+                logger.warning("Device not found and doesn't match auto-registration pattern", 
+                              extra={
+                                  "device_id": DeviceService.mask_sensitive(norm_device_id), 
+                                  "client_ip": client_ip
+                              })
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Device not registered or not found"
+                )
         
-        if not device_record.get("enabled", False):
+        # Check if device is active
+        if not device.is_active:
             logger.warning("Device disabled", 
                           extra={
-                              "device_id": mask_sensitive(norm_device_id), 
+                              "device_id": DeviceService.mask_sensitive(norm_device_id), 
                               "client_ip": client_ip
                           })
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Device is disabled or suspended"
             )
+        
+        # Convert Device model to dict format for compatibility with existing code
+        device_record = {
+            "device_id": device.device_id,
+            "oob_secret_hex": device.oob_secret,
+            "enabled": device.is_active,
+            "status": device.status
+        }
         
         # Step 3: HMAC signature verification with ORIGINAL IDs
         # Pass original values - normalization happens inside verify_device_hmac if flag is set
