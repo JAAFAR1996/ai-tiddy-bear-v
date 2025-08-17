@@ -854,7 +854,7 @@ async def claim_device(
         # Convert Device model to dict format for compatibility with existing code
         device_record = {
             "device_id": device.device_id,
-            "oob_secret_hex": device.oob_secret,
+            "oob_secret_hex": device.oob_secret_hash,
             "enabled": device.is_active,
             "status": device.status
         }
