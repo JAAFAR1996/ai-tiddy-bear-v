@@ -42,6 +42,118 @@ from ..config.config_manager_provider import get_config_manager
 from ..logging import get_logger, audit_logger
 
 
+# Migration SQL Scripts
+ADD_IS_ACTIVE_TO_CHILDREN_SQL = """
+-- Add is_active field to children table
+ALTER TABLE children 
+ADD COLUMN is_active BOOLEAN DEFAULT TRUE NOT NULL;
+
+-- Add index for performance
+CREATE INDEX idx_children_is_active ON children(is_active);
+
+-- Update existing records to be active
+UPDATE children SET is_active = TRUE WHERE is_active IS NULL;
+"""
+
+CREATE_DEVICES_TABLE_SQL = """
+-- Create devices table
+CREATE TABLE devices (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    
+    -- Status and soft delete support
+    is_active BOOLEAN DEFAULT TRUE NOT NULL,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    is_deleted BOOLEAN DEFAULT FALSE NOT NULL,
+    
+    -- Data retention and compliance
+    retention_status VARCHAR(32) DEFAULT 'active' NOT NULL,
+    scheduled_deletion_at TIMESTAMP WITH TIME ZONE,
+    
+    -- Audit fields
+    created_by UUID,
+    updated_by UUID,
+    
+    -- Metadata
+    metadata_json JSONB DEFAULT '{}' NOT NULL,
+    
+    -- Device identification
+    device_id VARCHAR(64) UNIQUE NOT NULL,
+    device_type VARCHAR(32) DEFAULT 'ESP32_TEDDY' NOT NULL,
+    hardware_version VARCHAR(16),
+    firmware_version VARCHAR(16),
+    
+    -- Device status and health
+    status VARCHAR(32) DEFAULT 'pending' NOT NULL,
+    last_seen_at TIMESTAMP WITH TIME ZONE,
+    ip_address VARCHAR(45),
+    
+    -- Security credentials
+    oob_secret_hash VARCHAR(64),
+    device_fingerprint VARCHAR(128),
+    mac_address VARCHAR(17),
+    
+    -- Pairing and relationships
+    paired_at TIMESTAMP WITH TIME ZONE,
+    parent_id UUID REFERENCES users(id),
+    
+    -- Device configuration
+    configuration JSONB DEFAULT '{}' NOT NULL,
+    capabilities JSONB DEFAULT '[]' NOT NULL,
+    
+    -- Usage tracking
+    total_uptime_hours FLOAT DEFAULT 0.0 NOT NULL,
+    interaction_count INTEGER DEFAULT 0 NOT NULL,
+    last_interaction_at TIMESTAMP WITH TIME ZONE,
+    
+    -- Audit and compliance
+    registration_source VARCHAR(32) DEFAULT 'auto' NOT NULL,
+    compliance_flags JSONB DEFAULT '{}' NOT NULL,
+    
+    -- Constraints
+    CONSTRAINT check_device_id_format CHECK (device_id ~ '^[A-Za-z0-9_-]+$'),
+    CONSTRAINT uq_device_id UNIQUE (device_id)
+);
+
+-- Create indexes for performance
+CREATE INDEX idx_devices_device_id ON devices(device_id);
+CREATE INDEX idx_devices_status ON devices(status);
+CREATE INDEX idx_devices_parent_id ON devices(parent_id);
+CREATE INDEX idx_devices_last_seen ON devices(last_seen_at);
+CREATE INDEX idx_devices_active_status ON devices(is_active, status);
+CREATE INDEX idx_devices_is_active ON devices(is_active);
+CREATE INDEX idx_devices_retention_status ON devices(retention_status);
+
+-- Add trigger for updated_at
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_devices_updated_at 
+    BEFORE UPDATE ON devices 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+"""
+
+ROLLBACK_DEVICES_TABLE_SQL = """
+-- Rollback devices table creation
+DROP TRIGGER IF EXISTS update_devices_updated_at ON devices;
+DROP FUNCTION IF EXISTS update_updated_at_column();
+DROP TABLE IF EXISTS devices CASCADE;
+"""
+
+ROLLBACK_IS_ACTIVE_CHILDREN_SQL = """
+-- Rollback is_active field from children table
+DROP INDEX IF EXISTS idx_children_is_active;
+ALTER TABLE children DROP COLUMN IF EXISTS is_active;
+"""
+
+
 class MigrationStatus(Enum):
     """Migration status enumeration."""
 

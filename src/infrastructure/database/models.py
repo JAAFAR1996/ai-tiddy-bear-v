@@ -16,6 +16,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from enum import Enum as PyEnum
+import re
 
 from sqlalchemy import (
     Column,
@@ -114,6 +115,15 @@ class DataRetentionStatus(PyEnum):
     ANONYMIZED = "anonymized"
 
 
+class DeviceStatus(PyEnum):
+    """Device status enumeration."""
+    PENDING = "pending"
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    BLOCKED = "blocked"
+    MAINTENANCE = "maintenance"
+
+
 # Base model class with common functionality
 class BaseModel(Base):
     """Base model with common fields and functionality."""
@@ -131,7 +141,8 @@ class BaseModel(Base):
         nullable=False,
     )
 
-    # Soft delete support
+    # Status and soft delete support
+    is_active = Column(Boolean, default=True, nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     is_deleted = Column(Boolean, default=False, nullable=False)
 
@@ -1099,6 +1110,62 @@ def add_subscription_relationship_to_user():
     # This would be added to the User class:
     # subscriptions = relationship("Subscription", back_populates="user")
     pass
+
+
+class Device(BaseModel):
+    """ESP32 Device model with security and tracking features."""
+    
+    __tablename__ = "devices"
+    
+    # ✅ إضافة الحقل المفقود:
+    is_active = Column(Boolean, default=True, nullable=False)
+    
+    # Device identification
+    device_id = Column(String(64), unique=True, nullable=False, index=True)
+    device_type = Column(String(32), default="ESP32_TEDDY", nullable=False)
+    hardware_version = Column(String(16), nullable=True)
+    firmware_version = Column(String(16), nullable=True)
+    
+    # Device status and health
+    status = Column(Enum(DeviceStatus), default=DeviceStatus.PENDING, nullable=False)
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
+    ip_address = Column(String(45), nullable=True)
+    
+    # Security credentials
+    oob_secret_hash = Column(String(64), nullable=True)
+    device_fingerprint = Column(String(128), nullable=True)
+    mac_address = Column(String(17), nullable=True)
+    
+    # Pairing and relationships
+    paired_at = Column(DateTime(timezone=True), nullable=True)
+    parent_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    
+    # Device configuration
+    configuration = Column(JSONB, default=dict, nullable=False)
+    capabilities = Column(JSONB, default=list, nullable=False)
+    
+    # Usage tracking
+    total_uptime_hours = Column(Float, default=0.0, nullable=False)
+    interaction_count = Column(Integer, default=0, nullable=False)
+    last_interaction_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Audit and compliance
+    registration_source = Column(String(32), default="auto", nullable=False)
+    compliance_flags = Column(JSONB, default=dict, nullable=False)
+    
+    # Indexes for performance
+    __table_args__ = (
+        Index("idx_devices_device_id", "device_id"),
+        Index("idx_devices_status", "status"),
+        Index("idx_devices_parent_id", "parent_id"),
+        Index("idx_devices_last_seen", "last_seen_at"),
+        Index("idx_devices_active_status", "is_active", "status"),  # ✅ الآن سيعمل
+        UniqueConstraint("device_id", name="uq_device_id"),
+        CheckConstraint(
+            "device_id ~ '^[A-Za-z0-9_-]+$'",
+            name="check_device_id_format"
+        ),
+    )
 
 
 def schedule_child_data_cleanup():
