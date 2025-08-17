@@ -3,12 +3,32 @@
 # E2E Test Script for ESP32 Device Claim with Idempotency
 # =========================================================
 
-# Configuration
+# Configuration - Dynamic test data
+TIMESTAMP=$(date +%s)
 export URL="${URL:-https://ai-tiddy-bear-v-xuqy.onrender.com/api/v1/pair/claim}"
-export DID="Teddy-ESP32-A795BAA4"
-export CID="test-child-001"
+export DID="Teddy-ESP32-TEST-${TIMESTAMP}"
+export CID="test-child-${TIMESTAMP}"
 export PC="TEST_PAIRING_a4ba95a7dbcc"
 export OOB="20F98D30602B1F5359C2775CC6BC74389CDE906348676F9B4D89B93151C77182"
+
+# Clean up test data first
+echo "🧹 Cleaning up previous test data..."
+./cleanup_test_data.sh
+
+# Create dynamic test child profile
+echo "👶 Creating dynamic test child profile..."
+psql "$DATABASE_URL" -c "
+INSERT INTO child_profiles (child_id, parent_id, name, age, status) 
+VALUES ('${CID}', 'test-parent-001', 'Test Child Dynamic', 7, 'active') 
+ON CONFLICT (child_id) DO UPDATE SET status = 'active';
+"
+
+if [ $? -eq 0 ]; then
+    echo "✅ Child profile created: ${CID}"
+else
+    echo "❌ Failed to create child profile"
+    exit 1
+fi
 
 echo "=========================================="
 echo "ESP32 Device Claim E2E Test"
