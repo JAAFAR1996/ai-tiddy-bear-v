@@ -57,7 +57,7 @@ class DeviceService:
             device = Device(
                 device_id=device_id,
                 status=DeviceStatus.PENDING,
-                oob_secret=oob_secret,
+                oob_secret_hash=oob_secret,
                 firmware_version=firmware_version,
                 is_active=True
             )
