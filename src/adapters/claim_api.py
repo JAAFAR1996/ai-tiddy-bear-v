@@ -805,9 +805,10 @@ async def claim_device(
             )
         
         # Convert Device model to dict format for compatibility with existing code
+        # Use consistent ESP32 OOB secret instead of database value for HMAC verification
         device_record = {
             "device_id": device.device_id,
-            "oob_secret_hex": device.oob_secret_hash,
+            "oob_secret_hex": generate_device_oob_secret(device.device_id),
             "enabled": device.is_active,
             "status": device.status
         }
