@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
 import logging
 
-from src.infrastructure.database.models import Device, DeviceStatus
+from src.infrastructure.database.models import Device
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class DeviceService:
             # Create new device
             device = Device(
                 device_id=device_id,
-                status=DeviceStatus.PENDING,
+                status="pending",
                 oob_secret_hash=oob_secret,
                 firmware_version=firmware_version,
                 is_active=True
@@ -215,7 +215,7 @@ class DeviceService:
         return result.scalars().all()
     
     @staticmethod
-    async def count_devices_by_status(status: DeviceStatus = None, db: AsyncSession = None) -> int:
+    async def count_devices_by_status(status: str = None, db: AsyncSession = None) -> int:
         """
         Count devices by status.
         
