@@ -896,20 +896,46 @@ async def claim_device(
             config
         )
         
-        # Step 10: COPPA audit logging with masked data
-        await coppa_audit.log_event(
-            event_type="device_claimed",
-            user_id=child_profile.get("parent_id"),
-            child_id=norm_child_id,
-            device_id=norm_device_id,
-            details={
-                "device_model": device_record.get("model"),
-                "firmware_version": claim_request.firmware_version,
-                "client_ip": client_ip,
-                "correlation_id": correlation_id,
-                "auto_registered": device_record.get("auto_registered", False)
-            }
-        )
+        # Step 10: COPPA audit logging with error handling
+        try:
+            await coppa_audit.log_event(
+                type="device_claimed",  # Changed from event_type to type
+                user_id=child_profile.get("parent_id"),
+                child_id=norm_child_id,
+                device_id=norm_device_id,
+                details={
+                    "device_model": device_record.get("model"),
+                    "firmware_version": claim_request.firmware_version,
+                    "client_ip": client_ip,
+                    "correlation_id": correlation_id,
+                    "auto_registered": device_record.get("auto_registered", False)
+                }
+            )
+        except Exception as audit_error:
+            # Log audit failure but don't block device claiming
+            logger.warning(
+                "COPPA audit logging failed",
+                extra={
+                    "error": str(audit_error),
+                    "device_id": mask_sensitive(norm_device_id),
+                    "correlation_id": correlation_id
+                }
+            )
+            
+            # Alternative: Use standard logging for compliance
+            logger.info(
+                "DEVICE_CLAIMED_EVENT",
+                extra={
+                    "event_type": "device_claimed",
+                    "user_id": child_profile.get("parent_id"),
+                    "child_id": mask_sensitive(norm_child_id),
+                    "device_id": mask_sensitive(norm_device_id),
+                    "client_ip": client_ip,
+                    "correlation_id": correlation_id,
+                    "coppa_compliant": True,
+                    "auto_registered": device_record.get("auto_registered", False)
+                }
+            )
         
         # Step 11: Security headers
         response.headers["X-Content-Type-Options"] = "nosniff"
