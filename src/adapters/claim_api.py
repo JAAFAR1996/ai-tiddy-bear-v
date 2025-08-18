@@ -908,7 +908,7 @@ async def claim_device(
                 "client_ip": client_ip,
                 "correlation_id": correlation_id,
                 "auto_registered": device_record.get("auto_registered", False)
-            },
+            }
         )
         
         # Step 11: Security headers
