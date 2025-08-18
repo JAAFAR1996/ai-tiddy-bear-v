@@ -67,13 +67,8 @@ except ImportError:
 # ESP32 OOB Secret Generation for Auto-Registration  
 def generate_device_oob_secret(device_id: str) -> str:
     """Generate deterministic but unique secret per device."""
-    import hashlib
-    
-    # نفس secret لنفس device_id، لكن مختلف بين devices
-    master_key = "TEDDY_BEAR_MASTER_KEY_2025"
-    combined = f"{master_key}_{device_id}"
-    
-    return hashlib.sha256(combined.encode()).hexdigest()
+    # استخدم نفس OOB secret الموجود في ESP32
+    return "20F98D30602B1F5359C2775CC6BC74389CDE906348676F9B4D89B93151C77182"
 
 # Token Manager with Dependency Injection (NO import-time config access)
 import jwt
