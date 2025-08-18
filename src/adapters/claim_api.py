@@ -149,49 +149,7 @@ class SimpleRedisManager:
 
 redis_manager = SimpleRedisManager()
 
-# Device OOB Secret Management
-def generate_device_oob_secret(device_id: str) -> str:
-    """
-    Generate or retrieve OOB secret for a device based on device ID
-    
-    In production, this would:
-    1. Check database for existing secret
-    2. Generate new secret if device is new
-    3. Store secret in database
-    
-    For development, we generate a deterministic secret based on device ID
-    so the same device always gets the same secret.
-    
-    Args:
-        device_id: Device identifier
-        
-    Returns:
-        64-character hex string (32 bytes)
-    """
-    try:
-        # For development/testing: Create deterministic secret from device ID
-        # This ensures same device always gets same secret
-        import hashlib
-        
-        # Use device ID + a salt to generate consistent secret
-        salt = "ai-teddy-bear-oob-secret-v1"
-        hash_input = f"{device_id}:{salt}".encode('utf-8')
-        
-        # Generate 32 bytes (256 bits) using SHA-256
-        device_hash = hashlib.sha256(hash_input).hexdigest()
-        
-        # Double hash for extra security
-        final_hash = hashlib.sha256((device_hash + salt).encode('utf-8')).hexdigest()
-        
-        logger.info("Generated OOB secret for device (deterministic)", extra={"device_id_prefix": device_id[:12]})
-        
-        return final_hash.upper()  # Return as uppercase hex
-        
-    except Exception as e:
-        logger.error("Error generating OOB secret", extra={"device_id": device_id, "error": str(e)})
-        # Fallback to random secret
-        import secrets
-        return secrets.token_hex(32).upper()
+# Device OOB Secret Management - REMOVED (Using single function above)
 
 
 # Request/Response Models
