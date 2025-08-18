@@ -679,10 +679,10 @@ async def get_child_profile(child_id: str, db: AsyncSession) -> Optional[Dict[st
         return {
             "id": str(child.id),
             "name": child.name,
-            "age": child.age,  # Use actual age field from table
+            "age": child.estimated_age or 8,  # Use correct field name with fallback
             "language": "en",  # Default - field doesn't exist
             "voice_settings": {},  # Default - field doesn't exist
-            "safety_settings": child.safety_settings,  # Use actual JSON field
+            "safety_settings": getattr(child, 'content_preferences', {}),  # Use existing field safely
             "parent_id": str(child.parent_id) if child.parent_id else None
         }
         
