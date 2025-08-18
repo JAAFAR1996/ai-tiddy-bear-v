@@ -147,7 +147,7 @@ class BaseModel(Base):
     is_deleted = Column(Boolean, default=False, nullable=False)
 
     # Data retention and compliance
-    retention_status = Column(String(32), default="active", nullable=False)
+    retention_status = Column(String(32), default="ACTIVE", nullable=False)
     scheduled_deletion_at = Column(DateTime(timezone=True), nullable=True)
 
     # Audit fields
@@ -1125,7 +1125,7 @@ class Device(BaseModel):
     firmware_version = Column(String(16), nullable=True)
     
     # Device status and health
-    status = Column(String(32), default="pending", nullable=False)
+    status = Column(String(32), default="PENDING", nullable=False)
     last_seen_at = Column(DateTime(timezone=True), nullable=True)
     ip_address = Column(String(45), nullable=True)
     
