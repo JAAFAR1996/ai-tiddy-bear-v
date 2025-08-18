@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 # Database integration - production-grade DI
 try:
     from src.application.dependencies import DatabaseConnectionDep
-    from src.infrastructure.database.models import User, Child, Device, DeviceStatus
+    from src.infrastructure.database.models import User, Child, Device
     from src.services.device_service import DeviceService
 except ImportError as e:
     logger.warning(f"Database imports not available: {e}")
@@ -599,7 +599,7 @@ async def get_device_record(device_id: str, db: AsyncSession, config) -> Optiona
             "device_id": norm_device_id,
             "oob_secret_hex": oob_secret_hex,
             "enabled": True,
-            "status": DeviceStatus.UNREGISTERED,  # str Enum is JSON serializable
+            "status": "unregistered",  # String status value
             "auto_registered": True
         }
         
