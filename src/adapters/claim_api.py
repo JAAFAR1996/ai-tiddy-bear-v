@@ -27,7 +27,8 @@ from fastapi import APIRouter, HTTPException, Depends, Request, Response, status
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, Field, validator
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, func, cast, String
+from sqlalchemy import select, and_, or_, func, cast
+from sqlalchemy.types import String
 from sqlalchemy.orm import selectinload
 
 # Core infrastructure imports  
@@ -639,57 +640,103 @@ async def get_child_profile(child_id: str, db: AsyncSession) -> Optional[Dict[st
     Returns:
         Dict with child profile or None if not found
     """
+    import uuid
+    from sqlalchemy.exc import DBAPIError, ProgrammingError
+
     try:
-        import uuid
-        from datetime import datetime
-        
-        # Try UUID first, then hashed_identifier
-        id_conditions = []
-        
-        # 1. Try as UUID
-        try:
-            child_uuid = uuid.UUID(child_id)
-            id_conditions.append(Child.id == child_uuid)
-        except (ValueError, AttributeError):
-            pass
-        
-        # 2. Try as hashed_identifier (case-insensitive)
-        id_conditions.append(
-            func.lower(Child.hashed_identifier) == child_id.lower()
-        )
-        
-        # Query with both conditions (OR)
-        stmt = select(Child).where(
-            and_(
-                or_(*id_conditions),
-                Child.is_deleted == False,
-                Child.is_active == True,  # Now exists!
-                Child.parental_consent == True  # COPPA requirement
+        # Normalize once
+        raw_id = (child_id or "").strip()
+
+        # Early validation
+        if not raw_id or len(raw_id) > 64:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid child identifier",
             )
-        ).options(selectinload(Child.parent))
-        
-        result = await db.execute(stmt)
-        child = result.scalar_one_or_none()
-        
+        base_filters = (
+            Child.is_deleted == False,
+            Child.is_active == True,
+            Child.parental_consent == True,
+        )
+
+        # Branch 1: UUID-looking ID (keeps index usage on UUID columns)
+        try:
+            child_uuid = uuid.UUID(raw_id)
+            try:
+                stmt = (
+                    select(Child)
+                    .where(Child.id == child_uuid, *base_filters)
+                    .options(selectinload(Child.parent))
+                    .limit(1)
+                )
+                result = await db.execute(stmt)
+                child = result.scalar_one_or_none()
+            except (ProgrammingError, DBAPIError) as db_err:
+                # Only fallback for the specific type mismatch case
+                msg = str(getattr(db_err, "orig", db_err)).lower()
+                if (
+                    "operator does not exist" in msg
+                    or "undefinedfunctionerror" in msg
+                    or "character varying = uuid" in msg
+                ):
+                    logger.debug(
+                        "UUID compare failed, falling back to text compare",
+                        extra={"error": str(db_err)},
+                    )
+                    stmt = (
+                        select(Child)
+                        .where(cast(Child.id, String) == str(child_uuid), *base_filters)
+                        .options(selectinload(Child.parent))
+                        .limit(1)
+                    )
+                    result = await db.execute(stmt)
+                    child = result.scalar_one_or_none()
+                else:
+                    raise
+        except (ValueError, AttributeError):
+            child = None
+
+        # Branch 2: hashed_identifier (case-insensitive) if UUID path didn't find anything
         if not child:
-            logger.debug(f"Child not found with id: {mask_sensitive(child_id)}")
+            stmt = (
+                select(Child)
+                .where(
+                    func.lower(Child.hashed_identifier) == raw_id.lower(),
+                    *base_filters,
+                )
+                .options(selectinload(Child.parent))
+                .limit(1)
+            )
+            result = await db.execute(stmt)
+            child = result.scalar_one_or_none()
+
+        if not child:
+            logger.debug(f"Child not found with id: {mask_sensitive(raw_id)}")
             return None
-        
+
         # Return profile with existing fields only
         return {
             "id": str(child.id),
             "name": child.name,
-            "age": child.estimated_age or 8,  # Use correct field name with fallback
-            "language": "en",  # Default - field doesn't exist
-            "voice_settings": {},  # Default - field doesn't exist
-            "safety_settings": getattr(child, 'content_preferences', {}),  # Use existing field safely
-            "parent_id": str(child.parent_id) if child.parent_id else None
+            "age": child.estimated_age or 8,
+            "language": "en",
+            "voice_settings": {},
+            "safety_settings": getattr(child, "content_preferences", {}),
+            "parent_id": str(child.parent_id) if child.parent_id else None,
         }
-        
+
+    except HTTPException:
+        # Propagate explicit HTTP errors (e.g., 422 invalid id)
+        raise
     except Exception as e:
-        logger.error("Error retrieving child profile", 
-                    extra={"child_id": mask_sensitive(child_id), "error": str(e)})
-        return None
+        logger.error(
+            "Error retrieving child profile",
+            extra={"child_id": mask_sensitive(child_id), "error": str(e)},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Child profile retrieval error",
+        )
 
 
 # API Endpoints
