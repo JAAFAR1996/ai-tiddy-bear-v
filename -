@@ -1,75 +1,48 @@
-#ifndef WIFI_MANAGER_H
-#define WIFI_MANAGER_H
+#ifndef SYSTEM_MONITOR_H
+#define SYSTEM_MONITOR_H
 
-#include <WiFi.h>
-#include <EEPROM.h>
-#include <ArduinoJson.h>
+#include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <esp_system.h>
 
-// WiFi Manager Configuration
-#define WIFI_CONFIG_TIMEOUT 300  // 5 minutes
-#define WIFI_AP_NAME "TeddyBear_Setup"
-#define WIFI_AP_PASSWORD "teddy123"
-#define EEPROM_SIZE 512
+/**
+ * Production System Monitor for AI Teddy Bear ESP32
+ * 
+ * Features:
+ * - Brownout detection for power stability
+ * - Task Watchdog Timer (WDT) for critical tasks
+ * - Heap monitoring with 40KB threshold for audio
+ * - System health checks and recovery
+ * - Reset reason tracking
+ * 
+ * Critical for production deployment and 2-hour stability test
+ */
 
-// Configuration Storage Addresses
-#define EEPROM_WIFI_CONFIGURED 0
-#define EEPROM_SERVER_HOST 10
-#define EEPROM_SERVER_PORT 110
-#define EEPROM_DEVICE_ID 120
-#define EEPROM_DEVICE_SECRET 180
+// System monitor initialization
+bool initProductionSystemMonitor();
+void cleanupSystemMonitor();
 
-struct DeviceConfig {
-  char wifi_ssid[32];
-  char wifi_password[64];
-  char server_host[64];
-  int server_port;
-  char device_id[32];
-  char device_secret[64];
-  char child_id[32];
-  char child_name[32];
-  int child_age;
-  bool ssl_enabled;
-  bool configured;
-};
+// Watchdog Timer management
+bool addTaskToWDT(TaskHandle_t taskHandle, const char* taskName);
+bool removeTaskFromWDT(TaskHandle_t taskHandle, const char* taskName);
+void feedWDT(); // For main loop only
 
-// Function declarations
-bool initWiFiManager();
-bool initWiFi();  // Combined initialization and connection with internet test
-bool connectToWiFi();
-bool reconnectWiFi();
-void handleWiFiManager();
-bool saveDeviceConfig(const DeviceConfig& config);
-DeviceConfig loadDeviceConfig();
-void startConfigPortal();
-bool isConfigured();
-String getWiFiDeviceInfo();
+// Task-specific WDT feeding (call from within each task)
+void feedAudioTaskWDT();
+void feedWebSocketTaskWDT();
 
-// Enhanced WiFi management functions
-bool testInternetConnection();
-void handleInternetDisconnection();
-void handleSetupMode();
+// Critical task registration
+void registerAudioTaskWDT(TaskHandle_t taskHandle);
+void registerWebSocketTaskWDT(TaskHandle_t taskHandle);
 
-// WiFi Quality Monitoring Functions
-void initializeWiFiMonitoring();
-void monitorWiFiQuality();
-void updateWiFiSignalMetrics();
-void assessWiFiQuality();
-String getRSSIQualityText(int rssi);
-void printInitialWiFiStats();
+// System health monitoring
+void performSystemHealthCheck();
+bool isSystemHealthyForAudio();
+void handleSystemMonitor();
 
-// Smart Reconnection Functions
-void resetReconnectionStrategy();
-void updateWiFiQualityOnFailure();
+// Recovery and diagnostics
+void triggerSystemRecovery(const char* reason);
+const char* getResetReasonString(esp_reset_reason_t reason);
 
-// Enhanced WiFi Diagnostics
-void printWiFiDiagnostics();
-
-// Global config instance
-extern DeviceConfig deviceConfig;
-
-// Global monitoring variables
-extern bool isConnectedToInternet;
-extern unsigned long lastInternetCheck;
-
-#endif
-
+#endif // SYSTEM_MONITOR_H
