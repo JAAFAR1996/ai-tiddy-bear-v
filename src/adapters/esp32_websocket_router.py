@@ -5,7 +5,7 @@ FastAPI router for ESP32 WebSocket connections with complete audio processing.
 """
 
 import logging
-from typing import Optional
+from typing import Optional, Dict
 
 from fastapi import (
     APIRouter,
@@ -24,6 +24,7 @@ from src.infrastructure.security.admin_security import (
     SecurityLevel,
     AdminSession,
 )
+from src.adapters.esp32_router import ws_auth_dependency
 
 
 # Create router
@@ -49,6 +50,7 @@ async def esp32_websocket_endpoint(
     child_id: str = Query(..., description="Child profile identifier"),
     child_name: str = Query(..., description="Child's name"),
     child_age: int = Query(..., description="Child's age (3-13)"),
+    auth_info: Dict[str, str] = Depends(ws_auth_dependency),
 ):
     """
     WebSocket endpoint for ESP32 device connections.
@@ -92,7 +94,7 @@ async def esp32_websocket_endpoint(
         "audio_data": "base64_encoded_audio",
         "text": "AI response text",
         "format": "mp3",
-        "audio_rate": 22050
+        "sample_rate": 22050
     }
 
     System Messages:
