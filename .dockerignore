@@ -238,6 +238,13 @@ mlruns/
 *.wav
 *.mp4
 *.mov
+
+# Project-local large folders not needed in production image
+ESP32_Project/
+mobile-app/
+performance_testing/
+security_system/
+ai-tiddy-bear-v/
 uploads/
 logs/
 tmp/

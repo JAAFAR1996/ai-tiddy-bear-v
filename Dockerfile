@@ -43,7 +43,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Python deps
 COPY requirements.txt .
+# Install CPU-only PyTorch stack first to avoid pulling CUDA/cuDNN wheels
 RUN pip install --upgrade pip && \
+    pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision torchaudio && \
     pip install --no-cache-dir --compile -r requirements.txt && \
     apt-get purge -y --auto-remove build-essential && \
     apt-get clean && \
