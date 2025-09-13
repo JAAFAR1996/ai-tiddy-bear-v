@@ -679,6 +679,13 @@ async def get_child_profile(child_id: str, db: AsyncSession) -> Optional[Dict[st
                     or "undefinedfunctionerror" in msg
                     or "character varying = uuid" in msg
                 ):
+                    # Previous failed statement left the transaction in error state;
+                    # rollback before retrying with a compatible comparison.
+                    try:
+                        await db.rollback()
+                    except Exception:
+                        # Ignore rollback errors; proceed to fallback attempt
+                        pass
                     logger.debug(
                         "UUID compare failed, falling back to text compare",
                         extra={"error": str(db_err)},
@@ -692,6 +699,11 @@ async def get_child_profile(child_id: str, db: AsyncSession) -> Optional[Dict[st
                     result = await db.execute(stmt)
                     child = result.scalar_one_or_none()
                 else:
+                    # Ensure transaction is clean before propagating
+                    try:
+                        await db.rollback()
+                    except Exception:
+                        pass
                     raise
         except (ValueError, AttributeError):
             child = None
