@@ -925,7 +925,7 @@ async def claim_device(
         # Step 7: Device configuration
         device_config = {
             "session_id": device_session_id,
-            "websocket_url": f"wss://{config.HOST}/ws/esp32/chat",
+            "websocket_url": f"wss://{config.HOST}/ws/esp32/connect",
             "api_base_url": f"https://{config.HOST}/api/v1",
             "heartbeat_interval": 30,
             "reconnect_delay": 5,

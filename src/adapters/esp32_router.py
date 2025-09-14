@@ -442,7 +442,7 @@ async def get_device_config(request: Request, response: Response):
     config = {
         "host": PUBLIC_HOST,
         "port": 443,
-        "ws_path": "/api/v1/esp32/private/chat",  # ✅ Corrected to match actual WebSocket endpoint
+        "ws_path": "/ws/esp32/connect",  # ✅ Use production WebSocket endpoint
         "firmware_endpoint": "/api/v1/esp32/firmware",  # صريح للـESP32
         "tls": True,
         "ntp": ["pool.ntp.org", "time.google.com", "time.cloudflare.com", "time.nist.gov"],
