@@ -114,25 +114,25 @@ async def ws_auth_dependency(websocket: WebSocket) -> Dict[str, str]:
         
         # Enhanced validation for ESP32 devices
         device_id = websocket.query_params.get("device_id", "")
-    if device_id and len(device_id) >= 8:
-        if not valid_esp32_token(token, device_id):
-            # Extra diagnostics: log token/expected prefixes to help field debugging
-            try:
-                secret = os.getenv("ESP32_SHARED_SECRET", "")
-                if secret:
-                    import hmac as _hmac
-                    import hashlib as _hashlib
-                    _expected = _hmac.new(secret.encode(), device_id.encode(), _hashlib.sha256).hexdigest()
-                    logger.warning(
-                        f"Invalid ESP32 token for device {device_id} (got={token[:8]}, expected={_expected[:8]})"
-                    )
-                else:
-                    logger.warning(f"Invalid ESP32 token for device {device_id} (secret missing)")
-            except Exception:
-                logger.warning(f"Invalid ESP32 token for device {device_id}")
-            await websocket.close(code=1008, reason="Invalid token format")
-            raise HTTPException(status_code=403, detail="Invalid token format")
-            
+        if device_id and len(device_id) >= 8:
+            if not valid_esp32_token(token, device_id):
+                # Extra diagnostics: log token/expected prefixes to help field debugging
+                try:
+                    secret = os.getenv("ESP32_SHARED_SECRET", "")
+                    if secret:
+                        import hmac as _hmac
+                        import hashlib as _hashlib
+                        _expected = _hmac.new(secret.encode(), device_id.encode(), _hashlib.sha256).hexdigest()
+                        logger.warning(
+                            f"Invalid ESP32 token for device {device_id} (got={token[:8]}, expected={_expected[:8]})"
+                        )
+                    else:
+                        logger.warning(f"Invalid ESP32 token for device {device_id} (secret missing)")
+                except Exception:
+                    logger.warning(f"Invalid ESP32 token for device {device_id}")
+                await websocket.close(code=1008, reason="Invalid token format")
+                raise HTTPException(status_code=403, detail="Invalid token format")
+
             return {"type": "device", "device_id": device_id, "token": token}
         
         # For user tokens, require minimum length and format
