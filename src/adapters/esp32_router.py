@@ -37,6 +37,7 @@ def valid_esp32_token(token: str, device_id: str) -> bool:
     Validate ESP32 device token with production-grade security.
     Expected: HMAC-SHA256(device_id, ESP32_SHARED_SECRET) as hex string
     """
+    global _esp32_expected_prefix_logged
     SECRET = os.getenv("ESP32_SHARED_SECRET", "")
     ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
     
@@ -65,7 +66,6 @@ def valid_esp32_token(token: str, device_id: str) -> bool:
             hashlib.sha256
         ).hexdigest()
         # Log expected prefix once for client/server comparison
-        global _esp32_expected_prefix_logged
         if not _esp32_expected_prefix_logged:
             try:
                 logger.info(f"ESP32 expected HMAC prefix: {expected[:8]}")
@@ -85,7 +85,6 @@ def valid_esp32_token(token: str, device_id: str) -> bool:
                 hashlib.sha256
             ).hexdigest()
             # Log expected prefix once for client/server comparison
-            global _esp32_expected_prefix_logged
             if not _esp32_expected_prefix_logged:
                 try:
                     logger.info(f"ESP32 expected HMAC prefix: {expected[:8]}")
