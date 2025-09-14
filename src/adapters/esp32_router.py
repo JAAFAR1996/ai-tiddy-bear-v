@@ -27,6 +27,10 @@ from starlette.requests import HTTPConnection
 from ..services.esp32_chat_server import esp32_chat_server
 from ..infrastructure.security.auth import get_current_user
 
+# Module-level logger and one-time log flag (declare before use)
+logger = logging.getLogger(__name__)
+_esp32_expected_prefix_logged = False
+
 
 def valid_esp32_token(token: str, device_id: str) -> bool:
     """
@@ -61,10 +65,7 @@ def valid_esp32_token(token: str, device_id: str) -> bool:
             hashlib.sha256
         ).hexdigest()
         # Log expected prefix once for client/server comparison
-        try:
-            global _esp32_expected_prefix_logged
-        except NameError:
-            _esp32_expected_prefix_logged = False
+        global _esp32_expected_prefix_logged
         if not _esp32_expected_prefix_logged:
             try:
                 logger.info(f"ESP32 expected HMAC prefix: {expected[:8]}")
@@ -84,10 +85,7 @@ def valid_esp32_token(token: str, device_id: str) -> bool:
                 hashlib.sha256
             ).hexdigest()
             # Log expected prefix once for client/server comparison
-            try:
-                global _esp32_expected_prefix_logged
-            except NameError:
-                _esp32_expected_prefix_logged = False
+            global _esp32_expected_prefix_logged
             if not _esp32_expected_prefix_logged:
                 try:
                     logger.info(f"ESP32 expected HMAC prefix: {expected[:8]}")
@@ -151,8 +149,7 @@ async def ws_auth_dependency(websocket: WebSocket) -> Dict[str, str]:
         await websocket.close(code=1008, reason="Authentication failed")
         raise
 
-logger = logging.getLogger(__name__)
-_esp32_expected_prefix_logged = False
+# logger and flag defined above
 
 
 class FirmwareManager:
