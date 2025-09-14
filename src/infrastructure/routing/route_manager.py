@@ -425,14 +425,17 @@ def register_all_routers(app: FastAPI) -> RouteManager:
     try:
         from src.adapters.esp32_router import esp32_private
 
+        # IMPORTANT: Do not attach global user JWT auth to this router because
+        # WebSocket auth is handled via query HMAC in ws_auth_dependency.
+        # Attaching HTTPBearer at router-level causes WS handshake to fail.
         route_manager.register_router(
             router=esp32_private,
             router_name="esp32_private",
             prefix="/api/v1/esp32/private",
             tags=["ESP32-Private"],
-            require_auth=True,
+            require_auth=False,
         )
-        logger.info("✅ ESP32 private router registered (specific routes first)")
+        logger.info("✅ ESP32 private router registered (WS auth via HMAC query)")
     except ImportError as e:
         logger.critical(f"❌ Failed to load ESP32 private router: {e}")
         from src.core.exceptions import ConfigurationError

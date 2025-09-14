@@ -30,8 +30,42 @@ const int SPEAKER_PIN = 25;   // PWM pin for speaker
 // 📱 Global Objects
 WebSocketsClient webSocket;
 bool isConnected = false;
+bool wsConnecting = false; // Prevent parallel connection attempts
 bool buttonPressed = false;
 unsigned long lastHeartbeat = 0;
+
+// Reconnection backoff management
+struct ConnectionHealth {
+  unsigned long reconnectDelay;     // current backoff delay (ms)
+  unsigned long nextReconnectAt;    // millis() timestamp when a reconnect may be attempted
+};
+
+static const unsigned long RECONNECT_BASE_MS = 2000;   // 2s baseline
+static const unsigned long RECONNECT_MAX_MS  = 60000;  // 60s cap
+ConnectionHealth connectionHealth = { RECONNECT_BASE_MS, 0 };
+
+void scheduleReconnection(unsigned long delayMs) {
+  // Schedule next reconnect attempt after delayMs
+  connectionHealth.nextReconnectAt = millis() + delayMs;
+}
+
+bool initWebSocket() {
+  // Guard: require WiFi before attempting websocket
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("❌ WiFi not connected, cannot init WebSocket");
+    return false;
+  }
+
+  // Configure WebSocket connection
+  webSocket.beginSSL(server_host, server_port, ws_path);
+  webSocket.onEvent(webSocketEvent);
+  // Disable library auto-reconnect; we manage scheduling explicitly
+  webSocket.setReconnectInterval(0);
+  // Keep heartbeat enabled
+  webSocket.enableHeartbeat(15000, 3000, 2);
+
+  return true; // Actual connection progresses asynchronously via webSocket.loop()
+}
 
 void setup() {
   Serial.begin(115200);
@@ -48,11 +82,8 @@ void setup() {
   // Connect to WiFi
   connectToWiFi();
   
-  // Configure WebSocket with SSL
-  webSocket.beginSSL(server_host, server_port, ws_path);
-  webSocket.onEvent(webSocketEvent);
-  webSocket.setReconnectInterval(5000);
-  webSocket.enableHeartbeat(15000, 3000, 2);
+  // First connection attempt is scheduled immediately; init performed on demand
+  scheduleReconnection(0);
   
   Serial.println("✅ Setup complete! Ready to connect to Teddy Bear server...");
 }
@@ -89,13 +120,20 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
     case WStype_DISCONNECTED:
       Serial.println("❌ WebSocket Disconnected from Teddy Bear Server");
       isConnected = false;
+      wsConnecting = false; // Ensure we don't remain in connecting state
       digitalWrite(LED_PIN, LOW);
+      // Schedule reconnection using current backoff, then increase backoff (capped)
+      scheduleReconnection(connectionHealth.reconnectDelay);
+      connectionHealth.reconnectDelay = min(connectionHealth.reconnectDelay * 2, RECONNECT_MAX_MS);
       break;
       
     case WStype_CONNECTED:
       Serial.printf("✅ WebSocket Connected to Teddy Bear Server!\n");
       Serial.printf("🔗 URL: %s\n", payload);
       isConnected = true;
+      wsConnecting = false;
+      // Reset backoff on successful connection
+      connectionHealth.reconnectDelay = RECONNECT_BASE_MS;
       digitalWrite(LED_PIN, HIGH);
       
       // Send initial connection message
@@ -113,6 +151,11 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
       
     case WStype_ERROR:
       Serial.printf("❌ WebSocket Error: %s\n", payload);
+      isConnected = false;
+      wsConnecting = false;
+      // Unified reconnection scheduling on errors
+      scheduleReconnection(connectionHealth.reconnectDelay);
+      connectionHealth.reconnectDelay = min(connectionHealth.reconnectDelay * 2, RECONNECT_MAX_MS);
       break;
       
     case WStype_PING:
@@ -221,6 +264,21 @@ void loop() {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("📡 WiFi disconnected, reconnecting...");
     connectToWiFi();
+  }
+
+  // Drive connection attempts with explicit scheduling and guard against parallel connects
+  if (!isConnected && !wsConnecting) {
+    unsigned long now = millis();
+    if (now >= connectionHealth.nextReconnectAt) {
+      wsConnecting = true;
+      bool ok = initWebSocket();
+      // Do not leave wsConnecting stuck true if init fails internally
+      if (!ok) {
+        wsConnecting = false;
+        scheduleReconnection(connectionHealth.reconnectDelay);
+        connectionHealth.reconnectDelay = min(connectionHealth.reconnectDelay * 2, RECONNECT_MAX_MS);
+      }
+    }
   }
   
   // Check button press

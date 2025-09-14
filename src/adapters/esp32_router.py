@@ -60,6 +60,17 @@ def valid_esp32_token(token: str, device_id: str) -> bool:
             device_id.encode(), 
             hashlib.sha256
         ).hexdigest()
+        # Log expected prefix once for client/server comparison
+        try:
+            global _esp32_expected_prefix_logged
+        except NameError:
+            _esp32_expected_prefix_logged = False
+        if not _esp32_expected_prefix_logged:
+            try:
+                logger.info(f"ESP32 expected HMAC prefix: {expected[:8]}")
+            except Exception:
+                pass
+            _esp32_expected_prefix_logged = True
         return hmac.compare_digest(token.lower(), expected)
     
     # Development: Allow HMAC or fallback to simple validation
@@ -72,6 +83,17 @@ def valid_esp32_token(token: str, device_id: str) -> bool:
                 device_id.encode(), 
                 hashlib.sha256
             ).hexdigest()
+            # Log expected prefix once for client/server comparison
+            try:
+                global _esp32_expected_prefix_logged
+            except NameError:
+                _esp32_expected_prefix_logged = False
+            if not _esp32_expected_prefix_logged:
+                try:
+                    logger.info(f"ESP32 expected HMAC prefix: {expected[:8]}")
+                except Exception:
+                    pass
+                _esp32_expected_prefix_logged = True
             return hmac.compare_digest(token.lower(), expected)
     
     # Development fallback: accept long alphanumeric tokens
@@ -81,27 +103,35 @@ def valid_esp32_token(token: str, device_id: str) -> bool:
 async def ws_auth_dependency(websocket: WebSocket) -> Dict[str, str]:
     """
     WebSocket authentication with enhanced token validation.
-    ESP32 devices should pass: /chat?token=HMAC_TOKEN&device_id=...
+    ESP32 devices must pass: /chat?token=HMAC_TOKEN&device_id=...
     """
     try:
-        # Try authorization header first
-        auth_header = websocket.headers.get("authorization", "")
-        if auth_header.lower().startswith("bearer "):
-            token = auth_header.split(" ", 1)[1]
-        else:
-            # Fallback to query parameter for ESP32 devices
-            token = websocket.query_params.get("token")
-            if not token:
-                await websocket.close(code=1008, reason="Authentication required")
-                raise HTTPException(status_code=403, detail="Token required")
+        # Only accept token from query parameter for ESP32 devices (no Authorization header)
+        token = websocket.query_params.get("token")
+        if not token:
+            await websocket.close(code=1008, reason="Authentication required")
+            raise HTTPException(status_code=403, detail="Token required")
         
         # Enhanced validation for ESP32 devices
         device_id = websocket.query_params.get("device_id", "")
-        if device_id and len(device_id) >= 8:
-            if not valid_esp32_token(token, device_id):
+    if device_id and len(device_id) >= 8:
+        if not valid_esp32_token(token, device_id):
+            # Extra diagnostics: log token/expected prefixes to help field debugging
+            try:
+                secret = os.getenv("ESP32_SHARED_SECRET", "")
+                if secret:
+                    import hmac as _hmac
+                    import hashlib as _hashlib
+                    _expected = _hmac.new(secret.encode(), device_id.encode(), _hashlib.sha256).hexdigest()
+                    logger.warning(
+                        f"Invalid ESP32 token for device {device_id} (got={token[:8]}, expected={_expected[:8]})"
+                    )
+                else:
+                    logger.warning(f"Invalid ESP32 token for device {device_id} (secret missing)")
+            except Exception:
                 logger.warning(f"Invalid ESP32 token for device {device_id}")
-                await websocket.close(code=1008, reason="Invalid token format")
-                raise HTTPException(status_code=403, detail="Invalid token format")
+            await websocket.close(code=1008, reason="Invalid token format")
+            raise HTTPException(status_code=403, detail="Invalid token format")
             
             return {"type": "device", "device_id": device_id, "token": token}
         
@@ -122,6 +152,7 @@ async def ws_auth_dependency(websocket: WebSocket) -> Dict[str, str]:
         raise
 
 logger = logging.getLogger(__name__)
+_esp32_expected_prefix_logged = False
 
 
 class FirmwareManager:
