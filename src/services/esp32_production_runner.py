@@ -34,13 +34,20 @@ class ESP32ProductionRunner:
         )
         return logging.getLogger(__name__)
 
-    async def initialize_services(self) -> None:
-        """Initialize all required services."""
+    async def initialize_services(self, config=None) -> None:
+        """Initialize all required services with explicit config injection."""
         try:
             self.logger.info("Initializing ESP32 Chat Server services...")
 
-            # Initialize service registry
-            self.service_registry = ServiceRegistry()
+            # Resolve configuration explicitly
+            if config is None:
+                from src.infrastructure.config.production_config import (
+                    get_config as get_loaded_config,
+                )
+                config = get_loaded_config()
+
+            # Initialize service registry with explicit config
+            self.service_registry = ServiceRegistry(config=config)
 
             # Get services from registry
             ai_service = await self.service_registry.get_ai_service()
@@ -51,11 +58,9 @@ class ESP32ProductionRunner:
 
             # Configuration
             stt_model_size = os.getenv("WHISPER_MODEL_SIZE", "base")
-            redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+            redis_url = os.getenv("REDIS_URL", getattr(config, "REDIS_URL", "redis://localhost:6379"))
 
             # Create production server with all services using proper DI
-            from src.infrastructure.config.production_config import get_config as get_loaded_config
-            config = get_loaded_config()
             factory = ESP32ServiceFactory(config=config)
             
             self.chat_server = await factory.create_production_server(
