@@ -542,6 +542,19 @@ async def lifespan(app: FastAPI):
             logger.info("✅ Metrics API registered")
             
             logger.info("✅ All routers registered via RouteManager")
+
+            # Initialize ESP32 Chat Server services eagerly (production-grade)
+            try:
+                from src.services.esp32_production_runner import (
+                    esp32_production_runner,
+                )
+                await esp32_production_runner.initialize_services()
+                logger.info("ESP32 services initialized successfully (eager startup)")
+            except Exception as e:
+                # Do not crash the whole API; WS endpoint will attempt lazy init as fallback
+                logger.error(
+                    f"ESP32 services eager init failed: {e}", exc_info=True
+                )
             
         logger.info(
             "✅ API started in %s mode", config.ENVIRONMENT if config else "unknown"
