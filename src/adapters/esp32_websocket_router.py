@@ -215,10 +215,20 @@ async def esp32_metrics():
     try:
         chat_server = esp32_production_runner.get_chat_server()
 
+        # Attempt lazy initialization if chat server not ready yet
         if not chat_server:
-            return JSONResponse(
-                status_code=503, content={"error": "Server not initialized"}
-            )
+            try:
+                logger.info("ESP32 chat server not initialized; attempting lazy init via /metrics...")
+                from src.infrastructure.config.production_config import get_config as _get_loaded_config
+                _cfg = _get_loaded_config()
+                await esp32_production_runner.initialize_services(config=_cfg)
+                chat_server = esp32_production_runner.get_chat_server()
+            except Exception as _e:
+                logger.error(f"Lazy init from /metrics failed: {_e}", exc_info=True)
+                chat_server = None
+
+        if not chat_server:
+            return JSONResponse(status_code=503, content={"error": "Server not initialized"})
 
         metrics = chat_server.get_session_metrics()
 
