@@ -548,12 +548,14 @@ async def lifespan(app: FastAPI):
                 from src.services.esp32_production_runner import (
                     esp32_production_runner,
                 )
-                await esp32_production_runner.initialize_services(config=config)
-                logger.info("ESP32 services initialized successfully (eager startup)")
+                # Run initialization in the background to avoid blocking startup and worker timeouts
+                import asyncio as _asyncio
+                _asyncio.create_task(esp32_production_runner.initialize_services(config=config))
+                logger.info("ESP32 services background init started (non-blocking)")
             except Exception as e:
                 # Do not crash the whole API; WS endpoint will attempt lazy init as fallback
                 logger.error(
-                    f"ESP32 services eager init failed: {e}", exc_info=True
+                    f"ESP32 services eager init scheduling failed: {e}", exc_info=True
                 )
             
         logger.info(

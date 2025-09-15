@@ -34,13 +34,17 @@ logger = logging.getLogger(__name__)
 
 @esp32_router.on_event("startup")
 async def startup_esp32_services():
-    """Initialize ESP32 services on startup."""
+    """Initialize ESP32 services on startup (non-fatal on failure)."""
     try:
-        await esp32_production_runner.initialize_services()
+        # Inject production config explicitly to satisfy strict DI
+        from src.infrastructure.config.production_config import get_config as _get_loaded_config
+        _cfg = _get_loaded_config()
+        await esp32_production_runner.initialize_services(config=_cfg)
         logger.info("ESP32 services initialized successfully")
     except Exception as e:
-        logger.error(f"Failed to initialize ESP32 services: {e}", exc_info=True)
-        raise
+        # Do not abort app startup; WS endpoint has lazy init fallback
+        logger.error(f"Failed to initialize ESP32 services at router startup: {e}", exc_info=True)
+        return
 
 
 @esp32_router.websocket("/connect")
