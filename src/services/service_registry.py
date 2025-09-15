@@ -482,7 +482,6 @@ class ServiceRegistry:
             safety_monitor=safety_monitor,
             logger=logger,
             redis_url=redis_url,
-            config=config,
         )
 
     async def _create_user_service(self, **dependencies) -> UserService:
