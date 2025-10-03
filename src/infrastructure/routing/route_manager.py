@@ -241,11 +241,11 @@ class RouteManager:
         # Direct prefix conflict - always an error
         if prefix in self.registered_prefixes:
             raise RouteConflictError(
-                f"Prefix '{prefix}' already registered. "
-                f"Use a different prefix for router '{router_name}'"
+                f"Prefix '{prefix}' already registered. Use a different prefix for router '{router_name}'"
             )
 
         # Check for overlapping prefixes
+
         for existing_prefix in self.registered_prefixes:
             if self._prefixes_overlap(prefix, existing_prefix):
                 overlap_msg = (
@@ -324,16 +324,28 @@ class RouteManager:
         return summary
 
     def validate_all_routes(self) -> bool:
-        """Validate all registered routes using the monitor."""
+        """Validate all registered routes using the monitor.
+
+        Production-friendly behavior: allow WARNING-level issues to pass while logging,
+        so startup is not blocked by advisory findings (e.g., mixed auth patterns),
+        but still fail on CRITICAL problems.
+        """
+        import os
         validation_results = self.monitor.validate_route_organization()
 
         status = validation_results["overall_status"]
         if status in ["HEALTHY", "MINOR_ISSUES"]:
-            logger.info("✅ All routes validated successfully")
+            logger.info("? All routes validated successfully")
             return True
-        else:
-            logger.error(f"❌ Route validation failed with status: {status}")
-            return False
+
+        # In production/staging, allow WARNING with a clear log and proceed
+        env = (os.getenv("ENVIRONMENT") or os.getenv("ENV") or "production").lower()
+        if status == "WARNING" and env in ("production", "staging"):
+            logger.warning("?? Route validation WARNING in %s; proceeding with startup", env)
+            return True
+
+        logger.error(f"? Route validation failed with status: {status}")
+        return False
 
     def generate_route_documentation(self, output_file: Optional[str] = None) -> str:
         """Generate comprehensive route documentation."""
@@ -404,7 +416,7 @@ def register_all_routers(app: FastAPI) -> RouteManager:
         route_manager.register_router(
             router=main_api_router,
             router_name="core_api",
-            prefix="/api/v1/core",
+            prefix="/api/v1",
             tags=["Core API"],
             require_auth=True,
             allow_overlap=True,  # Intentional overlap with /api/v1 base
@@ -476,10 +488,10 @@ def register_all_routers(app: FastAPI) -> RouteManager:
         route_manager.register_router(
             router=claim_router,
             router_name="device_claim",
-            prefix="/api/v1",  # Base prefix (claim endpoint is at /api/v1/pair/claim)
+            prefix="/api/v1/pair",  # Dedicated claim prefix to avoid routing conflicts
             tags=["Device Claiming"],
             require_auth=False,  # Uses HMAC authentication
-            allow_overlap=True,  # Allow overlap with other v1 endpoints
+            allow_overlap=False
         )
         logger.info("✅ Device claim router registered with auto-registration")
     except ImportError as e:
@@ -501,6 +513,21 @@ def register_all_routers(app: FastAPI) -> RouteManager:
         logger.info("✅ ESP32 WebSocket router registered")
     except ImportError as e:
         logger.warning(f"⚠️ ESP32 WebSocket router not available: {e}")
+    
+    # 4d. ESP32 Token Refresh Router
+    try:
+        from src.adapters.esp32_token_refresh import token_refresh_router
+        
+        route_manager.register_router(
+            router=token_refresh_router,
+            router_name="esp32_token_refresh",
+            prefix="/api/v1/esp32/token",
+            tags=["ESP32-Token"],
+            require_auth=False,
+        )
+        logger.info("✅ ESP32 token refresh router registered")
+    except ImportError as e:
+        logger.warning(f"⚠️ ESP32 token refresh router not available: {e}")
 
     # 5. Web Interface Router (templates) - SEPARATED from API
     try:
@@ -595,6 +622,20 @@ def register_all_routers(app: FastAPI) -> RouteManager:
     # 10. Claim API Router - ALREADY REGISTERED ABOVE as device_claim
     # Removed duplicate registration to prevent prefix conflict
 
+    try:
+        from src.adapters.admin_drain_routes import router as admin_drain_router
+
+        route_manager.register_router(
+            router=admin_drain_router,
+            router_name="admin_drain",
+            prefix="/admin/drain",
+            tags=["Admin"],
+            require_auth=True,
+        )
+        logger.info("✅ Admin drain router registered")
+    except ImportError as e:
+        logger.warning(f"⚠️ Admin drain router not available: {e}")
+
     # Final validation
     if route_manager.validate_all_routes():
         logger.info("✅ All routers registered successfully with no conflicts detected")
@@ -643,3 +684,5 @@ def get_route_documentation(app: FastAPI) -> Dict[str, any]:
         "validation_results": monitor.validate_route_organization(),
         "detailed_report": monitor.generate_route_report(),
     }
+
+

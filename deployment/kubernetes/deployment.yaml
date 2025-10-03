@@ -112,7 +112,7 @@ spec:
             ephemeral-storage: 2Gi
         livenessProbe:
           httpGet:
-            path: /api/v1/health
+            path: /health
             port: http
             scheme: HTTP
           initialDelaySeconds: 60
@@ -122,7 +122,7 @@ spec:
           successThreshold: 1
         readinessProbe:
           httpGet:
-            path: /api/v1/health/ready
+            path: /ready
             port: http
             scheme: HTTP
           initialDelaySeconds: 30
@@ -132,7 +132,7 @@ spec:
           successThreshold: 1
         startupProbe:
           httpGet:
-            path: /api/v1/health/startup
+            path: /healthz
             port: http
             scheme: HTTP
           initialDelaySeconds: 10
@@ -303,7 +303,7 @@ spec:
             ephemeral-storage: 2Gi
         livenessProbe:
           httpGet:
-            path: /api/v1/health
+            path: /health
             port: http
             scheme: HTTP
           initialDelaySeconds: 60
@@ -313,7 +313,7 @@ spec:
           successThreshold: 1
         readinessProbe:
           httpGet:
-            path: /api/v1/health/ready
+            path: /ready
             port: http
             scheme: HTTP
           initialDelaySeconds: 30
@@ -323,7 +323,7 @@ spec:
           successThreshold: 1
         startupProbe:
           httpGet:
-            path: /api/v1/health/startup
+            path: /healthz
             port: http
             scheme: HTTP
           initialDelaySeconds: 10

@@ -146,7 +146,7 @@ post_deployment_verification() {
     log "Running post-deployment verification..."
     
     # Health check
-    if curl -f -s "http://localhost:8000/api/v1/health" > /dev/null; then
+    if curl -f -s "http://localhost:8000/health" > /dev/null; then
         success "Health check passed"
     else
         error "Health check failed"
@@ -216,7 +216,7 @@ main() {
     success "Deployment completed successfully!"
     log "Application is now running at: http://localhost:8000"
     log "API Documentation: http://localhost:8000/docs"
-    log "Health Check: http://localhost:8000/api/v1/health"
+    log "Health Check: http://localhost:8000/health"
 }
 
 # Error handling
@@ -224,3 +224,4 @@ trap 'error "Deployment failed at line $LINENO"' ERR
 
 # Run main function
 main "$@"
+

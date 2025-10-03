@@ -80,8 +80,8 @@ class UserResponse(BaseModel):
 
 @router.post("/login", response_model=LoginResponse)
 async def login(
-    request: LoginRequest, 
-    req: Request, 
+    request: LoginRequest,
+    req: Request,
     db: AsyncSession = DatabaseConnectionDep,
     token_manager: TokenManager = TokenManagerDep
 ):
@@ -129,9 +129,7 @@ async def login(
             "type": "access",
         }
 
-        access_token = await token_manager.create_token(
-            token_data, expires_delta=timedelta(hours=24)
-        )
+        access_token = await token_manager.create_access_token(token_data)
 
         # Update last login
         user.last_login_at = datetime.utcnow()
@@ -141,11 +139,11 @@ async def login(
         await db.commit()
 
         # COPPA audit log
-        await coppa_audit.log_event(
-            event_type="parent_login",
-            user_id=str(user.id),
-            details={"email": user.email},
-        )
+        coppa_audit.log_event({
+            "event_type": "authentication_failure",  # Using value
+            "user_id": str(user.id),
+            "details": {"email": user.email, "action": "parent_login"},
+        })
 
         # Return response
         return LoginResponse(
@@ -201,9 +199,9 @@ async def register(request: RegisterRequest, db: AsyncSession = DatabaseConnecti
             username=request.email.split("@")[0],  # Use email prefix as username
             email=request.email,
             password_hash=password_hash,
-            role=UserRole.PARENT,
+            role=UserRole.PARENT.value,
             display_name=request.name,
-            phone_number=request.phone,
+            phone_number=request.phone if hasattr(request, 'phone') and request.phone else None,
             is_active=True,
             is_verified=False,
             timezone="UTC",
@@ -218,11 +216,11 @@ async def register(request: RegisterRequest, db: AsyncSession = DatabaseConnecti
         await db.refresh(new_user)  # Get the auto-generated ID
 
         # COPPA audit log
-        await coppa_audit.log_event(
-            event_type="parent_registration",
-            user_id=str(new_user.id),
-            details={"email": request.email},
-        )
+        coppa_audit.log_event({
+            "event_type": "child_registration",  # Using value
+            "user_id": str(new_user.id),
+            "details": {"email": request.email, "action": "parent_registration"},
+        })
 
         logger.info(f"New parent registered: {request.email}")
 
@@ -258,11 +256,11 @@ async def logout(current_user: dict = Depends(get_current_user)):
         # await token_manager.blacklist_token(token)
 
         # Audit log
-        await coppa_audit.log_event(
-            event_type="parent_logout",
-            user_id=current_user["id"],
-            details={"email": current_user["email"]},
-        )
+        coppa_audit.log_event({
+            "event_type": "authentication_failure",  # Using value
+            "user_id": current_user["id"],
+            "details": {"email": current_user["email"], "action": "parent_logout"},
+        })
 
         return {"message": "Successfully logged out"}
 
@@ -299,9 +297,7 @@ async def refresh_token(
             "type": "access",
         }
 
-        new_token = await token_manager.create_token(
-            token_data, expires_delta=timedelta(hours=24)
-        )
+        new_token = await token_manager.create_access_token(token_data)
 
         return {"access_token": new_token, "token_type": "Bearer", "expires_in": 86400}
 

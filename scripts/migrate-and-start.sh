@@ -33,7 +33,23 @@ export PYTHONPATH=/app
 # Ensure we're in the right directory
 cd /app
 
+# Ensure RSA and encryption keys are available when injected via mounted files
+if [ -z "${JWT_PRIVATE_KEY:-}" ] && [ -n "${JWT_PRIVATE_KEY_FILE:-}" ] && [ -f "${JWT_PRIVATE_KEY_FILE}" ]; then
+  export JWT_PRIVATE_KEY="$(tr -d '\r\n' < "${JWT_PRIVATE_KEY_FILE}")"
+fi
+
+if [ -z "${JWT_PUBLIC_KEY:-}" ] && [ -n "${JWT_PUBLIC_KEY_FILE:-}" ] && [ -f "${JWT_PUBLIC_KEY_FILE}" ]; then
+  export JWT_PUBLIC_KEY="$(tr -d '\r\n' < "${JWT_PUBLIC_KEY_FILE}")"
+fi
+
+if [ -z "${ENCRYPTION_KEY:-}" ] && [ -n "${ENCRYPTION_KEY_FILE:-}" ] && [ -f "${ENCRYPTION_KEY_FILE}" ]; then
+  export ENCRYPTION_KEY="$(tr -d '\r\n' < "${ENCRYPTION_KEY_FILE}")"
+fi
+
+log_info "Loaded secrets from key files"
+
 log_info "Starting pre-flight checks..."
+
 
 # =============================================================================
 # PRE-FLIGHT CHECKS
@@ -89,6 +105,36 @@ echo "   - Database Host: ${db_host:-unknown}"
 echo "   - Database Name: ${db_name:-unknown}"
 echo "   - Environment: ${ENVIRONMENT:-production}"
 
+log_info "2.5/5 Validating application configuration (production-grade)..."
+
+# Validate full application configuration early to fail-fast if misconfigured
+if [[ "${ENVIRONMENT:-production}" == "production" ]]; then
+  if python3 - <<'PY'
+import os, sys
+try:
+    # Allow overriding env file via ENV_FILE for flexible deployments
+    env_file = os.environ.get('ENV_FILE')
+    from src.infrastructure.config.production_config import load_config
+    cfg = load_config(env_file)
+    # Print a terse OK line to stdout for logs
+    print(f"CONFIG OK: ENV={cfg.ENVIRONMENT}, CORS={len(cfg.CORS_ALLOWED_ORIGINS)}, HOSTS={len(cfg.ALLOWED_HOSTS)}")
+    sys.exit(0)
+except Exception as e:
+    # Keep message compact; full trace already logged by loader
+    print(f"CONFIG ERROR: {e}")
+    sys.exit(1)
+PY
+  then
+    log_success "Configuration validated successfully"
+  else
+    log_error "Configuration validation failed. Aborting startup."
+    echo "Required keys include: SECRET_KEY, JWT_SECRET_KEY, COPPA_ENCRYPTION_KEY, DATABASE_URL, REDIS_URL, OPENAI_API_KEY, CORS_ALLOWED_ORIGINS, ALLOWED_HOSTS, PARENT_NOTIFICATION_EMAIL (Stripe keys only when STRIPE_ENABLED=true)"
+    exit 1
+  fi
+else
+  log_warning "Skipping strict config validation (ENVIRONMENT != production)"
+fi
+
 log_info "3/5 Testing database connectivity and psycopg2 availability..."
 
 # Check if psycopg2 is available for Alembic
@@ -103,26 +149,46 @@ fi
 
 # Database ping test
 log_info "Attempting to connect to database..."
-if timeout 30 python3 -c "
+if timeout 60 python3 -c "
 import asyncpg
 import asyncio
 import os
+import time
 
 async def test_connection():
-    try:
-        conn = await asyncpg.connect(os.environ['DATABASE_URL'], command_timeout=10)
-        await conn.execute('SELECT 1')
-        await conn.close()
-        print('Database connection successful')
-        return True
-    except Exception as e:
-        print(f'Database connection failed: {e}')
-        return False
+    # Use MIGRATIONS_DATABASE_URL if available, otherwise DATABASE_URL
+    raw_url = os.environ.get('MIGRATIONS_DATABASE_URL') or os.environ['DATABASE_URL']
+    # Normalize SQLAlchemy-style URLs to plain asyncpg
+    url = raw_url.replace('postgresql+asyncpg://', 'postgresql://').replace('postgresql+psycopg2://', 'postgresql://')
+
+    last_err = None
+    # Retry a few times to avoid race with DB readiness
+    for attempt in range(1, 11):
+        try:
+            conn = await asyncpg.connect(url, command_timeout=10)
+            await conn.execute('SELECT 1')
+            await conn.close()
+            print('Database connection successful')
+            return True
+        except Exception as e:
+            last_err = e
+            print(f'Attempt {attempt}/10: Database connection failed: {e}')
+            await asyncio.sleep(3)
+    print(f'Final failure connecting to DB: {last_err}')
+    return False
 
 result = asyncio.run(test_connection())
 exit(0 if result else 1)
 " 2>/dev/null; then
     log_success "Database is accessible"
+log_info "3.5/5 Ensuring ORM baseline schema..."
+if python3 /app/scripts/bootstrap_database.py; then
+    log_success "Schema bootstrap completed"
+else
+    log_error "Schema bootstrap failed. Aborting startup."
+    exit 1
+fi
+
 else
     log_error "Cannot connect to database!"
     log_error "Please check:"
@@ -220,4 +286,5 @@ exec gunicorn \
     --error-logfile - \
     --capture-output \
     --enable-stdio-inheritance \
+    --preload \
     src.main:app

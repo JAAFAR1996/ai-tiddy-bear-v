@@ -1,4 +1,4 @@
-"""
+﻿"""
 Whisper STT Provider - Local Implementation
 ==========================================
 Production-ready local Whisper implementation for real-time speech-to-text
@@ -83,17 +83,32 @@ class WhisperSTTProvider(ISTTProvider):
         self._fallback_model = None  # Smaller model for high-latency scenarios
         self._logger = logging.getLogger(__name__)
 
-        # Determine optimal device
         if device == "auto":
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
         else:
             self.device = device
+
+        if self.device == "cpu" and compute_type == "float16":
+            self._logger.warning("float16 compute type not supported on CPU; falling back to float32")
+            compute_type = "float32"
+        self.compute_type = compute_type
 
         # Performance metrics
         self._total_requests = 0
         self._successful_requests = 0
         self._total_processing_time = 0.0
         self._language_detections = {"ar": 0, "en": 0, "other": 0}
+
+    async def initialize(self) -> bool:
+        """Preload Whisper models and report readiness."""
+        try:
+            await self._load_model()
+            # _load_model handles fallback when adaptive_model is enabled
+            self._logger.info("Whisper STT provider initialized successfully")
+            return True
+        except Exception as exc:
+            self._logger.error("Whisper STT provider initialization failed: %s", exc, exc_info=True)
+            return False
 
     async def _load_model(self) -> whisper.Whisper:
         """Load Whisper model with optimization and fallback."""
@@ -390,3 +405,4 @@ class WhisperSTTProvider(ISTTProvider):
             self._logger.info("Whisper model warmed up for real-time performance")
         except Exception as e:
             self._logger.warning(f"Model warm-up failed: {e}")
+

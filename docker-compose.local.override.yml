@@ -1,0 +1,7 @@
+services:
+  app:
+    environment:
+      AUTH_REQUIRE_EMAIL_VERIFICATION: "false"
+      AUTH_MOCK_EMAIL: "true"
+      ALLOW_AUTO_DEVICE_REG: "true"
+      ENVIRONMENT: "development"

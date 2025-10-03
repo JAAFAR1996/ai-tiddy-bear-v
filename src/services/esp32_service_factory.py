@@ -6,7 +6,6 @@ Factory for creating and configuring ESP32 Chat Server with all required service
 
 import logging
 import os
-import random
 from typing import Optional
 
 from src.services.esp32_chat_server import ESP32ChatServer
@@ -30,7 +29,7 @@ class ESP32ServiceFactory:
         self,
         ai_provider,  # Required - no default
         tts_service,  # Required - no default
-        stt_model_size: str = "base",
+        stt_provider=None,
         redis_url: Optional[str] = None,
     ) -> ESP32ChatServer:
         """
@@ -39,7 +38,7 @@ class ESP32ServiceFactory:
         Args:
             ai_provider: AI provider instance (REQUIRED)
             tts_service: TTS service instance (REQUIRED)
-            stt_model_size: Whisper model size ("tiny", "base", "small", "medium", "large")
+            stt_provider: Production STT provider instance (required for non-Whisper deployments)
             redis_url: Redis connection URL
 
         Returns:
@@ -57,8 +56,9 @@ class ESP32ServiceFactory:
             raise ValueError("tts_service is required and cannot be None")
 
         try:
-            # Create STT Provider (Whisper)
-            stt_provider = await self._create_stt_provider(stt_model_size)
+            # Use injected STT provider when supplied; otherwise build fallback (Whisper)
+            if stt_provider is None:
+                stt_provider = await self._create_stt_provider()
 
             # Create AI Service
             ai_service = await self._create_ai_service(ai_provider, redis_url)
@@ -88,10 +88,11 @@ class ESP32ServiceFactory:
             self.logger.error(f"Failed to create ESP32 Chat Server: {e}", exc_info=True)
             raise
 
-    async def _create_stt_provider(self, model_size: str) -> WhisperSTTProvider:
-        """Create and initialize Whisper STT provider."""
+    async def _create_stt_provider(self) -> WhisperSTTProvider:
+        """Create and initialize Whisper STT provider when DI does not supply one."""
+        model_size = getattr(self.config, "WHISPER_MODEL", None) or os.getenv("WHISPER_MODEL", "base")
         try:
-            self.logger.info(f"Initializing Whisper STT provider with model: {model_size}")
+            self.logger.info("Initializing fallback Whisper STT provider", extra={"model": model_size})
 
             # Determine device
             device = "cuda" if os.getenv("USE_GPU", "false").lower() == "true" else "cpu"

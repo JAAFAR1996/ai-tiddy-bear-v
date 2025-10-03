@@ -1,0 +1,7 @@
+ArduinoJson@^6.21.3
+ayushsharma82/ElegantOTA@^2.2.9
+tzapu/WiFiManager@^2.0.17
+densaugeo/base64@^1.4.0
+WebSockets@^2.4.0
+bblanchon/StreamUtils@^1.7.3
+arduino-libraries/NTPClient@^3.2.1

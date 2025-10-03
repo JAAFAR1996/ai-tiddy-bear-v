@@ -111,8 +111,12 @@ stringData:
   COPPA_ENCRYPTION_KEY: "REPLACE-WITH-ACTUAL-COPPA-KEY-32-CHARS-MIN"
   DATABASE_URL: "postgresql://username:password@host:5432/database"
   REDIS_URL: "redis://redis:6379/0"
-  OPENAI_API_KEY: "sk-REPLACE-WITH-ACTUAL-OPENAI-KEY"
+  # OPENAI_API_KEY is provisioned via external secret manager. Ensure the Kubernetes secret contains it before deployment.
   PARENT_NOTIFICATION_EMAIL: "parent@aiteddybear.com"
+  # Stripe credentials (required for premium subscriptions)
+  STRIPE_PUBLISHABLE_KEY: "REPLACE-WITH-STRIPE-PUBLISHABLE-KEY"
+  STRIPE_SECRET_KEY: "REPLACE-WITH-STRIPE-SECRET-KEY"
+  STRIPE_WEBHOOK_SECRET: "REPLACE-WITH-STRIPE-WEBHOOK-SECRET"
   SENTRY_DSN: "https://your-sentry-dsn@sentry.io/project-id"
   ELEVENLABS_API_KEY: ""
   

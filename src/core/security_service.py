@@ -1967,12 +1967,14 @@ async def create_security_service(
     """Factory function to create security service with Redis and rate limiting support."""
     if config is None:
         raise ValueError("create_security_service requires config parameter - no global access in production")
-    if redis_client is None:
+    if not getattr(config, "ENABLE_REDIS", True):
+        redis_client = None
+    elif redis_client is None:
         try:
             redis_client = aioredis.from_url(config.REDIS_URL)
             # Test connection
             await redis_client.ping()
-        except ConnectionError as e:
+        except Exception as e:
             logger = get_logger(__name__, "security_service_factory")
             logger.warning(
                 "Could not connect to Redis, using in-memory fallback: %s", str(e)

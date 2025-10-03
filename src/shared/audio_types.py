@@ -3,7 +3,7 @@ Shared Audio Types - SINGLE SOURCE OF TRUTH
 ===========================================
 Production-ready unified audio type definitions.
 
-⚠️  CRITICAL RULE: ALL shared audio enums MUST be defined here.
+WARNING: CRITICAL RULE: ALL shared audio enums MUST be defined here.
     Any duplication or external definition is a BUG and will be removed.
 
     Specialized enums (TTS-only, Compression-only) go in their specific modules

@@ -235,7 +235,7 @@ health_check() {
                 local pf_pid=$!
                 sleep 5
                 
-                if curl -f "http://localhost:8080/api/v1/health" > /dev/null 2>&1; then
+                if curl -f "http://localhost:8080/health" > /dev/null 2>&1; then
                     kill $pf_pid 2>/dev/null || true
                     success "Health check passed for $deployment_name"
                     return 0
@@ -265,8 +265,8 @@ validate_child_safety_post_deployment() {
     
     # Test child safety endpoints
     local endpoints=(
-        "/api/v1/health/child-safety"
-        "/api/v1/health/coppa-compliance"
+        "/health/child-safety"
+        "/health/coppa-compliance"
         "/api/v1/content/safety-filter"
     )
     
@@ -481,9 +481,9 @@ run_post_deployment_tests() {
     
     # Basic API tests
     local test_endpoints=(
-        "/api/v1/health"
-        "/api/v1/health/ready"
-        "/api/v1/health/comprehensive"
+        "/health"
+        "/ready"
+        "/health/comprehensive"
     )
     
     local failed_tests=0

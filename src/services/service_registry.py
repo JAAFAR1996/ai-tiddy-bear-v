@@ -8,6 +8,7 @@ Consolidated Service Registry - Clean Async Pattern
 
 import asyncio
 import logging
+import os
 import time
 from typing import Any, Dict, Optional, TypeVar, List
 from src.infrastructure.config.production_config import ProductionConfig
@@ -15,11 +16,13 @@ from src.infrastructure.config.validator import (
     validate_production_config,
     ConfigurationValidationError,
 )
+from src.utils.redaction import sanitize_text, sanitize_mapping
 
 # Explicit imports: كل خدمة وكل repository يجب أن يكون معرف بوضوح
 from src.application.services.ai_service import ConsolidatedAIService
 from src.application.services.user_service import UserService
 from src.application.services.child_safety_service import ConsolidatedChildSafetyService
+from src.services.drain_manager import DrainManager
 from src.services.conversation_service import ConsolidatedConversationService
 from src.infrastructure.logging.structured_logger import StructuredLogger
 from src.application.services.child_safety_service import ChildSafetyService
@@ -128,6 +131,9 @@ class ServiceRegistry:
         self._instances: Dict[str, Any] = {}
         self._lock = asyncio.Lock()
 
+        instance_id = os.getenv("INSTANCE_ID", "app")
+        self._drain_manager = DrainManager(instance_id=instance_id)
+
         self._register_all_factories()
         logger.info("Service Registry initialized with factories only")
         self._audit(
@@ -141,6 +147,10 @@ class ServiceRegistry:
             },
         )
 
+    def get_drain_manager(self) -> DrainManager:
+        """Access the per-instance drain manager."""
+        return self._drain_manager
+
     def _audit(self, event: str, details: dict):
         entry = {"event": event, "timestamp": time.time(), "details": details}
         self._audit_log.append(entry)
@@ -152,7 +162,7 @@ class ServiceRegistry:
         Returns a dict with status and details. Raises if not ready.
         """
 
-        status = {"db": False, "redis": False, "openai": False, "errors": []}
+        status = {"db": False, "redis": False, "openai": False, "drain": True, "errors": []}
         logger = self._audit_logger
 
         async def db_check():
@@ -224,13 +234,14 @@ class ServiceRegistry:
                     result = await asyncio.wait_for(fn(), timeout=5)
                     return result
                 except Exception as e:
+                    sanitized = sanitize_text(str(e)) or str(e)
                     if attempt == max_attempts:
-                        logger.error(f"{name} readiness failed after {max_attempts} attempts: {e}")
-                        status["errors"].append(f"{name}: {e}")
+                        logger.error(f"{name} readiness failed after {max_attempts} attempts: {sanitized}")
+                        status["errors"].append(f"{name}: {sanitized}")
                         return False
                     else:
                         wait_time = min(2 ** attempt, 8)  # Exponential backoff
-                        logger.warning(f"{name} attempt {attempt} failed, retrying in {wait_time}s: {e}")
+                        logger.warning(f"{name} attempt {attempt} failed, retrying in {wait_time}s: {sanitized}")
                         await asyncio.sleep(wait_time)
             return False
 
@@ -238,10 +249,20 @@ class ServiceRegistry:
         status["redis"] = await run_with_retry(redis_check, "Redis")
         status["openai"] = await run_with_retry(openai_check, "OpenAI")
 
-        self._audit("readiness_check", details=status)
+        fallback_allowed = getattr(self.config, "ALLOW_AI_FAILURE_FALLBACK", True)
+        env_override = os.getenv("ALLOW_AI_FAILURE_FALLBACK")
+        if env_override is not None:
+            fallback_allowed = env_override.strip().lower() in ("1", "true", "yes")
+        if not status["openai"] and fallback_allowed:
+            logger.warning("OpenAI readiness degraded; enabling mock fallback")
+            status["openai"] = True
+            notes = status.setdefault("notes", [])
+            notes.append("openai_fallback")
+        sanitized_status = sanitize_mapping(dict(status))
+        self._audit("readiness_check", details=sanitized_status)
         if not all([status["db"], status["redis"], status["openai"]]):
-            raise RuntimeError(f"Readiness check failed: {status}")
-        return status
+            raise RuntimeError(f"Readiness check failed: {sanitized_status}")
+        return sanitized_status
 
     def get_dependency_tree(self) -> dict:
         """
@@ -908,3 +929,10 @@ async def get_delivery_record_repository():
     """Convenience function to get DeliveryRecord repository."""
     registry = await get_service_registry()
     return await registry.get_service("delivery_record_repository")
+
+
+
+async def get_drain_manager() -> DrainManager:
+    """Convenience accessor for the drain manager."""
+    registry = await get_service_registry()
+    return registry.get_drain_manager()

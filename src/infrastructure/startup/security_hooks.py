@@ -106,17 +106,18 @@ class SecurityStartupHooks:
             self.logger.info("🚀 Validating production readiness...")
 
             # Check production-specific requirements
+            stripe_enabled = os.getenv("STRIPE_ENABLED", "false").lower() in {"1", "true", "yes"}
             production_requirements = [
                 "JWT_PRIVATE_KEY",
                 "JWT_PUBLIC_KEY",
                 "DATABASE_URL",
                 "REDIS_URL",
                 "REDIS_PASSWORD",
-                "STRIPE_SECRET_KEY",
-                "SENTRY_DSN",
                 "SECRET_KEY",
                 "ENCRYPTION_KEY",
             ]
+            if stripe_enabled:
+                production_requirements.append("STRIPE_SECRET_KEY")
 
             missing_vars = []
             for var in production_requirements:

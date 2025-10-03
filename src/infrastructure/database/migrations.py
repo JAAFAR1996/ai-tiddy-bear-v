@@ -654,14 +654,12 @@ class MigrationManager:
         self.config_manager = get_config_manager()
         self.logger = get_logger("migration_manager")
 
+        self._config = self._ensure_config_loaded()
+
         # Migration settings
-        self.migration_timeout = self.config_manager.get_float(
-            "MIGRATION_TIMEOUT", 600.0
-        )  # 10 minutes
-        self.enable_rollback = self.config_manager.get_bool(
-            "MIGRATION_ENABLE_ROLLBACK", True
-        )
-        self.dry_run_mode = self.config_manager.get_bool("MIGRATION_DRY_RUN", False)
+        self.migration_timeout = self._get_float("MIGRATION_TIMEOUT", 600.0)  # 10 minutes
+        self.enable_rollback = self._get_bool("MIGRATION_ENABLE_ROLLBACK", True)
+        self.dry_run_mode = self._get_bool("MIGRATION_DRY_RUN", False)
 
         # Available migrations in order
         self.migrations = [
@@ -669,6 +667,64 @@ class MigrationManager:
             CreateInitialTables(),
             CreateIndexes(),
         ]
+
+    def _ensure_config_loaded(self):
+        config = None
+        manager = self.config_manager
+
+        if manager:
+            get_cfg = getattr(manager, "get_config", None)
+            if callable(get_cfg):
+                try:
+                    config = get_cfg()
+                except Exception:
+                    config = None
+
+            if config is None:
+                load_cfg = getattr(manager, "load_config", None)
+                if callable(load_cfg):
+                    try:
+                        config = load_cfg()
+                    except Exception:
+                        config = None
+
+        if config is None:
+            try:
+                from src.infrastructure.config.production_config import load_config
+
+                config = load_config()
+            except Exception:
+                self.logger.debug("Falling back to default migration configuration values")
+                config = None
+
+        return config
+
+    def _get_float(self, key: str, default: float) -> float:
+        getter = getattr(self.config_manager, "get_float", None)
+        if callable(getter):
+            try:
+                return getter(key, default)
+            except Exception:
+                self.logger.debug("Using default float for %s", key)
+
+        config = self._config or self._ensure_config_loaded()
+        if config is not None:
+            return getattr(config, key, default)
+        return default
+
+    def _get_bool(self, key: str, default: bool) -> bool:
+        getter = getattr(self.config_manager, "get_bool", None)
+        if callable(getter):
+            try:
+                return getter(key, default)
+            except Exception:
+                self.logger.debug("Using default bool for %s", key)
+
+        config = self._config or self._ensure_config_loaded()
+        if config is not None:
+            return getattr(config, key, default)
+        return default
+
 
     async def initialize_tracking(self):
         """Initialize migration tracking table."""

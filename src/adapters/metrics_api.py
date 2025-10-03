@@ -179,7 +179,7 @@ def get_system_metrics():
 
 
 @router.get("/esp32/metrics", response_class=JSONResponse)
-async def esp32_metrics(config = ConfigDep):
+async def esp32_metrics(config = ConfigDep, _access: bool = Depends(verify_metrics_access)):
     """
     ESP32-specific metrics endpoint (JSON format)
     
@@ -256,6 +256,14 @@ async def esp32_metrics(config = ConfigDep):
             detail="Metrics generation failed"
         )
 
+
+@router.head("/esp32/metrics", include_in_schema=False)
+async def esp32_metrics_head(
+    request: Request,
+    _access: bool = Depends(verify_metrics_access),
+):
+    """Lightweight HEAD handler ensuring access control for ESP32 metrics."""
+    return Response(status_code=200)
 
 @router.get("/metrics", response_class=PlainTextResponse, include_in_schema=False)
 def prometheus_metrics(

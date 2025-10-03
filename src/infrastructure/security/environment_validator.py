@@ -216,9 +216,10 @@ class EnvironmentSecurityValidator:
             description="OpenAI API key"
         )
         
+        stripe_enabled_env = os.getenv("STRIPE_ENABLED", "false").lower() in {"1", "true", "yes"}
         requirements["STRIPE_SECRET_KEY"] = SecretRequirement(
             name="STRIPE_SECRET_KEY",
-            required=self.environment == "production",
+            required=self.environment == "production" and stripe_enabled_env,
             min_length=30,
             max_length=None,
             complexity_patterns=[
@@ -352,6 +353,9 @@ class EnvironmentSecurityValidator:
                 ))
         
         # Check for common weak patterns
+        if name in {"JWT_PRIVATE_KEY", "JWT_PUBLIC_KEY"}:  # PEM headers contain repeated characters by design
+            return issues
+
         weak_patterns = [
             (r"^(test|dev|demo|example).*", "Contains weak prefix"),
             (r".*\b(123|abc|password|secret)\b.*", "Contains common weak words"),
@@ -457,6 +461,9 @@ class EnvironmentSecurityValidator:
         # Check for environment variables that might leak in logs/errors
         dangerous_env_vars = []
         for key, value in os.environ.items():
+            if key in {"JWT_PRIVATE_KEY", "JWT_PUBLIC_KEY"}:
+                continue
+
             if any(keyword in key.upper() for keyword in ["SECRET", "KEY", "PASSWORD", "TOKEN", "API"]):
                 if len(value) < 8:  # Very short secret
                     issues.append(ValidationIssue(
@@ -466,7 +473,7 @@ class EnvironmentSecurityValidator:
                         message=f"Secret {key} is very short and may be weak",
                         recommendation=f"Use a longer, more complex value for {key}"
                     ))
-                
+
                 # Check if secret appears to be encoded
                 if re.match(r"^[A-Za-z0-9+/=]+$", value) and len(value) % 4 == 0:
                     # Looks like base64
@@ -485,7 +492,6 @@ class EnvironmentSecurityValidator:
                             message=f"Secret {key} appears to contain common words",
                             recommendation=f"Use a randomly generated value for {key}"
                         ))
-        
         return issues
     
     def validate_all_secrets(self) -> Dict[str, Any]:
@@ -555,14 +561,14 @@ class EnvironmentSecurityValidator:
         results = self.validation_results
         
         report = f"""
-🔐 ENVIRONMENT SECURITY VALIDATION REPORT
+?? ENVIRONMENT SECURITY VALIDATION REPORT
 {'=' * 60}
 Timestamp: {results['timestamp']}
 Environment: {results['environment']}
 Validator Version: {results['validator_version']}
 
 SECURITY SCORE: {results['security_score']}/100
-Production Ready: {'✅ YES' if results['is_production_ready'] else '❌ NO'}
+Production Ready: {'? YES' if results['is_production_ready'] else '? NO'}
 
 ISSUE SUMMARY:
 - Critical Failures: {results['critical_failures']}
@@ -578,20 +584,20 @@ ISSUE SUMMARY:
             
             for issue in results['validation_issues']:
                 severity_icon = {
-                    'critical_fail': '💥',
-                    'fail': '❌', 
-                    'warn': '⚠️',
-                    'pass': '✅'
-                }.get(issue['severity'], '❓')
+                    'critical_fail': '??',
+                    'fail': '?', 
+                    'warn': '??',
+                    'pass': '?'
+                }.get(issue['severity'], '?')
                 
                 report += f"{severity_icon} {issue['variable']}: {issue['message']}\n"
-                report += f"   → {issue['recommendation']}\n\n"
+                report += f"   ? {issue['recommendation']}\n\n"
         else:
-            report += "\n✅ NO SECURITY ISSUES DETECTED\n"
+            report += "\n? NO SECURITY ISSUES DETECTED\n"
         
         if not results['is_production_ready']:
             report += f"""
-🚫 PRODUCTION DEPLOYMENT BLOCKED
+?? PRODUCTION DEPLOYMENT BLOCKED
 {'=' * 40}
 This configuration is NOT suitable for production deployment.
 Critical security issues must be resolved before proceeding.
@@ -599,13 +605,13 @@ Critical security issues must be resolved before proceeding.
 REQUIRED ACTIONS:
 1. Fix all critical failures
 2. Resolve security failures  
-3. Achieve security score ≥ 85%
+3. Achieve security score = 85%
 4. Re-run validation until production ready
 
 """
         else:
             report += f"""
-🎉 PRODUCTION DEPLOYMENT APPROVED
+?? PRODUCTION DEPLOYMENT APPROVED
 {'=' * 40}
 Environment configuration meets security requirements.
 System is ready for production deployment.
@@ -619,7 +625,7 @@ System is ready for production deployment.
         Perform startup security check.
         Returns True if safe to proceed, False if startup should be blocked.
         """
-        print("🔐 Performing environment security validation...")
+        print("?? Performing environment security validation...")
         
         results = self.validate_all_secrets()
         report = self.generate_security_report()
@@ -631,14 +637,14 @@ System is ready for production deployment.
         with open(report_file, 'w') as f:
             json.dump(results, f, indent=2)
         
-        print(f"📄 Detailed report saved to: {report_file}")
+        print(f"?? Detailed report saved to: {report_file}")
         
         if not results['is_production_ready']:
-            print("\n💥 STARTUP BLOCKED: Critical security issues detected!")
+            print("\n?? STARTUP BLOCKED: Critical security issues detected!")
             print("Server will NOT start until security requirements are met.")
             return False
         
-        print("\n✅ Security validation passed - proceeding with startup")
+        print("\n? Security validation passed - proceeding with startup")
         return True
 
 
@@ -650,7 +656,7 @@ def validate_environment_on_startup():
     is_safe = validator.startup_security_check()
     
     if not is_safe:
-        print("\n🚫 TERMINATING: Security validation failed")
+        print("\n?? TERMINATING: Security validation failed")
         sys.exit(1)
     
     return validator
@@ -671,3 +677,5 @@ def get_environment_validator() -> EnvironmentSecurityValidator:
 if __name__ == "__main__":
     # Run standalone validation
     validate_environment_on_startup()
+
+

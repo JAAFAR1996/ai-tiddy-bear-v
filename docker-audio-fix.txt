@@ -1,5 +1,0 @@
-# Add to Dockerfile for ffmpeg support:
-# RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
-
-# For production deployment, add this line after system dependencies
-# This fixes the "Couldn't find ffmpeg" warning for TTS/Audio processing

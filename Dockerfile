@@ -1,6 +1,6 @@
 # AI Teddy Bear - Production Docker Image for Render.com
 # ===================================================
-FROM python:3.11-slim
+FROM python:3.11-slim AS production
 
 LABEL maintainer="AI Teddy Bear Team <team@aiteddybear.com>" \
       version="1.0.0" \

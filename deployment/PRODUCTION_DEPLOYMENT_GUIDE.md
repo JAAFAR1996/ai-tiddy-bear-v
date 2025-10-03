@@ -47,14 +47,21 @@ mkdir -p secure_storage/prod
 
 ### 2. Environment Configuration
 ```bash
-# Copy environment template
-cp .env.production.template .env.production
-
-# Edit with your production values
-nano .env.production
+# Edit the root .env file (single source of truth)
+nano ../.env
 ```
 
-**⚠️ CRITICAL: Replace ALL placeholder values in .env.production**
+**⚠️ تأكد من استبدال كل قيم `__SET_ME__` في `.env` بأسرار حقيقية محفوظة خارج Git.**
+
+بعد تحديث القيم السرية، شغّل:
+
+```bash
+python scripts/generate_production_rsa_keys.py
+```
+
+سيُنشئ ذلك ملفات RSA داخل `../keys/` ويحدّث `.env` بمساراتها؛ احرص على نقل هذه الملفات إلى مخزنٍ آمن أو توفيرها كأسرارٍ وقت التشغيل.
+
+**⚠️ CRITICAL: Replace ALL placeholder values in .env**
 
 ### 3. Generate Security Keys
 ```bash
@@ -69,6 +76,9 @@ openssl rand -hex 32
 
 # Generate BACKUP_ENCRYPTION_KEY
 openssl rand -hex 32
+
+# Generate RSA key pair + symmetric key (writes to ../keys/)
+python ../scripts/generate_production_rsa_keys.py
 ```
 
 ### 4. SSL Certificate Setup
@@ -77,20 +87,20 @@ openssl rand -hex 32
 openssl dhparam -out ssl/certs/dhparam.pem 2048
 
 # Set proper permissions
-chmod 600 .env.production
+chmod 600 .env
 chmod 755 backup/backup.sh backup/restore.sh
 ```
 
 ### 5. Launch Production Services
 ```bash
 # Start all services
-docker-compose -f docker-compose.production.yml up -d
+docker compose --env-file ../.env -f docker-compose.production.yml up -d
 
 # Check status
-docker-compose -f docker-compose.production.yml ps
+docker compose --env-file ../.env -f docker-compose.production.yml ps
 
 # View logs
-docker-compose -f docker-compose.production.yml logs -f app
+docker compose --env-file ../.env -f docker-compose.production.yml logs -f app
 ```
 
 ## 🔒 SSL/HTTPS Setup
@@ -103,10 +113,10 @@ The deployment includes automatic SSL certificate generation using Certbot:
 # Certificates are stored in: ssl/certs/live/yourdomain.com/
 
 # Manual certificate generation (if needed)
-docker-compose -f docker-compose.production.yml run --rm certbot
+docker compose --env-file ../.env -f docker-compose.production.yml run --rm certbot
 
 # Certificate renewal (automatic via cron)
-docker-compose -f docker-compose.production.yml restart certbot
+docker compose --env-file ../.env -f docker-compose.production.yml restart certbot
 ```
 
 ### SSL Configuration Features
@@ -125,7 +135,7 @@ docker-compose -f docker-compose.production.yml restart certbot
 
 ### Grafana Dashboards
 - **URL**: `http://localhost:3000` (localhost only)
-- **Login**: admin / (set in .env.production)
+- **Login**: admin / (set in .env)
 - **Features**: Pre-configured dashboards, alerts, notifications
 
 ### Alerting Rules
@@ -206,7 +216,7 @@ Redis: Memory optimization, persistence tuning
 ```bash
 # Horizontal scaling (future)
 # Increase replicas in docker-compose.production.yml
-docker-compose -f docker-compose.production.yml up -d --scale app=3
+docker compose --env-file ../.env -f docker-compose.production.yml up -d --scale app=3
 
 # Load balancing setup
 # Nginx upstream configuration already included
@@ -217,10 +227,10 @@ docker-compose -f docker-compose.production.yml up -d --scale app=3
 ### Daily Operations
 ```bash
 # Check service health
-docker-compose -f docker-compose.production.yml ps
+docker compose --env-file ../.env -f docker-compose.production.yml ps
 
 # View application logs
-docker-compose -f docker-compose.production.yml logs -f app
+docker compose --env-file ../.env -f docker-compose.production.yml logs -f app
 
 # Check backup status
 ls -la backups/database/
@@ -245,7 +255,7 @@ openssl x509 -in ssl/certs/live/yourdomain.com/cert.pem -text -noout | grep "Not
 ```bash
 # Update Docker images
 docker-compose -f docker-compose.production.yml pull
-docker-compose -f docker-compose.production.yml up -d
+docker compose --env-file ../.env -f docker-compose.production.yml up -d
 
 # Clean up old logs
 find logs/ -name "*.log" -mtime +30 -delete
@@ -337,8 +347,8 @@ docker exec -it ai-teddy-db-backup-prod /restore.sh latest_backup.sql.enc
 ## 📞 Support and Monitoring
 
 ### Health Check Endpoints
-- **Application**: `https://api.yourdomain.com/api/v1/health`
-- **Comprehensive**: `https://api.yourdomain.com/api/v1/health/comprehensive`
+- **Application**: `https://api.yourdomain.com/health`
+- **Comprehensive**: `https://api.yourdomain.com/health/comprehensive`
 
 ### Log Locations
 ```bash
@@ -377,14 +387,14 @@ git pull origin main
 docker-compose -f docker-compose.production.yml build app
 
 # Rolling update
-docker-compose -f docker-compose.production.yml up -d app
+docker compose --env-file ../.env -f docker-compose.production.yml up -d app
 ```
 
 ### Rollback Procedure
 ```bash
 # Rollback to specific version
 docker tag ai-teddy-app:previous ai-teddy-app:latest
-docker-compose -f docker-compose.production.yml up -d app
+docker compose --env-file ../.env -f docker-compose.production.yml up -d app
 
 # Database rollback (use pre-restore backup)
 docker exec -it ai-teddy-db-backup-prod /restore.sh pre_restore_backup.sql
@@ -443,3 +453,8 @@ docker exec -it ai-teddy-db-backup-prod /restore.sh pre_restore_backup.sql
 **📝 Last Updated**: [Current Date]
 **🔖 Version**: 1.0.0
 **👥 Maintained by**: AI Teddy Bear DevOps Team
+### Local TLS fallback
+- Set `TLS_SELF_SIGNED=true` in `.env` when running locally without trusted certificates.
+- The nginx container will generate a temporary self-signed certificate under `deployment/ssl` at startup.
+
+

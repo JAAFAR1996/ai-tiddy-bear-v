@@ -13,6 +13,7 @@ from uuid import uuid4
 from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.websockets import WebSocket as StarletteWebSocket
 
 # Import our logging system
 from .logging.production_logger import get_logger, security_logger
@@ -70,11 +71,18 @@ class ErrorHandler:
         self, request: Request, exc: AITeddyBearException, user_context: Dict[str, Any]
     ) -> JSONResponse:
         """Handle custom application exceptions with simplified logging."""
+        # Safely derive path/method for both HTTP and WebSocket
+        is_ws = isinstance(request, StarletteWebSocket) or getattr(getattr(request, "scope", {}), "get", lambda *_: None)("type") == "websocket"
+        method = "WS" if is_ws else getattr(request, "method", "UNKNOWN")
+        try:
+            path = request.url.path
+        except Exception:
+            path = getattr(getattr(request, "scope", {}), "get", lambda *_: None)("path") or "unknown"
         log_data = {
             "error_code": exc.error_code,
             "correlation_id": exc.correlation_id,
-            "path": request.url.path,
-            "method": request.method,
+            "path": path,
+            "method": method,
             "user_context": user_context,
         }
 
@@ -157,10 +165,16 @@ class ErrorHandler:
         correlation_id = getattr(request.state, "correlation_id", str(uuid4()))
         # Simplified logging - remove status_code from extra kwargs
         log_msg = f"HTTP error {exc.status_code}: {exc.detail}"
+        is_ws = isinstance(request, StarletteWebSocket) or getattr(getattr(request, "scope", {}), "get", lambda *_: None)("type") == "websocket"
+        method = "WS" if is_ws else getattr(request, "method", "UNKNOWN")
+        try:
+            path = request.url.path
+        except Exception:
+            path = getattr(getattr(request, "scope", {}), "get", lambda *_: None)("path") or "unknown"
         log_extra = {
             "correlation_id": correlation_id,
-            "path": request.url.path,
-            "method": request.method,
+            "path": path,
+            "method": method,
             "user_context": user_context,
         }
 
@@ -203,12 +217,18 @@ class ErrorHandler:
 
         # Safe logging with fallback
         try:
+            is_ws = isinstance(request, StarletteWebSocket) or getattr(getattr(request, "scope", {}), "get", lambda *_: None)("type") == "websocket"
+            method = "WS" if is_ws else getattr(request, "method", "UNKNOWN")
+            try:
+                path = request.url.path
+            except Exception:
+                path = getattr(getattr(request, "scope", {}), "get", lambda *_: None)("path") or "unknown"
             log_data = {
                 "error": str(exc),
                 "error_type": type(exc).__name__,
                 "correlation_id": correlation_id,
-                "path": request.url.path,
-                "method": request.method,
+                "path": path,
+                "method": method,
             }
 
             if isinstance(exc, (SystemError, MemoryError, KeyboardInterrupt)):

@@ -195,8 +195,8 @@ validate_child_safety_post_rollback() {
     
     # Test child safety endpoints
     local endpoints=(
-        "/api/v1/health/child-safety"
-        "/api/v1/health/coppa-compliance"
+        "/health/child-safety"
+        "/health/coppa-compliance"
         "/api/v1/content/safety-filter"
     )
     

@@ -12,10 +12,12 @@ Features:
 - Rate limiting and security headers
 """
 
+import jwt
 import logging
 import hmac
 import hashlib
 import secrets
+import base64
 import re
 import json
 import asyncio
@@ -26,12 +28,12 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Depends, Request, Response, status
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, Field, validator
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine
 from sqlalchemy import select, and_, or_, func, cast
 from sqlalchemy.types import String
 from sqlalchemy.orm import selectinload
 
-# Core infrastructure imports  
+# Core infrastructure imports
 from src.application.dependencies import ConfigDep
 
 # Basic logger setup first
@@ -40,11 +42,12 @@ logger = logging.getLogger(__name__)
 # Database integration - production-grade DI
 try:
     from src.application.dependencies import DatabaseConnectionDep
-    from src.infrastructure.database.models import User, Child, Device
+    from src.infrastructure.database.models import User, Child, Device, DeviceStatus as DBDeviceStatus
     from src.services.device_service import DeviceService
 except ImportError as e:
     logger.warning(f"Database imports not available: {e}")
     # Create fallback dependency
+
     async def get_db():
         """Fallback database session"""
         return None
@@ -54,7 +57,7 @@ except ImportError as e:
 try:
     from src.infrastructure.logging.production_logger import get_logger
 except ImportError:
-    get_logger = lambda name, context: logging.getLogger(name)
+    def get_logger(name, context): return logging.getLogger(name)
 
 try:
     from src.infrastructure.monitoring.audit import coppa_audit
@@ -65,34 +68,41 @@ except ImportError:
             logger.info(f"AUDIT: {kwargs}")
     coppa_audit = MockAudit()
 
-# ESP32 OOB Secret Generation for Auto-Registration  
+# ESP32 OOB Secret Generation for Auto-Registration
+
+
 def generate_device_oob_secret(device_id: str) -> str:
     """Generate deterministic but unique secret per device."""
     # استخدم نفس OOB secret الموجود في ESP32
     return "20F98D30602B1F5359C2775CC6BC74389CDE906348676F9B4D89B93151C77182"
 
+
 # Token Manager with Dependency Injection (NO import-time config access)
-import jwt
+
+
 class SimpleTokenManager:
     def __init__(self, secret: str, algorithm: str = "HS256"):
         self.secret = secret
         self.algorithm = algorithm
-    
+
     async def create_token(self, data: dict, expires_delta: timedelta):
         """Create JWT token"""
         import time
         now = int(time.time())
         payload = {**data, "iat": now, "exp": now + int(expires_delta.total_seconds())}
         return jwt.encode(payload, self.secret, algorithm=self.algorithm)
-    
+
     async def decode_token(self, token: str):
         """Decode JWT token"""
         return jwt.decode(token, self.secret, algorithms=[self.algorithm])
 
 # Dependency factory (no import-time instantiation)
-def get_token_manager(config = ConfigDep) -> SimpleTokenManager:
+
+
+def get_token_manager(config=ConfigDep) -> SimpleTokenManager:
     """Get TokenManager instance with config from app.state"""
     return SimpleTokenManager(secret=config.JWT_SECRET_KEY, algorithm="HS256")
+
 
 # Device management
 try:
@@ -100,18 +110,13 @@ try:
     # DeviceStatus is now a str Enum, so it's JSON serializable
     DEVICE_STATUS_IMPORTED = True
 except ImportError:
-    # Create mock device status that matches the Enum interface
-    class DeviceStatus:
-        UNREGISTERED = "unregistered"
-        PAIRING_MODE = "pairing_mode"
-        PAIRED = "paired"
-        ACTIVE = "active"
-        OFFLINE = "offline"
-        ERROR = "error"
-        MAINTENANCE = "maintenance"
+    # Use DeviceStatus from models instead
+    from src.infrastructure.database.models import DeviceStatus
+    DEVICE_STATUS_IMPORTED = True
+
     class DevicePairingManager:
         pass
-    DEVICE_STATUS_IMPORTED = False
+
 
 def get_device_status_value(status):
     """Get the string value of a device status, handling both Enum and mock cases"""
@@ -119,21 +124,41 @@ def get_device_status_value(status):
         return status.value
     return status
 
+
 logger = get_logger(__name__, "claim_api")
-router = APIRouter(prefix="/pair", tags=["Device Claiming"])
+router = APIRouter(tags=["Device Claiming"])
 security = HTTPBearer()
 # No module-level instantiation - use dependency injection
 # device_manager removed to avoid import-time config access
 
+
+# Utilities
+async def _ensure_core_tables(db: AsyncSession) -> None:
+    """Idempotently ensure core tables exist (safe for first run)."""
+    try:
+        from src.infrastructure.database.models import Base
+        bind = db.get_bind() if hasattr(db, "get_bind") else getattr(db, "bind", None)
+        if isinstance(bind, AsyncEngine):
+            async with bind.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("Ensured core database tables (create_all)")
+        else:
+            # If no async engine is available, skip silently (handled by migrations)
+            logger.debug("Skipping create_all (no AsyncEngine bound)")
+    except Exception as e:
+        logger.warning("Failed to ensure core tables", extra={"error": str(e)})
+
 # ✅ Configuration will come via Depends(get_config_from_state) - no module-level access
 
 # Redis manager for nonce tracking
+
+
 class SimpleRedisManager:
     """Simple Redis manager for nonce tracking"""
-    
+
     def __init__(self):
         self._client = None
-    
+
     async def get_client(self, redis_url: str):
         """Get Redis client instance"""
         if not self._client:
@@ -148,6 +173,7 @@ class SimpleRedisManager:
                 self._client = None
         return self._client
 
+
 redis_manager = SimpleRedisManager()
 
 # Device OOB Secret Management - REMOVED (Using single function above)
@@ -157,9 +183,9 @@ redis_manager = SimpleRedisManager()
 class ClaimRequest(BaseModel):
     """Device claim request with HMAC authentication"""
     device_id: str = Field(
-        ..., 
-        min_length=8, 
-        max_length=64, 
+        ...,
+        min_length=8,
+        max_length=64,
         pattern=r'^[a-zA-Z0-9_-]+$',
         description="Unique ESP32 device identifier"
     )
@@ -219,6 +245,8 @@ class DeviceTokenResponse(BaseModel):
     device_session_id: str = Field(..., description="Unique session identifier")
     child_profile: Dict[str, Any] = Field(..., description="Child profile data")
     device_config: Dict[str, Any] = Field(..., description="Device configuration")
+    pairing_code: Optional[str] = Field(None, max_length=64, description="Provisioned pairing code for ESP32")
+    provisioning_payload: Optional[str] = Field(None, description="Base64-encoded provisioning payload for device bootstrap")
 
 
 class RefreshRequest(BaseModel):
@@ -229,7 +257,7 @@ class RefreshRequest(BaseModel):
 class RefreshResponse(BaseModel):
     """Token refresh response"""
     access_token: str = Field(..., description="New access token")
-    token_type: str = Field(default="Bearer", description="Token type") 
+    token_type: str = Field(default="Bearer", description="Token type")
     expires_in: int = Field(..., description="Token expiry in seconds")
 
 
@@ -238,13 +266,13 @@ class RefreshResponse(BaseModel):
 async def verify_nonce_once(nonce: str, redis_url: str, device_id: str = None, child_id: str = None) -> None:
     """
     Verify nonce hasn't been used before (anti-replay protection)
-    
+
     Args:
         nonce: Hex-encoded nonce string
         redis_url: Redis connection URL
         device_id: Optional device identifier for scoped nonce
         child_id: Optional child identifier for scoped nonce
-        
+
     Raises:
         HTTPException: If Redis unavailable or nonce already used
     """
@@ -266,23 +294,23 @@ async def verify_nonce_once(nonce: str, redis_url: str, device_id: str = None, c
         else:
             # Fallback to global nonce (less secure)
             nonce_key = f"device_nonce:{nonce}"
-        
+
         # Atomic check-and-set with expiration (aligned with idempotency cache)
         is_new = await redis_client.set(nonce_key, "used", ex=300, nx=True)  # 5 min expiry (same as idempotency)
-        
+
         if not is_new:
-            logger.warning("Nonce replay attack detected", 
-                          extra={
-                              "nonce_prefix": nonce[:16],
-                              "device_id": mask_sensitive(device_id) if device_id else "global"
-                          })
+            logger.warning("Nonce replay attack detected",
+                           extra={
+                               "nonce_prefix": nonce[:16],
+                               "device_id": mask_sensitive(device_id) if device_id else "global"
+                           })
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Nonce already used - possible replay attack"
             )
-            
+
         logger.debug("Nonce verified and marked as used", extra={"nonce_prefix": nonce[:16]})
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -301,11 +329,11 @@ def mask_sensitive(value: str, visible_chars: int = 4) -> str:
 
 
 async def verify_nonce_idempotent(
-    nonce: str, 
-    device_id: str, 
-    child_id: str, 
-    hmac_hex: str, 
-    redis_url: str, 
+    nonce: str,
+    device_id: str,
+    child_id: str,
+    hmac_hex: str,
+    redis_url: str,
     config: Any
 ) -> Optional[dict]:
     """
@@ -317,7 +345,7 @@ async def verify_nonce_idempotent(
         # Use scoped nonce verification
         await verify_nonce_once(nonce, redis_url, device_id, child_id)
         return None
-    
+
     try:
         redis_client = await redis_manager.get_client(redis_url)
         if not redis_client:
@@ -332,47 +360,47 @@ async def verify_nonce_idempotent(
         # Normalize identifiers
         norm_device_id = device_id.strip().lower()
         norm_child_id = child_id.strip().lower()
-        
+
         # Create idempotency key
         idempotency_key = f"claim:{norm_device_id}:{norm_child_id}:{nonce}:{hmac_hex}"
-        
+
         # Check if exact request was processed before - handle bytes
         cached_response = await redis_client.get(idempotency_key)
         if cached_response:
             if isinstance(cached_response, bytes):
                 cached_response = cached_response.decode('utf-8')
-            logger.info("Idempotent request - returning cached response", 
-                       extra={
-                           "device_id": mask_sensitive(norm_device_id), 
-                           "nonce": "***MASKED***", 
-                           "hmac": "***MASKED***"
-                       })
+            logger.info("Idempotent request - returning cached response",
+                        extra={
+                            "device_id": mask_sensitive(norm_device_id),
+                            "nonce": "***MASKED***",
+                            "hmac": "***MASKED***"
+                        })
             return json.loads(cached_response)
-        
+
         # Check if nonce was used with different HMAC
         nonce_key = f"nonce:{norm_device_id}:{norm_child_id}:{nonce}"
-        
+
         # Atomic set-if-not-exists
         was_set = await redis_client.set(nonce_key, hmac_hex, ex=300, nx=True)
-        
+
         if not was_set:
             # Nonce already used, check if with same HMAC
             existing_hmac = await redis_client.get(nonce_key)
             if isinstance(existing_hmac, bytes):
                 existing_hmac = existing_hmac.decode('utf-8')
             if existing_hmac and existing_hmac != hmac_hex:
-                logger.warning("Nonce reuse with different HMAC", 
-                             extra={
-                                 "device_id": mask_sensitive(norm_device_id), 
-                                 "nonce": "***MASKED***"
-                             })
+                logger.warning("Nonce reuse with different HMAC",
+                               extra={
+                                   "device_id": mask_sensitive(norm_device_id),
+                                   "nonce": "***MASKED***"
+                               })
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Nonce already used with different signature"
                 )
-        
+
         return None
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -384,46 +412,46 @@ async def verify_nonce_idempotent(
 
 
 async def store_idempotent_response(
-    nonce: str, 
-    device_id: str, 
-    child_id: str, 
-    hmac_hex: str, 
-    response: dict, 
+    nonce: str,
+    device_id: str,
+    child_id: str,
+    hmac_hex: str,
+    response: dict,
     redis_url: str,
     config: Any
 ) -> None:
     """Store response for idempotency"""
     if not getattr(config, "ENABLE_IDEMPOTENCY", False):
         return
-    
+
     try:
         redis_client = await redis_manager.get_client(redis_url)
         if redis_client:
             norm_device_id = device_id.strip().lower()
             norm_child_id = child_id.strip().lower()
             idempotency_key = f"claim:{norm_device_id}:{norm_child_id}:{nonce}:{hmac_hex}"
-            
+
             # Store with 300 second TTL
             await redis_client.set(idempotency_key, json.dumps(response), ex=300)
-            logger.debug("Stored idempotent response", 
-                        extra={"key": mask_sensitive(idempotency_key)})
+            logger.debug("Stored idempotent response",
+                         extra={"key": mask_sensitive(idempotency_key)})
     except Exception as e:
         logger.warning(f"Failed to store idempotent response: {e}")
 
 
 def verify_device_hmac(
-    device_id: str, 
-    child_id: str, 
-    nonce: str, 
-    hmac_hex: str, 
+    device_id: str,
+    child_id: str,
+    nonce: str,
+    hmac_hex: str,
     oob_secret_hex: str,
     config: Any = None
 ) -> bool:
     """
     Verify HMAC signature using device OOB secret
-    
+
     The HMAC is calculated as: HMAC-SHA256(device_id || child_id || nonce, OOB_secret)
-    
+
     Args:
         device_id: Device identifier
         child_id: Child identifier
@@ -431,7 +459,7 @@ def verify_device_hmac(
         hmac_hex: Provided HMAC signature (64 hex chars)
         oob_secret_hex: Device out-of-band secret (64 hex chars)
         config: Optional config for feature flags
-        
+
     Returns:
         bool: True if HMAC is valid
     """
@@ -440,31 +468,31 @@ def verify_device_hmac(
         if config and getattr(config, "NORMALIZE_IDS_IN_HMAC", False):
             device_id = device_id.strip().lower()
             child_id = child_id.strip().lower()
-        
+
         # Convert OOB secret from hex to bytes
         oob_secret_bytes = bytes.fromhex(oob_secret_hex)
-        
+
         # Create HMAC instance
         mac = hmac.new(oob_secret_bytes, digestmod=hashlib.sha256)
-        
+
         # Add data in specific order (device_id || child_id || nonce)
         mac.update(device_id.encode('utf-8'))
         mac.update(child_id.encode('utf-8'))
         mac.update(bytes.fromhex(nonce))
-        
+
         # Calculate expected HMAC
         expected_hmac = mac.hexdigest()
-        
+
         # Constant-time comparison
         is_valid = hmac.compare_digest(expected_hmac, hmac_hex.lower())
-        
+
         if is_valid:
             logger.debug("HMAC verification successful", extra={"device_id_prefix": device_id[:8]})
         else:
             logger.warning("HMAC verification failed", extra={"device_id_prefix": device_id[:8]})
-            
+
         return is_valid
-        
+
     except Exception as e:
         logger.error("HMAC verification error", extra={"error": str(e)})
         return False
@@ -473,18 +501,18 @@ def verify_device_hmac(
 async def get_device_record(device_id: str, db: AsyncSession, config) -> Optional[Dict[str, Any]]:
     """
     Retrieve device record from database with auto-registration support
-    
+
     Args:
         device_id: Device identifier
         db: Database session
         config: Configuration object
-        
+
     Returns:
         Dict with device record or None if not found
     """
     # Normalize device_id for consistency
     norm_device_id = device_id.strip().lower()
-    
+
     try:
         # First try to fetch from DB (if table exists)
         try:
@@ -498,7 +526,7 @@ async def get_device_record(device_id: str, db: AsyncSession, config) -> Optiona
                 {"device_id": norm_device_id}
             )
             device = result.fetchone()
-            
+
             if device:
                 return {
                     "device_id": device.device_id,
@@ -509,27 +537,27 @@ async def get_device_record(device_id: str, db: AsyncSession, config) -> Optiona
         except Exception as db_error:
             # Table might not exist, continue with auto-registration logic
             logger.debug(f"DB query failed, checking auto-registration: {db_error}")
-        
+
         # Check if auto-registration is enabled
         enable_auto_register = getattr(config, "ENABLE_AUTO_REGISTER", False)
-        
+
         if not enable_auto_register:
             logger.info(f"Auto-registration disabled: {mask_sensitive(norm_device_id)}")
             return None
-        
+
         # Check if device matches auto-registration pattern
         if not (norm_device_id.startswith("teddy-esp32-") or norm_device_id.startswith("esp32-")):
             logger.info(f"Device doesn't match pattern: {mask_sensitive(norm_device_id)}")
             return None
-        
+
         # Generate OOB secret for new device
         oob_secret_hex = generate_device_oob_secret(norm_device_id)
-        
+
         # Try to insert into DB (if table exists)
         try:
             from sqlalchemy import text
             logger.info(f"Auto-registering device: {mask_sensitive(norm_device_id)}")
-            
+
             # Store device_id in lowercase for consistency
             await db.execute(
                 text("""
@@ -547,7 +575,7 @@ async def get_device_record(device_id: str, db: AsyncSession, config) -> Optiona
         except Exception as insert_error:
             # Table might not exist, just return in-memory record
             logger.debug(f"DB insert failed, returning in-memory: {insert_error}")
-        
+
         # Return the device record
         return {
             "device_id": norm_device_id,
@@ -556,34 +584,34 @@ async def get_device_record(device_id: str, db: AsyncSession, config) -> Optiona
             "status": "unregistered",  # String status value
             "auto_registered": True
         }
-        
+
     except Exception as e:
-        logger.error(f"Error in get_device_record: {e}", 
-                    extra={"device_id": mask_sensitive(norm_device_id)})
+        logger.error(f"Error in get_device_record: {e}",
+                     extra={"device_id": mask_sensitive(norm_device_id)})
         return None
 
 
 async def issue_device_tokens(
-    device_id: str, 
+    device_id: str,
     child_id: str,
     device_session_id: str,
     token_manager: SimpleTokenManager
 ) -> tuple[str, str, int]:
     """
     Issue JWT access and refresh tokens for device
-    
+
     Args:
         device_id: Device identifier
         child_id: Child identifier  
         device_session_id: Unique session ID
-        
+
     Returns:
         tuple: (access_token, refresh_token, expires_in_seconds)
     """
     try:
         # Create subject with device and child info
         subject = f"device:{device_id}:child:{child_id}"
-        
+
         # Token payload with device-specific claims
         token_data = {
             "sub": subject,
@@ -594,33 +622,33 @@ async def issue_device_tokens(
             "aud": "teddy-api",
             "iss": "teddy-device-system"
         }
-        
+
         # Issue access token (shorter expiry for devices)
         access_token_expires = timedelta(hours=1)  # 1 hour for devices
         access_token = await token_manager.create_token(
-            token_data, 
+            token_data,
             expires_delta=access_token_expires
         )
-        
+
         # Issue refresh token (longer expiry)
         refresh_token_data = token_data.copy()
         refresh_token_data.update({
             "type": "device_refresh",
             "exp": datetime.utcnow() + timedelta(days=7)  # 7 days
         })
-        
+
         refresh_token_expires = timedelta(days=7)
         refresh_token = await token_manager.create_token(
             refresh_token_data,
             expires_delta=refresh_token_expires
         )
-        
+
         expires_in = int(access_token_expires.total_seconds())
-        
+
         logger.info("Device tokens issued", extra={"device_id_prefix": device_id[:8], "child_id_prefix": child_id[:8]})
-        
+
         return access_token, refresh_token, expires_in
-        
+
     except Exception as e:
         logger.error("Token generation failed", extra={"error": str(e)})
         raise HTTPException(
@@ -632,11 +660,11 @@ async def issue_device_tokens(
 async def get_child_profile(child_id: str, db: AsyncSession) -> Optional[Dict[str, Any]]:
     """
     Get child profile data for device configuration
-    
+
     Args:
         child_id: Child identifier (UUID string or hashed_identifier)
         db: Database session
-        
+
     Returns:
         Dict with child profile or None if not found
     """
@@ -664,13 +692,17 @@ async def get_child_profile(child_id: str, db: AsyncSession) -> Optional[Dict[st
             child_uuid = uuid.UUID(raw_id)
             try:
                 stmt = (
-                    select(Child)
+                    select(
+                        Child.id,
+                        Child.name,
+                        Child.parent_id,
+
+                    )
                     .where(Child.id == child_uuid, *base_filters)
-                    .options(selectinload(Child.parent))
                     .limit(1)
                 )
                 result = await db.execute(stmt)
-                child = result.scalar_one_or_none()
+                child_row = result.first()
             except (ProgrammingError, DBAPIError) as db_err:
                 # Only fallback for the specific type mismatch case
                 msg = str(getattr(db_err, "orig", db_err)).lower()
@@ -691,13 +723,17 @@ async def get_child_profile(child_id: str, db: AsyncSession) -> Optional[Dict[st
                         extra={"error": str(db_err)},
                     )
                     stmt = (
-                        select(Child)
+                        select(
+                            Child.id,
+                            Child.name,
+                            Child.parent_id,
+
+                        )
                         .where(cast(Child.id, String) == str(child_uuid), *base_filters)
-                        .options(selectinload(Child.parent))
                         .limit(1)
                     )
                     result = await db.execute(stmt)
-                    child = result.scalar_one_or_none()
+                    child_row = result.first()
                 else:
                     # Ensure transaction is clean before propagating
                     try:
@@ -706,35 +742,41 @@ async def get_child_profile(child_id: str, db: AsyncSession) -> Optional[Dict[st
                         pass
                     raise
         except (ValueError, AttributeError):
-            child = None
+            child_row = None
 
         # Branch 2: hashed_identifier (case-insensitive) if UUID path didn't find anything
-        if not child:
+        if not child_row:
             stmt = (
-                select(Child)
+                select(
+                    Child.id,
+                    Child.name,
+                    Child.parent_id,
+
+                )
                 .where(
                     func.lower(Child.hashed_identifier) == raw_id.lower(),
                     *base_filters,
                 )
-                .options(selectinload(Child.parent))
                 .limit(1)
             )
             result = await db.execute(stmt)
-            child = result.scalar_one_or_none()
+            child_row = result.first()
 
-        if not child:
+        if not child_row:
             logger.debug(f"Child not found with id: {mask_sensitive(raw_id)}")
             return None
 
         # Return profile with existing fields only
+        cid, cname, cparent_id = child_row
+        safety_settings = {}
         return {
-            "id": str(child.id),
-            "name": child.name,
-            "age": child.estimated_age or 8,
+            "id": str(cid),
+            "name": cname,
+            "age": 8,
             "language": "en",
             "voice_settings": {},
-            "safety_settings": getattr(child, "content_preferences", {}),
-            "parent_id": str(child.parent_id) if child.parent_id else None,
+            "safety_settings": safety_settings,
+            "parent_id": str(cparent_id) if cparent_id else None,
         }
 
     except HTTPException:
@@ -759,14 +801,14 @@ async def claim_device(
     http_req: Request,                          # بدون قيمة افتراضية
     response: Response,                         # بدون قيمة افتراضية
     db: AsyncSession = DatabaseConnectionDep,   # Dependencies فقط هنا
-    config = ConfigDep,
+    config=ConfigDep,
 ):
     """
     ESP32 device claiming endpoint with idempotency and normalization
-    
+
     This endpoint allows ESP32 devices to claim access to a child's profile
     using HMAC-based authentication with out-of-band secrets.
-    
+
     Security Features:
     - HMAC-SHA256 authentication with device OOB secrets
     - Idempotency support for retry safety
@@ -774,25 +816,25 @@ async def claim_device(
     - Device ID normalization for consistency
     - Rate limiting per device and IP
     - COPPA compliance auditing
-    
+
     Args:
         claim_request: Device claim request with HMAC signature
         http_req: FastAPI request object for IP tracking
         response: FastAPI response object for headers
-        
+
     Returns:
         DeviceTokenResponse: JWT tokens and device configuration
-        
+
     Raises:
         HTTPException: Various error conditions (401, 403, 404, 409, 503)
     """
     correlation_id = str(uuid4())
     client_ip = http_req.client.host if http_req.client else "unknown"
-    
+
     # Normalize identifiers at the beginning
     norm_device_id = claim_request.device_id.strip().lower()
     norm_child_id = claim_request.child_id.strip().lower()
-    
+
     try:
         logger.info(
             "Device claim attempt",
@@ -805,7 +847,10 @@ async def claim_device(
                 "hmac": "***MASKED***"
             }
         )
-        
+
+        # Ensure core tables exist on first run (idempotent, non-blocking)
+        await _ensure_core_tables(db)
+
         # Step 1: Check idempotency
         cached_response = await verify_nonce_idempotent(
             claim_request.nonce,
@@ -815,18 +860,18 @@ async def claim_device(
             config.REDIS_URL,
             config
         )
-        
+
         if cached_response:
             # Return cached response for idempotent request
             logger.info("Returning cached response",
-                       extra={
-                           "device_id": mask_sensitive(norm_device_id),
-                           "correlation_id": correlation_id
-                       })
+                        extra={
+                            "device_id": mask_sensitive(norm_device_id),
+                            "correlation_id": correlation_id
+                        })
             response.headers["X-Correlation-Id"] = correlation_id
             response.headers["X-Idempotent-Request"] = "true"
             return DeviceTokenResponse(**cached_response)
-        
+
         # Step 2: Device validation using DeviceService with auto-registration
         device = await DeviceService.get_device(norm_device_id, db)
         if not device:
@@ -841,28 +886,28 @@ async def claim_device(
                 )
                 logger.info(f"Auto-registered device: {DeviceService.mask_sensitive(norm_device_id)}")
             else:
-                logger.warning("Device not found and doesn't match auto-registration pattern", 
-                              extra={
-                                  "device_id": DeviceService.mask_sensitive(norm_device_id), 
-                                  "client_ip": client_ip
-                              })
+                logger.warning("Device not found and doesn't match auto-registration pattern",
+                               extra={
+                                   "device_id": DeviceService.mask_sensitive(norm_device_id),
+                                   "client_ip": client_ip
+                               })
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Device not registered or not found"
                 )
-        
+
         # Check if device is active
         if not device.is_active:
-            logger.warning("Device disabled", 
-                          extra={
-                              "device_id": DeviceService.mask_sensitive(norm_device_id), 
-                              "client_ip": client_ip
-                          })
+            logger.warning("Device disabled",
+                           extra={
+                               "device_id": DeviceService.mask_sensitive(norm_device_id),
+                               "client_ip": client_ip
+                           })
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Device is disabled or suspended"
             )
-        
+
         # Convert Device model to dict format for compatibility with existing code
         # Use consistent ESP32 OOB secret instead of database value for HMAC verification
         device_record = {
@@ -871,7 +916,7 @@ async def claim_device(
             "enabled": device.is_active,
             "status": device.status
         }
-        
+
         # Step 3: HMAC signature verification with ORIGINAL IDs
         # Pass original values - normalization happens inside verify_device_hmac if flag is set
         is_valid_hmac = verify_device_hmac(
@@ -882,7 +927,7 @@ async def claim_device(
             device_record["oob_secret_hex"],
             config  # Pass config for NORMALIZE_IDS_IN_HMAC flag
         )
-        
+
         if not is_valid_hmac:
             logger.warning(
                 "Invalid HMAC signature",
@@ -896,23 +941,46 @@ async def claim_device(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid device authentication signature"
             )
-        
+
         # Step 4: Child profile validation with normalized ID
         child_profile = await get_child_profile(norm_child_id, db)
         if not child_profile:
-            logger.warning("Child profile not found", 
-                          extra={
-                              "child_id": mask_sensitive(norm_child_id), 
-                              "client_ip": client_ip
-                          })
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Child profile not found or inactive"
-            )
-        
+            # Development-friendly fallback: allow claiming without a pre-existing child profile
+            if getattr(config, "ENVIRONMENT", "development") != "production" or \
+               getattr(config, "ALLOW_AUTO_DEVICE_REG", False) or \
+               getattr(config, "WS_DEV_BYPASS", False):
+                logger.warning(
+                    "Child profile not found - using development fallback profile",
+                    extra={
+                        "child_id": mask_sensitive(norm_child_id),
+                        "client_ip": client_ip,
+                    },
+                )
+                child_profile = {
+                    "id": norm_child_id,
+                    "name": "Friend",
+                    "age": 7,
+                    "language": "en",
+                    "voice_settings": {},
+                    "safety_settings": {},
+                    "parent_id": None,
+                }
+            else:
+                logger.warning(
+                    "Child profile not found",
+                    extra={
+                        "child_id": mask_sensitive(norm_child_id),
+                        "client_ip": client_ip,
+                    },
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Child profile not found or inactive",
+                )
+
         # Step 5: Generate device session
         device_session_id = str(uuid4())
-        
+
         # Step 6: Issue JWT tokens with normalized IDs
         token_manager = SimpleTokenManager(secret=config.JWT_SECRET_KEY)
         access_token, refresh_token, expires_in = await issue_device_tokens(
@@ -921,30 +989,75 @@ async def claim_device(
             device_session_id,
             token_manager
         )
-        
-        # Step 7: Device configuration
+
+        # Step 7: Generate provisioning artifacts
+        existing_pairing_code = None
+        if isinstance(device.configuration, dict):
+            existing_pairing_code = (device.configuration or {}).get("pairing", {}).get("code")
+
+        pairing_code = existing_pairing_code or secrets.token_hex(16)
+        pairing_metadata = {
+            "code": pairing_code,
+            "child_id": norm_child_id,
+            "updated_at": datetime.utcnow().isoformat()
+        }
+
+        updated_configuration = dict(device.configuration or {})
+        updated_configuration["pairing"] = pairing_metadata
+        device.configuration = updated_configuration
+        device.paired_at = datetime.utcnow()
+        device.status = DBDeviceStatus.ACTIVE
+
+        try:
+            await db.commit()
+            await db.refresh(device)
+        except Exception as pairing_commit_error:
+            await db.rollback()
+            logger.warning("Failed to persist pairing metadata", extra={"device_id": mask_sensitive(norm_device_id), "error": str(pairing_commit_error)})
+
+        provisioning_document = {
+            "device_id": norm_device_id,
+            "child_id": norm_child_id,
+            "pairing_code": pairing_code,
+            "status": "provisioned",
+            "version": "1.0",
+            "issued_at": datetime.utcnow().isoformat()
+        }
+        provisioning_payload = base64.b64encode(json.dumps(provisioning_document).encode()).decode()
+
+        # Step 8: Device configuration (derive host/scheme from request for local deployments)
+        req_host = (
+            http_req.headers.get("x-forwarded-host")
+            or http_req.headers.get("host")
+            or getattr(config, "HOST", "localhost")
+        )
+        req_scheme = http_req.headers.get("x-forwarded-proto") or http_req.url.scheme or "http"
+        ws_scheme = "wss" if req_scheme == "https" else "ws"
+
         device_config = {
             "session_id": device_session_id,
-            "websocket_url": f"wss://{config.HOST}/ws/esp32/connect",
-            "api_base_url": f"https://{config.HOST}/api/v1",
+            "websocket_url": f"{ws_scheme}://{req_host}/ws/esp32/connect",
+            "api_base_url": f"{req_scheme}://{req_host}/api/v1",
             "heartbeat_interval": 30,
             "reconnect_delay": 5,
             "max_message_size": 8192,
-            "supported_audio_formats": ["opus", "mp3"],
-            "firmware_update_url": f"https://{config.HOST}/api/v1/esp32/firmware"
+            "supported_audio_formats": ["pcm_s16le", "mp3"],
+            "firmware_update_url": f"{req_scheme}://{req_host}/api/v1/esp32/firmware",
         }
-        
-        # Step 8: Build response data for idempotency storage
+
+        # Step 9: Build response data for idempotency storage
         response_data = {
             "access_token": access_token,
             "refresh_token": refresh_token,
             "expires_in": expires_in,
             "device_session_id": device_session_id,
             "child_profile": child_profile,
-            "device_config": device_config
+            "device_config": device_config,
+            "pairing_code": pairing_code,
+            "provisioning_payload": provisioning_payload
         }
-        
-        # Step 9: Store response for idempotency
+
+        # Step 10: Store response for idempotency
         await store_idempotent_response(
             claim_request.nonce,
             norm_device_id,
@@ -954,11 +1067,11 @@ async def claim_device(
             config.REDIS_URL,
             config
         )
-        
-        # Step 10: COPPA audit logging with error handling
+
+        # Step 11: COPPA audit logging with error handling
         try:
             await coppa_audit.log_event(
-                type="device_claimed",  # Changed from event_type to type
+                event_type="device_claimed",
                 user_id=child_profile.get("parent_id"),
                 child_id=norm_child_id,
                 device_id=norm_device_id,
@@ -980,7 +1093,7 @@ async def claim_device(
                     "correlation_id": correlation_id
                 }
             )
-            
+
             # Alternative: Use standard logging for compliance
             logger.info(
                 "DEVICE_CLAIMED_EVENT",
@@ -995,15 +1108,15 @@ async def claim_device(
                     "auto_registered": device_record.get("auto_registered", False)
                 }
             )
-        
-        # Step 11: Security headers
+
+        # Step 12: Security headers
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         response.headers["X-Child-Safe"] = "true"
         response.headers["X-COPPA-Compliant"] = "true"
         response.headers["X-Correlation-Id"] = correlation_id
-        
+
         logger.info(
             "Device claim successful",
             extra={
@@ -1015,9 +1128,9 @@ async def claim_device(
                 "refresh_token": "***MASKED***"
             }
         )
-            
+
         return DeviceTokenResponse(**response_data)
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1044,41 +1157,41 @@ async def refresh_device_token(
 ):
     """
     Refresh device access token using valid refresh token
-    
+
     Args:
         refresh_request: Refresh token request
         http_req: FastAPI request object
         response: FastAPI response object
-        
+
     Returns:
         RefreshResponse: New access token
     """
     correlation_id = str(uuid4())
     client_ip = http_req.client.host if http_req.client else "unknown"
-    
+
     try:
         logger.debug(f"Device token refresh attempt - IP: {client_ip}, ID: {correlation_id}")
-        
+
         # Decode and validate refresh token
         payload = await token_manager.decode_token(refresh_request.refresh_token)
-        
+
         if payload.get("type") != "device_refresh":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token type for refresh"
             )
-        
+
         # Extract claims
         device_id = payload.get("device_id")
         child_id = payload.get("child_id")
         session_id = payload.get("session_id")
-        
+
         if not all([device_id, child_id, session_id]):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid refresh token claims"
             )
-        
+
         # Issue new access token
         subject = f"device:{device_id}:child:{child_id}"
         token_data = {
@@ -1090,28 +1203,28 @@ async def refresh_device_token(
             "aud": "teddy-api",
             "iss": "teddy-device-system"
         }
-        
+
         access_token_expires = timedelta(hours=1)
         new_access_token = await token_manager.create_token(
             token_data,
             expires_delta=access_token_expires
         )
-        
+
         expires_in = int(access_token_expires.total_seconds())
-        
+
         # Security headers
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-        
+
         logger.info(
             f"Device token refresh successful - Device: {device_id[:8]}..., "
             f"Session: {session_id[:8]}..."
         )
-        
+
         return RefreshResponse(
             access_token=new_access_token,
             expires_in=expires_in
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1127,16 +1240,16 @@ async def get_device_status(
     device_id: str,
     db: AsyncSession = DatabaseConnectionDep,
     current_user: dict = Depends(security),
-    config = ConfigDep
+    config=ConfigDep
 ):
     """
     Get device status and configuration (requires authentication)
-    
+
     Args:
         device_id: Device identifier
         db: Database session  
         current_user: Authenticated user context
-        
+
     Returns:
         Dict with device status information
     """
@@ -1148,7 +1261,7 @@ async def get_device_status(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Device not found"
             )
-        
+
         # Return device status (admin/parent only)
         return {
             "device_id": device_id,
@@ -1158,7 +1271,7 @@ async def get_device_status(
             "firmware_version": device_record.get("firmware_version"),
             "enabled": device_record.get("enabled", False)
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:

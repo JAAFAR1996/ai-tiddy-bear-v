@@ -146,7 +146,7 @@ class ChildSafetyValidator:
         logger.info("Testing API connectivity...")
         
         try:
-            response = requests.get(f"{self.base_url}/api/v1/health", timeout=30)
+            response = requests.get(f"{self.base_url}/health", timeout=30)
             if response.status_code == 200:
                 self.results.append(SafetyTestResult(
                     "api_connectivity",
@@ -509,7 +509,7 @@ class ChildSafetyValidator:
         rapid_requests = []
         for i in range(20):  # Try 20 rapid requests
             try:
-                response = requests.get(f"{self.base_url}/api/v1/health", timeout=5)
+                response = requests.get(f"{self.base_url}/health", timeout=5)
                 rapid_requests.append(response.status_code)
             except Exception as e:
                 rapid_requests.append(f"error: {str(e)}")
@@ -538,13 +538,13 @@ class ChildSafetyValidator:
             session = requests.Session()
             
             # Make initial request
-            response1 = session.get(f"{self.base_url}/api/v1/health")
+            response1 = session.get(f"{self.base_url}/health")
             
             # Wait and make another request (simulate session timeout)
             import time
             time.sleep(2)  # Short wait for testing
             
-            response2 = session.get(f"{self.base_url}/api/v1/health")
+            response2 = session.get(f"{self.base_url}/health")
             
             # Both should be successful for health endpoint
             session_working = response1.status_code == 200 and response2.status_code == 200

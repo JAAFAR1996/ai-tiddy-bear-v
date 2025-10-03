@@ -30,7 +30,13 @@ else:
     sync_db_url = db_url
 
 # Set the URL in config
-config.set_main_option("sqlalchemy.url", sync_db_url)
+# NOTE:
+# Alembic's underlying ConfigParser treats '%' as an interpolation token.
+# If the database password contains '%' (very common in strong passwords),
+# we must escape it as '%%' when injecting into the config to avoid
+# "invalid interpolation syntax" errors.
+safe_sync_db_url = sync_db_url.replace('%', '%%')
+config.set_main_option("sqlalchemy.url", safe_sync_db_url)
 
 # Mask password in logs for security
 masked_url = sync_db_url

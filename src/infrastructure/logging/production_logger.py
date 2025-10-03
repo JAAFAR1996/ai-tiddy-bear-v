@@ -13,6 +13,7 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 from datetime import datetime
 import structlog
+from src.utils.redaction import sanitize_text, sanitize_mapping, redact_in_place
 from uuid import uuid4
 
 
@@ -40,23 +41,15 @@ class SecurityFilter(logging.Filter):
     def filter(self, record):
         """Filter out sensitive information from log records."""
         if hasattr(record, "msg") and isinstance(record.msg, str):
-            # Check if message contains sensitive patterns
-            msg_lower = record.msg.lower()
-            for sensitive in self.SENSITIVE_KEYS:
-                if sensitive in msg_lower:
-                    # استخدام regex لإخفاء المعلومات الحساسة بدون تخريب الرسالة
-                    import re
+            record.msg = sanitize_text(record.msg)
 
-                    pattern = rf'({sensitive}[\s=:]*["\']?)([^"\'\s,}}\]]+)'
-                    record.msg = re.sub(
-                        pattern, r"\1***MASKED***", record.msg, flags=re.IGNORECASE
-                    )
 
-        # Filter sensitive data from extra fields
         if hasattr(record, "__dict__"):
-            for key, value in record.__dict__.items():
+            for key, value in list(record.__dict__.items()):
                 if any(sensitive in key.lower() for sensitive in self.SENSITIVE_KEYS):
                     setattr(record, key, "***MASKED***")
+                else:
+                    setattr(record, key, sanitize_mapping(value))
 
         return True
 
@@ -146,6 +139,7 @@ class JSONFormatter(logging.Formatter):
         if record.exc_info:
             log_entry["exception"] = self.formatException(record.exc_info)
 
+        redact_in_place(log_entry)
         return json.dumps(log_entry, default=str, ensure_ascii=False)
 
 
@@ -162,17 +156,24 @@ class AuditLogger:
 
     def _setup_audit_handler(self):
         """Setup audit log handler."""
-        log_dir = Path("logs/audit")
-        log_dir.mkdir(parents=True, exist_ok=True)
-
-        # Rotating file handler for audit logs
-        handler = logging.handlers.TimedRotatingFileHandler(
-            log_dir / "audit.log",
-            when="midnight",
-            interval=1,
-            backupCount=365,  # Keep 1 year of audit logs
-            encoding="utf-8",
-        )
+        enable_file = os.getenv("ENABLE_FILE_LOGGING", "false").lower() == "true"
+        handler: logging.Handler
+        if enable_file:
+            log_dir = Path("logs/audit")
+            log_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                # Rotating file handler for audit logs
+                handler = logging.handlers.TimedRotatingFileHandler(
+                    log_dir / "audit.log",
+                    when="midnight",
+                    interval=1,
+                    backupCount=365,  # Keep 1 year of audit logs
+                    encoding="utf-8",
+                )
+            except PermissionError:
+                handler = logging.StreamHandler()
+        else:
+            handler = logging.StreamHandler()
 
         handler.setFormatter(JSONFormatter())
         handler.addFilter(SecurityFilter())
@@ -229,17 +230,24 @@ class SecurityLogger:
 
     def _setup_security_handler(self):
         """Setup security log handler."""
-        log_dir = Path("logs/security")
-        log_dir.mkdir(parents=True, exist_ok=True)
-
-        # Rotating file handler for security logs
-        handler = logging.handlers.TimedRotatingFileHandler(
-            log_dir / "security.log",
-            when="midnight",
-            interval=1,
-            backupCount=90,  # Keep 90 days of security logs
-            encoding="utf-8",
-        )
+        enable_file = os.getenv("ENABLE_FILE_LOGGING", "false").lower() == "true"
+        handler: logging.Handler
+        if enable_file:
+            log_dir = Path("logs/security")
+            log_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                # Rotating file handler for security logs
+                handler = logging.handlers.TimedRotatingFileHandler(
+                    log_dir / "security.log",
+                    when="midnight",
+                    interval=1,
+                    backupCount=90,  # Keep 90 days of security logs
+                    encoding="utf-8",
+                )
+            except PermissionError:
+                handler = logging.StreamHandler()
+        else:
+            handler = logging.StreamHandler()
 
         handler.setFormatter(JSONFormatter())
         handler.addFilter(SecurityFilter())
@@ -309,30 +317,38 @@ def setup_production_logging(
 
     # File handler
     if enable_file:
-        file_handler = logging.handlers.TimedRotatingFileHandler(
-            log_path / "application.log",
-            when="midnight",
-            interval=1,
-            backupCount=30,
-            encoding="utf-8",
-        )
-        file_handler.setFormatter(JSONFormatter())
-        file_handler.addFilter(SecurityFilter())
-        file_handler.addFilter(COPPAComplianceFilter())
-        root_logger.addHandler(file_handler)
+        try:
+            file_handler = logging.handlers.TimedRotatingFileHandler(
+                log_path / "application.log",
+                when="midnight",
+                interval=1,
+                backupCount=30,
+                encoding="utf-8",
+            )
+            file_handler.setFormatter(JSONFormatter())
+            file_handler.addFilter(SecurityFilter())
+            file_handler.addFilter(COPPAComplianceFilter())
+            root_logger.addHandler(file_handler)
+        except PermissionError:
+            # Fall back to console-only if file logging is not permitted (e.g., read-only filesystem)
+            enable_file = False
+            root_logger.warning("File logging disabled due to permission error; continuing with console logging only")
 
     # Error file handler
-    error_handler = logging.handlers.TimedRotatingFileHandler(
-        log_path / "errors.log",
-        when="midnight",
-        interval=1,
-        backupCount=90,
-        encoding="utf-8",
-    )
-    error_handler.setLevel(logging.ERROR)
-    error_handler.setFormatter(JSONFormatter())
-    error_handler.addFilter(SecurityFilter())
-    root_logger.addHandler(error_handler)
+    try:
+        error_handler = logging.handlers.TimedRotatingFileHandler(
+            log_path / "errors.log",
+            when="midnight",
+            interval=1,
+            backupCount=90,
+            encoding="utf-8",
+        )
+        error_handler.setLevel(logging.ERROR)
+        error_handler.setFormatter(JSONFormatter())
+        error_handler.addFilter(SecurityFilter())
+        root_logger.addHandler(error_handler)
+    except PermissionError:
+        root_logger.warning("Error file logging disabled due to permission error")
 
 
 def get_logger(name: str, context: str = None) -> logging.Logger:
@@ -349,5 +365,8 @@ audit_logger = AuditLogger()
 setup_production_logging(
     log_level=os.getenv("LOG_LEVEL", "INFO"),
     enable_console=os.getenv("ENABLE_CONSOLE_LOGGING", "true").lower() == "true",
-    enable_file=os.getenv("ENABLE_FILE_LOGGING", "true").lower() == "true",
+    enable_file=os.getenv(
+        "ENABLE_FILE_LOGGING",
+        "true" if os.getenv("ENVIRONMENT", "production").lower() in ("development", "test") else "false",
+    ).lower() == "true",
 )

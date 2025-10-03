@@ -1,0 +1,12 @@
+services:
+  app:
+    environment:
+      # Force production behavior for ESP32 WS pipeline
+      ENVIRONMENT: "production"
+      REQUIRE_JWT: "true"
+      ALLOW_DEV_WS_NO_JWT: "false"
+      ALLOW_DEV_WS_NO_HMAC: "false"
+      WS_DEV_BYPASS: "0"
+      # Keep existing values from base compose for DB/Redis; only override WS/dev flags
+    # No volume override needed; /app/data already bound to ./data/app in base compose
+

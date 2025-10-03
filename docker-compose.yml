@@ -1,5 +1,4 @@
 version: '3.9'
-
 services:
   postgres:
     image: postgres:15-alpine
@@ -8,44 +7,50 @@ services:
       POSTGRES_DB: ${DB_NAME:-ai_teddy_bear}
       POSTGRES_USER: ${DB_USER:-teddy_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+      POSTGRES_INITDB_ARGS: --encoding=UTF-8
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./sql:/docker-entrypoint-initdb.d/
+    - postgres_data:/var/lib/postgresql/data
+    - ./sql:/docker-entrypoint-initdb.d/
     ports:
-      - "${DB_PORT:-5432}:5432"
+    - ${DB_PORT:-5432}:5432
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-teddy_user} -d ${DB_NAME:-ai_teddy_bear}"]
+      test:
+      - CMD-SHELL
+      - pg_isready -U ${DB_USER:-teddy_user} -d ${DB_NAME:-ai_teddy_bear}
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
     restart: unless-stopped
     networks:
-      - teddy-network
-
+    - teddy-network
   redis:
     image: redis:7-alpine
     container_name: ai-teddy-redis
-    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --appendfsync everysec
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --appendfsync
+      everysec
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
-      - redis_data:/data
+    - redis_data:/data
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+    - ${REDIS_PORT:-6379}:6379
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test:
+      - CMD
+      - redis-cli
+      - --raw
+      - incr
+      - ping
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 20s
     restart: unless-stopped
     networks:
-      - teddy-network
-
+    - teddy-network
   app:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
       target: production
@@ -56,137 +61,228 @@ services:
       redis:
         condition: service_healthy
     environment:
-      # Environment Configuration
-      - ENVIRONMENT=production
-      - DEBUG=false
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      
-      # Security Keys - REQUIRED
-      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
-      - COPPA_ENCRYPTION_KEY=${COPPA_ENCRYPTION_KEY:?COPPA_ENCRYPTION_KEY is required}
-      
-      # Database Configuration
-      - DATABASE_URL=postgresql://${DB_USER:-ai_teddy_user}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-ai_teddy_bear}
-      - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE:-10}
-      - DATABASE_MAX_OVERFLOW=${DATABASE_MAX_OVERFLOW:-20}
-      - DATABASE_POOL_TIMEOUT=${DATABASE_POOL_TIMEOUT:-30}
-      
-      # Redis Configuration
-      - REDIS_URL=redis://redis:6379/0
-      - REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-10}
-      - REDIS_TIMEOUT=${REDIS_TIMEOUT:-5}
-      
-      # AI Services Configuration
-      - OPENAI_API_KEY=${OPENAI_API_KEY:?OPENAI_API_KEY is required}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4}
-      - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-1000}
-      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.7}
-      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
-      - WHISPER_MODEL=${WHISPER_MODEL:-medium}
-      
-      # CORS & Security
-      - CORS_ALLOWED_ORIGINS=["https://app.aiteddybear.com","https://www.aiteddybear.com"]
-      - ALLOWED_HOSTS=["app.aiteddybear.com","api.aiteddybear.com"]
-      
-      # Child Safety & COPPA
-      - COPPA_COMPLIANCE_MODE=true
-      - CONTENT_FILTER_STRICT=true
-      - PARENT_NOTIFICATION_EMAIL=${PARENT_NOTIFICATION_EMAIL:?PARENT_NOTIFICATION_EMAIL is required}
-      
-      # Rate Limiting
-      - RATE_LIMIT_REQUESTS_PER_MINUTE=${RATE_LIMIT_REQUESTS_PER_MINUTE:-60}
-      - RATE_LIMIT_BURST=${RATE_LIMIT_BURST:-10}
-      
-      # Security Thresholds
-      - SECURITY_BRUTE_FORCE_ATTEMPTS=${SECURITY_BRUTE_FORCE_ATTEMPTS:-10}
-      - SECURITY_BRUTE_FORCE_WINDOW=${SECURITY_BRUTE_FORCE_WINDOW:-3600}
-      - SECURITY_ACCESS_MAX_PER_HOUR=${SECURITY_ACCESS_MAX_PER_HOUR:-30}
-      - SECURITY_ACCESS_MAX_PER_DAY=${SECURITY_ACCESS_MAX_PER_DAY:-200}
-      - SECURITY_ACCESS_MAX_PER_MINUTE=${SECURITY_ACCESS_MAX_PER_MINUTE:-10}
-      
-      # Content & Safety
-      - SAFETY_SCORE_THRESHOLD=${SAFETY_SCORE_THRESHOLD:-0.8}
-      - CONTENT_COMPLEXITY_AGE_THRESHOLD_SIMPLE=${CONTENT_COMPLEXITY_AGE_THRESHOLD_SIMPLE:-5}
-      - CONTENT_COMPLEXITY_AGE_THRESHOLD_COMPLEX=${CONTENT_COMPLEXITY_AGE_THRESHOLD_COMPLEX:-8}
-      
-      # JWT Configuration
-      - JWT_ALGORITHM=HS256
-      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
-      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS:-7}
-      
-      # API Configuration
-      - API_BASE_URL=${API_BASE_URL:-https://api.aiteddybear.com}
-      - API_TITLE=AI Teddy Bear API
-      - API_VERSION=1.0.0
-      - STAGING_URL=${STAGING_URL:-https://staging-api.aiteddybear.com}
-      - SUPPORT_EMAIL=${SUPPORT_EMAIL:-support@aiteddybear.com}
-      - DOCS_URL=""
-      - REDOC_URL=""
-      
-      # Session Configuration
-      - SESSION_EXPIRE_HOURS=${SESSION_EXPIRE_HOURS:-24}
-      - SESSION_SECURE=true
-      - SESSION_HTTPONLY=true
-      - SESSION_SAMESITE=strict
-      
-      # Feature Flags
-      - ENABLE_DATABASE=true
-      - ENABLE_REDIS=true
-      - ENABLE_AI_SERVICES=true
-      - USE_MOCK_SERVICES=false
-      
-      # Data Retention & Privacy
-      - DATA_RETENTION_DAYS=${DATA_RETENTION_DAYS:-90}
-      - AUTO_DELETE_ENABLED=true
-      - DATA_EXPORT_ENABLED=true
-      
-      # Optional Services
-      - KAFKA_ENABLED=false
-      - VAULT_ENABLED=false
-      
-      # Monitoring & Observability
-      - PROMETHEUS_ENABLED=true
-      - PROMETHEUS_PORT=9090
-      - SENTRY_DSN=${SENTRY_DSN:-}
-      - ENABLE_METRICS=true
-      - ENABLE_TRACING=false
-      
-      # Server Configuration
-      - HOST=0.0.0.0
-      - PORT=8000
-      - WORKERS=${WORKERS:-1}
+      ENVIRONMENT: production
+      DEBUG: 'false'
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      COPPA_ENCRYPTION_KEY: ${COPPA_ENCRYPTION_KEY:?COPPA_ENCRYPTION_KEY is required}
+      DATABASE_URL: postgresql://${DB_USER:-ai_teddy_user}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-ai_teddy_bear}
+      DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-10}
+      DATABASE_MAX_OVERFLOW: ${DATABASE_MAX_OVERFLOW:-20}
+      DATABASE_POOL_TIMEOUT: ${DATABASE_POOL_TIMEOUT:-30}
+      REDIS_URL: redis://redis:6379/0
+      REDIS_POOL_SIZE: ${REDIS_POOL_SIZE:-10}
+      REDIS_TIMEOUT: ${REDIS_TIMEOUT:-5}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY is required}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4}
+      OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS:-1000}
+      OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0.7}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      WHISPER_MODEL: ${WHISPER_MODEL:-medium}
+      CORS_ALLOWED_ORIGINS: '["https://app.aiteddybear.com","https://www.aiteddybear.com"]'
+      ALLOWED_HOSTS: '["app.aiteddybear.com","api.aiteddybear.com"]'
+      COPPA_COMPLIANCE_MODE: 'true'
+      CONTENT_FILTER_STRICT: 'true'
+      PARENT_NOTIFICATION_EMAIL: ${PARENT_NOTIFICATION_EMAIL:?PARENT_NOTIFICATION_EMAIL
+        is required}
+      RATE_LIMIT_REQUESTS_PER_MINUTE: ${RATE_LIMIT_REQUESTS_PER_MINUTE:-60}
+      RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-10}
+      SECURITY_BRUTE_FORCE_ATTEMPTS: ${SECURITY_BRUTE_FORCE_ATTEMPTS:-10}
+      SECURITY_BRUTE_FORCE_WINDOW: ${SECURITY_BRUTE_FORCE_WINDOW:-3600}
+      SECURITY_ACCESS_MAX_PER_HOUR: ${SECURITY_ACCESS_MAX_PER_HOUR:-30}
+      SECURITY_ACCESS_MAX_PER_DAY: ${SECURITY_ACCESS_MAX_PER_DAY:-200}
+      SECURITY_ACCESS_MAX_PER_MINUTE: ${SECURITY_ACCESS_MAX_PER_MINUTE:-10}
+      SAFETY_SCORE_THRESHOLD: ${SAFETY_SCORE_THRESHOLD:-0.8}
+      CONTENT_COMPLEXITY_AGE_THRESHOLD_SIMPLE: ${CONTENT_COMPLEXITY_AGE_THRESHOLD_SIMPLE:-5}
+      CONTENT_COMPLEXITY_AGE_THRESHOLD_COMPLEX: ${CONTENT_COMPLEXITY_AGE_THRESHOLD_COMPLEX:-8}
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      API_BASE_URL: ${API_BASE_URL:-https://api.aiteddybear.com}
+      API_TITLE: AI Teddy Bear API
+      API_VERSION: 1.0.0
+      STAGING_URL: ${STAGING_URL:-https://staging-api.aiteddybear.com}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-support@aiteddybear.com}
+      DOCS_URL: '""'
+      REDOC_URL: '""'
+      SESSION_EXPIRE_HOURS: ${SESSION_EXPIRE_HOURS:-24}
+      SESSION_SECURE: 'true'
+      SESSION_HTTPONLY: 'true'
+      SESSION_SAMESITE: strict
+      ENABLE_DATABASE: 'true'
+      ENABLE_REDIS: 'true'
+      ENABLE_AI_SERVICES: 'true'
+      USE_MOCK_SERVICES: 'false'
+      DATA_RETENTION_DAYS: ${DATA_RETENTION_DAYS:-90}
+      AUTO_DELETE_ENABLED: 'true'
+      DATA_EXPORT_ENABLED: 'true'
+      KAFKA_ENABLED: 'false'
+      VAULT_ENABLED: 'false'
+      PROMETHEUS_ENABLED: 'true'
+      PROMETHEUS_PORT: '9090'
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      ENABLE_METRICS: 'true'
+      ENABLE_TRACING: 'false'
+      HOST: 0.0.0.0
+      PORT: '8000'
+      WORKERS: ${WORKERS:-1}
+      INSTANCE_ID: app-a
+      AFFINITY_COOKIE_NAME: teddy_affinity
+      AFFINITY_COOKIE_TTL_SECONDS: '3600'
+      OPENAI_API_KEY_FILE: /run/secrets/ai_teddy_bear_openai_api_key
+      OPENAI_STT_API_KEY: ${OPENAI_STT_API_KEY:-}
+      OPENAI_STT_API_KEY_FILE: /run/secrets/ai_teddy_bear_openai_stt_api_key
+      ALLOW_AI_FAILURE_FALLBACK: 'false'
+      ALLOW_WS_MOCK: 'false'
     ports:
-      - "${APP_PORT:-8000}:8000"
+    - ${APP_PORT:-8000}:8000
     volumes:
-      - ./logs:/app/logs
-      - app_data:/app/data
+    - ./logs:/app/logs
+    - app_data:/app/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:8000/health
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
     restart: unless-stopped
     networks:
-      - teddy-network
-
+    - teddy-network
+    expose:
+    - '8000'
+    secrets:
+    - ai_teddy_bear_openai_api_key
+    - ai_teddy_bear_openai_stt_api_key
   nginx:
     image: nginx:alpine
     container_name: ai-teddy-nginx
     depends_on:
-      - app
+      app:
+        condition: service_healthy
+      app_replica:
+        condition: service_healthy
     ports:
-      - "${NGINX_PORT:-80}:80"
-      - "${NGINX_SSL_PORT:-443}:443"
+    - ${NGINX_PORT:-80}:80
+    - ${NGINX_SSL_PORT:-443}:443
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-      - ./logs/nginx:/var/log/nginx
+    - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    - ./nginx/ssl:/etc/nginx/ssl:ro
+    - ./logs/nginx:/var/log/nginx
     restart: unless-stopped
     networks:
-      - teddy-network
-
+    - teddy-network
+  app_replica:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: ai-teddy-app-b
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: production
+      DEBUG: 'false'
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      COPPA_ENCRYPTION_KEY: ${COPPA_ENCRYPTION_KEY:?COPPA_ENCRYPTION_KEY is required}
+      DATABASE_URL: postgresql://${DB_USER:-ai_teddy_user}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-ai_teddy_bear}
+      DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-10}
+      DATABASE_MAX_OVERFLOW: ${DATABASE_MAX_OVERFLOW:-20}
+      DATABASE_POOL_TIMEOUT: ${DATABASE_POOL_TIMEOUT:-30}
+      REDIS_URL: redis://redis:6379/0
+      REDIS_POOL_SIZE: ${REDIS_POOL_SIZE:-10}
+      REDIS_TIMEOUT: ${REDIS_TIMEOUT:-5}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY is required}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4}
+      OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS:-1000}
+      OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0.7}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      WHISPER_MODEL: ${WHISPER_MODEL:-medium}
+      CORS_ALLOWED_ORIGINS: '["https://app.aiteddybear.com","https://www.aiteddybear.com"]'
+      ALLOWED_HOSTS: '["app.aiteddybear.com","api.aiteddybear.com"]'
+      COPPA_COMPLIANCE_MODE: 'true'
+      CONTENT_FILTER_STRICT: 'true'
+      PARENT_NOTIFICATION_EMAIL: ${PARENT_NOTIFICATION_EMAIL:?PARENT_NOTIFICATION_EMAIL
+        is required}
+      RATE_LIMIT_REQUESTS_PER_MINUTE: ${RATE_LIMIT_REQUESTS_PER_MINUTE:-60}
+      RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-10}
+      SECURITY_BRUTE_FORCE_ATTEMPTS: ${SECURITY_BRUTE_FORCE_ATTEMPTS:-10}
+      SECURITY_BRUTE_FORCE_WINDOW: ${SECURITY_BRUTE_FORCE_WINDOW:-3600}
+      SECURITY_ACCESS_MAX_PER_HOUR: ${SECURITY_ACCESS_MAX_PER_HOUR:-30}
+      SECURITY_ACCESS_MAX_PER_DAY: ${SECURITY_ACCESS_MAX_PER_DAY:-200}
+      SECURITY_ACCESS_MAX_PER_MINUTE: ${SECURITY_ACCESS_MAX_PER_MINUTE:-10}
+      SAFETY_SCORE_THRESHOLD: ${SAFETY_SCORE_THRESHOLD:-0.8}
+      CONTENT_COMPLEXITY_AGE_THRESHOLD_SIMPLE: ${CONTENT_COMPLEXITY_AGE_THRESHOLD_SIMPLE:-5}
+      CONTENT_COMPLEXITY_AGE_THRESHOLD_COMPLEX: ${CONTENT_COMPLEXITY_AGE_THRESHOLD_COMPLEX:-8}
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      API_BASE_URL: ${API_BASE_URL:-https://api.aiteddybear.com}
+      API_TITLE: AI Teddy Bear API
+      API_VERSION: 1.0.0
+      STAGING_URL: ${STAGING_URL:-https://staging-api.aiteddybear.com}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-support@aiteddybear.com}
+      DOCS_URL: '""'
+      REDOC_URL: '""'
+      SESSION_EXPIRE_HOURS: ${SESSION_EXPIRE_HOURS:-24}
+      SESSION_SECURE: 'true'
+      SESSION_HTTPONLY: 'true'
+      SESSION_SAMESITE: strict
+      ENABLE_DATABASE: 'true'
+      ENABLE_REDIS: 'true'
+      ENABLE_AI_SERVICES: 'true'
+      USE_MOCK_SERVICES: 'false'
+      DATA_RETENTION_DAYS: ${DATA_RETENTION_DAYS:-90}
+      AUTO_DELETE_ENABLED: 'true'
+      DATA_EXPORT_ENABLED: 'true'
+      KAFKA_ENABLED: 'false'
+      VAULT_ENABLED: 'false'
+      PROMETHEUS_ENABLED: 'true'
+      PROMETHEUS_PORT: '9090'
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      ENABLE_METRICS: 'true'
+      ENABLE_TRACING: 'false'
+      HOST: 0.0.0.0
+      PORT: '8000'
+      WORKERS: ${WORKERS:-1}
+      INSTANCE_ID: app-b
+      AFFINITY_COOKIE_NAME: teddy_affinity
+      AFFINITY_COOKIE_TTL_SECONDS: '3600'
+      OPENAI_API_KEY_FILE: /run/secrets/ai_teddy_bear_openai_api_key
+      OPENAI_STT_API_KEY: ${OPENAI_STT_API_KEY:-}
+      OPENAI_STT_API_KEY_FILE: /run/secrets/ai_teddy_bear_openai_stt_api_key
+      ALLOW_AI_FAILURE_FALLBACK: 'false'
+      ALLOW_WS_MOCK: 'false'
+    volumes:
+    - ./logs:/app/logs
+    - app_data:/app/data
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:8000/health
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+    - teddy-network
+    expose:
+    - '8000'
+    secrets:
+    - ai_teddy_bear_openai_api_key
+    - ai_teddy_bear_openai_stt_api_key
 volumes:
   postgres_data:
     driver: local
@@ -194,24 +290,26 @@ volumes:
       type: none
       o: bind
       device: ./data/postgres
-  
   redis_data:
     driver: local
     driver_opts:
       type: none
       o: bind
       device: ./data/redis
-  
   app_data:
     driver: local
     driver_opts:
       type: none
       o: bind
       device: ./data/app
-
 networks:
   teddy-network:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.20.0.0/16
+      - subnet: 172.20.0.0/16
+secrets:
+  ai_teddy_bear_openai_api_key:
+    file: ./vault/secrets/openai_api_key
+  ai_teddy_bear_openai_stt_api_key:
+    file: ./vault/secrets/openai_stt_api_key

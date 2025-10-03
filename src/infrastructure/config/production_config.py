@@ -109,10 +109,13 @@ class ProductionConfig(BaseSettings):
     # ===========================================
     # AI SERVICES - OPENAI REQUIRED
     # ===========================================
-    OPENAI_API_KEY: str = Field(..., pattern="^sk-", description="OpenAI API key")
+    OPENAI_API_KEY: str = Field(..., description="OpenAI API key")
     OPENAI_MODEL: str = Field("gpt-4", description="OpenAI model to use")
     OPENAI_MAX_TOKENS: int = Field(1000, ge=1, le=4000)
     OPENAI_TEMPERATURE: float = Field(0.7, ge=0.0, le=2.0)
+    ALLOW_AI_FAILURE_FALLBACK: bool = Field(
+        False, description="Allow automatic fallback to mock AI when provider is unavailable during startup"
+    )
 
     # ===========================================
     # CORS & SECURITY - NO WILDCARDS ALLOWED
@@ -177,10 +180,10 @@ class ProductionConfig(BaseSettings):
     # ===========================================
     # API DOCUMENTATION
     # ===========================================
-    API_BASE_URL: str = Field("https://api.aiteddybear.com", description="API base URL")
+    API_BASE_URL: str = Field("https://api.your.production.domain", description="API base URL")
     API_TITLE: str = Field("AI Teddy Bear API", description="API title")
     API_VERSION: str = Field("1.0.0", description="API version")
-    SUPPORT_EMAIL: str = Field("support@aiteddybear.com", description="Support email")
+    SUPPORT_EMAIL: str = Field("support@your.production.domain", description="Support email")
 
     # ===========================================
     # OPTIONAL AI SERVICES
@@ -188,6 +191,25 @@ class ProductionConfig(BaseSettings):
     ELEVENLABS_API_KEY: Optional[str] = Field(None, description="ElevenLabs API key")
     TTS_PROVIDER: str = Field(
         "openai", pattern="^(openai|elevenlabs)$", description="TTS provider to use"
+    )
+
+    STT_PROVIDER: str = Field(
+        "openai", pattern="^(openai|whisper)$", description="Speech-to-text provider"
+    )
+    OPENAI_STT_MODEL: str = Field(
+        "whisper-1", description="OpenAI transcription model identifier"
+    )
+    OPENAI_STT_API_KEY: Optional[str] = Field(
+        None, description="Dedicated OpenAI API key for STT (defaults to OPENAI_API_KEY)"
+    )
+    STT_DEFAULT_LANGUAGE: Optional[str] = Field(
+        None, description="Default language code hint for STT requests"
+    )
+    STT_TIMEOUT_SECONDS: float = Field(
+        60.0, ge=5.0, le=120.0, description="Timeout for STT requests"
+    )
+    WHISPER_MODEL: str = Field(
+        "small", description="Local Whisper model size for on-device transcription"
     )
 
     # ===========================================
@@ -201,9 +223,18 @@ class ProductionConfig(BaseSettings):
     # ===========================================
     # PREMIUM SUBSCRIPTION SYSTEM
     # ===========================================
-    STRIPE_PUBLISHABLE_KEY: str = Field(..., description="Stripe publishable key")
-    STRIPE_SECRET_KEY: str = Field(..., description="Stripe secret key")
-    STRIPE_WEBHOOK_SECRET: str = Field(..., description="Stripe webhook secret")
+    # PREMIUM SUBSCRIPTION SYSTEM
+    # ===========================================
+    STRIPE_ENABLED: bool = Field(False, description="Enable premium billing and Stripe integration")
+    STRIPE_PUBLISHABLE_KEY: Optional[str] = Field(
+        None, description="Stripe publishable key"
+    )
+    STRIPE_SECRET_KEY: Optional[str] = Field(
+        None, description="Stripe secret key"
+    )
+    STRIPE_WEBHOOK_SECRET: Optional[str] = Field(
+        None, description="Stripe webhook secret"
+    )
     PREMIUM_TRIAL_DAYS: int = Field(7, ge=0, le=30, description="Premium trial period")
     PREMIUM_BILLING_CYCLE_DAYS: int = Field(
         30, ge=1, le=365, description="Billing cycle"
@@ -216,7 +247,6 @@ class ProductionConfig(BaseSettings):
     PREMIUM_HISTORY_DAYS_BASIC: int = Field(90, ge=1, le=365)
     PREMIUM_REPORTS_PER_MONTH_FREE: int = Field(1, ge=1, le=100)
     PREMIUM_REPORTS_PER_MONTH_BASIC: int = Field(5, ge=1, le=100)
-
     # ===========================================
     # WEBSOCKET & REAL-TIME NOTIFICATIONS
     # ===========================================
@@ -263,6 +293,10 @@ class ProductionConfig(BaseSettings):
     @classmethod
     def validate_openai_key_format(cls, v: str) -> str:
         """Validate OpenAI API key format."""
+        sentinel = "__PROVIDE_OPENAI_KEY_VIA_VAULT__"
+        if v == sentinel:
+            # Allow placeholder here; model-level validator will enforce policy with flags
+            return v
         if not v.startswith("sk-"):
             raise ValueError(
                 "OPENAI API ERROR: Invalid API key format. "
@@ -345,6 +379,14 @@ class ProductionConfig(BaseSettings):
             if self.HOST == "0.0.0.0":
                 logger.warning(
                     "WARNING: Binding to 0.0.0.0 in production - ensure proper firewall rules"
+                )
+            # Enforce OpenAI key policy when placeholder is used
+            if self.OPENAI_API_KEY == "__PROVIDE_OPENAI_KEY_VIA_VAULT__" and not (
+                self.ALLOW_AI_FAILURE_FALLBACK or self.USE_MOCK_SERVICES
+            ):
+                raise ValueError(
+                    "OPENAI_API_KEY placeholder used without fallback/mocks. "
+                    "Provide a real key or enable ALLOW_AI_FAILURE_FALLBACK or USE_MOCK_SERVICES."
                 )
         return self
 
@@ -429,6 +471,38 @@ class ConfigurationManager:
         self._config: Optional[ProductionConfig] = None
         self._config_lock = threading.Lock()
 
+    def _apply_secret_file_overrides(self) -> None:
+        """Load secrets from *_FILE paths into environment before validation."""
+        secret_keys = [
+            'OPENAI_API_KEY',
+            'OPENAI_STT_API_KEY',
+            'ELEVENLABS_API_KEY',
+        ]
+        for key in secret_keys:
+            file_var = f"{key}_FILE"
+            file_path = os.getenv(file_var)
+            if not file_path:
+                continue
+            try:
+                with open(file_path, 'r', encoding='utf-8') as secret_file:
+                    value = secret_file.read().strip()
+            except FileNotFoundError as exc:
+                raise ConfigurationError(
+                    f"Secret file not found for {key}",
+                    context={'config_key': file_var}
+                ) from exc
+            except OSError as exc:
+                raise ConfigurationError(
+                    f"Unable to read secret file for {key}",
+                    context={'config_key': file_var, 'error': exc.strerror or 'io_error'}
+                ) from exc
+            if not value:
+                raise ConfigurationError(
+                    f"Secret file empty for {key}",
+                    context={'config_key': file_var}
+                )
+            os.environ[key] = value
+
     @classmethod
     def get_instance(cls) -> "ConfigurationManager":
         """Get singleton instance."""
@@ -446,6 +520,7 @@ class ConfigurationManager:
                 return self._config
 
             try:
+                self._apply_secret_file_overrides()
                 if env_file:
                     self._config = ProductionConfig(_env_file=env_file)
                 else:
@@ -461,6 +536,29 @@ class ConfigurationManager:
                     safe_env,
                     safe_debug,
                 )
+
+                if self._config.ENVIRONMENT.lower() == 'production':
+                    placeholders = []
+
+                    def _collect(value, path):
+                        if isinstance(value, str):
+                            if '__SET_ME__' in value or 'your.production.domain' in value:
+                                placeholders.append(path)
+                        elif isinstance(value, (list, tuple, set)):
+                            for idx, item in enumerate(value):
+                                _collect(item, f"{path}[{idx}]")
+                        elif isinstance(value, dict):
+                            for key, item in value.items():
+                                _collect(item, f"{path}.{key}")
+
+                    _collect(self._config.model_dump(), 'config')
+
+                    if placeholders:
+                        raise ConfigurationError(
+                            'Production configuration still contains placeholder values',
+                            context={'placeholders': placeholders},
+                        )
+
                 return self._config
 
             except Exception as e:
@@ -639,8 +737,8 @@ OPENAI_MODEL=gpt-4
 OPENAI_MAX_TOKENS=1500
 
 # CORS - Production domains only (no localhost)
-CORS_ALLOWED_ORIGINS=["https://aiteddybear.com","https://www.aiteddybear.com","https://api.aiteddybear.com","https://ai-tiddy-bear-v-xuqy.onrender.com"]
-ALLOWED_HOSTS=["aiteddybear.com","www.aiteddybear.com","api.aiteddybear.com","ai-tiddy-bear-v-xuqy.onrender.com"]
+CORS_ALLOWED_ORIGINS=["https://your.production.domain","https://www.your.production.domain","https://api.your.production.domain","https://ai-tiddy-bear-v-xuqy.onrender.com"]
+ALLOWED_HOSTS=["your.production.domain","www.your.production.domain","api.your.production.domain","ai-tiddy-bear-v-xuqy.onrender.com"]
 
 # Child Safety & COPPA
 COPPA_COMPLIANCE_MODE=true

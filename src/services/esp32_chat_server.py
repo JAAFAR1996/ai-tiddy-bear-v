@@ -18,7 +18,10 @@ import logging
 import uuid
 import re
 import base64
+import io
 from datetime import datetime
+import os
+import wave
 from typing import Dict, Optional, Any, List
 from dataclasses import dataclass, field
 from enum import Enum
@@ -96,6 +99,8 @@ class ESP32Session:
     message_count: int = 0
     total_audio_duration: float = 0.0
     current_audio_session: Optional[str] = None
+    last_seq: int = 0
+    resume_store: Optional[Any] = None
 
     def update_activity(self) -> None:
         """Update last activity timestamp."""
@@ -166,6 +171,12 @@ class ESP32ChatServer:
         self.ai_service = ai_service
         self.safety_service = safety_service
 
+        # Mock mode awareness (allows lightweight flows in testing)
+        self.use_mock_services = bool(
+            getattr(config, "USE_MOCK_SERVICES", False)
+            or os.getenv("USE_MOCK_SERVICES", "false").strip().lower() in ("1", "true", "yes")
+        )
+
         # Session management
         self.active_sessions: Dict[str, ESP32Session] = {}
         self.device_sessions: Dict[str, str] = {}  # device_id -> session_id
@@ -202,7 +213,7 @@ class ESP32ChatServer:
             raise ValueError("AI service is required for production deployment")
         if not safety_service:
             raise ValueError("Safety service is required for production deployment")
-            
+
         self.stt_provider = stt_provider
         self.tts_service = tts_service
         self.ai_service = ai_service
@@ -222,6 +233,47 @@ class ESP32ChatServer:
                     "No event loop running - background tasks will be started later"
                 )
                 pass
+
+    async def handle_websocket_connection(
+        self,
+        websocket: WebSocket,
+        auth_info: Dict[str, str],
+        child_id: Optional[str] = None,
+        child_name: Optional[str] = None,
+        child_age: Optional[int] = None,
+    ) -> None:
+        """
+        Handle WebSocket connection from ESP32 router.
+        """
+        device_id = auth_info.get("device_id", "")
+        
+        # Set defaults for missing child info
+        if not child_id:
+            child_id = f"child_{device_id}"
+        if not child_name:
+            child_name = "Friend"
+        if not child_age:
+            child_age = 8  # Default safe age
+            
+        try:
+            session_id = await self.connect_device(
+                websocket, device_id, child_id, child_name, child_age
+            )
+            
+            # Handle messages until disconnection
+            while True:
+                try:
+                    message = await websocket.receive_text()
+                    await self.handle_message(session_id, message)
+                except Exception as e:
+                    self.logger.error(f"Message handling error: {e}")
+                    break
+                    
+        except Exception as e:
+            self.logger.error(f"WebSocket connection error: {e}")
+        finally:
+            if 'session_id' in locals():
+                await self.disconnect_device(session_id, "connection_closed")
 
     async def connect_device(
         self,
@@ -419,21 +471,32 @@ class ESP32ChatServer:
     ) -> None:
         """Handle audio session start from ESP32."""
         try:
+            requested_id = message_data.get("audio_session_id") if isinstance(message_data, dict) else None
             audio_session_id = str(uuid.uuid4())
-            
+
+            if isinstance(requested_id, str) and requested_id.strip():
+                candidate_id = requested_id.strip()[:64]
+                if candidate_id in self.audio_sessions:
+                    self.logger.warning(
+                        f"Duplicate requested audio_session_id: {candidate_id}",
+                        extra={"session_id": session.session_id, "device_id": session.device_id},
+                    )
+                else:
+                    audio_session_id = candidate_id
+
             # Create new audio session
             audio_session = AudioSession(
                 session_id=session.session_id,
                 audio_session_id=audio_session_id,
             )
-            
+
             self.audio_sessions[audio_session_id] = audio_session
             session.current_audio_session = audio_session_id
-            
+
             # Initialize audio buffer
             if session.session_id not in self.audio_buffers:
                 self.audio_buffers[session.session_id] = []
-            
+
             self.logger.info(
                 f"Audio session started: {audio_session_id}",
                 extra={
@@ -442,7 +505,7 @@ class ESP32ChatServer:
                     "child_id": session.child_id,
                 },
             )
-            
+
             # Send acknowledgment
             await self._send_system_message(
                 session.session_id,
@@ -452,7 +515,7 @@ class ESP32ChatServer:
                     "status": "ready",
                 },
             )
-            
+
         except Exception as e:
             self.logger.error(f"Audio start handling failed: {e}", exc_info=True)
             await self._send_error(
@@ -464,7 +527,7 @@ class ESP32ChatServer:
     ) -> None:
         """
         Handle audio chunk from ESP32 - PRODUCTION IMPLEMENTATION.
-        
+
         Complete audio processing pipeline:
         1. Receive and validate audio chunk
         2. Buffer audio data
@@ -480,13 +543,13 @@ class ESP32ChatServer:
             chunk_id = message_data.get("chunk_id", str(uuid.uuid4()))
             is_final = message_data.get("is_final", False)
             audio_session_id = message_data.get("audio_session_id")
-            
+
             if not audio_data_b64:
                 await self._send_error(
                     session.session_id, "missing_audio_data", "No audio data provided"
                 )
                 return
-            
+
             # Decode base64 audio data
             try:
                 audio_data = base64.b64decode(audio_data_b64)
@@ -496,7 +559,7 @@ class ESP32ChatServer:
                     session.session_id, "invalid_audio_data", "Invalid audio encoding"
                 )
                 return
-            
+
             # Validate audio session
             if audio_session_id and audio_session_id in self.audio_sessions:
                 audio_session = self.audio_sessions[audio_session_id]
@@ -506,9 +569,9 @@ class ESP32ChatServer:
                 if session.session_id not in self.audio_buffers:
                     self.audio_buffers[session.session_id] = []
                 self.audio_buffers[session.session_id].append(audio_data)
-            
+
             # Log chunk received
-            self.logger.debug(
+            self.logger.info(
                 f"Audio chunk received: {len(audio_data)} bytes, final: {is_final}",
                 extra={
                     "session_id": session.session_id,
@@ -516,11 +579,27 @@ class ESP32ChatServer:
                     "audio_session_id": audio_session_id,
                 },
             )
-            
+
+            # Send lightweight ACK back to device for observability
+            try:
+                await self._send_system_message(
+                    session.session_id,
+                    {
+                        "type": "audio_ack",
+                        "chunk_id": chunk_id,
+                        "bytes": len(audio_data),
+                        "final": bool(is_final),
+                        "audio_session_id": audio_session_id or "",
+                    },
+                )
+            except Exception:
+                # Non-fatal; continue processing
+                pass
+
             # If this is the final chunk, process the complete audio
             if is_final:
                 await self._process_complete_audio(session, audio_session_id)
-            
+
         except Exception as e:
             self.logger.error(f"Audio chunk handling failed: {e}", exc_info=True)
             await self._send_error(
@@ -533,17 +612,17 @@ class ESP32ChatServer:
         """Handle audio session end from ESP32."""
         try:
             audio_session_id = message_data.get("audio_session_id")
-            
+
             if audio_session_id and audio_session_id in self.audio_sessions:
                 audio_session = self.audio_sessions[audio_session_id]
                 audio_session.is_complete = True
-                
+
                 # Process the complete audio
                 await self._process_complete_audio(session, audio_session_id)
             else:
                 # Fallback: process buffered audio
                 await self._process_complete_audio(session, None)
-            
+
         except Exception as e:
             self.logger.error(f"Audio end handling failed: {e}", exc_info=True)
             await self._send_error(
@@ -555,7 +634,7 @@ class ESP32ChatServer:
     ) -> None:
         """
         Process complete audio through the full pipeline.
-        
+
         PRODUCTION AUDIO PROCESSING PIPELINE:
         1. Combine audio chunks
         2. Validate audio quality and safety
@@ -567,7 +646,7 @@ class ESP32ChatServer:
         """
         correlation_id = str(uuid.uuid4())
         start_time = datetime.now()
-        
+
         try:
             # Step 1: Combine audio chunks
             if audio_session_id and audio_session_id in self.audio_sessions:
@@ -575,17 +654,25 @@ class ESP32ChatServer:
                 audio_chunks = audio_session.chunks
             else:
                 audio_chunks = self.audio_buffers.get(session.session_id, [])
-            
+
             if not audio_chunks:
-                self.logger.warning(f"No audio data to process for session {session.session_id}")
-                await self._send_error(
-                    session.session_id, "no_audio_data", "No audio data received"
-                )
-                return
-            
+                if self.use_mock_services:
+                    self.logger.warning(
+                        f"No audio data received; generating placeholder for session {session.session_id}"
+                    )
+                    audio_chunks = [self._generate_mock_audio_placeholder()]
+                else:
+                    self.logger.warning(
+                        f"No audio data to process for session {session.session_id}"
+                    )
+                    await self._send_error(
+                        session.session_id, "no_audio_data", "No audio data received"
+                    )
+                    return
+
             # Combine all chunks into single audio data
             complete_audio = b"".join(audio_chunks)
-            
+
             self.logger.info(
                 f"[{correlation_id}] Processing complete audio: {len(complete_audio)} bytes",
                 extra={
@@ -595,31 +682,56 @@ class ESP32ChatServer:
                     "chunks_count": len(audio_chunks),
                 },
             )
-            
+
+            # Persist captured audio to disk for diagnostics/listening (WAV, PCM s16le mono)
+            if not self.use_mock_services:
+                try:
+                    saved_path = self._save_captured_pcm_wav(
+                        complete_audio,
+                        sample_rate=16000,
+                        device_id=session.device_id,
+                        session_id=session.session_id,
+                        audio_session_id=audio_session_id or "buffer",
+                    )
+                    self.logger.info(
+                        f"Saved captured audio to {saved_path}",
+                        extra={"session_id": session.session_id},
+                    )
+                except Exception as e:
+                    self.logger.warning(f"Failed to save captured audio: {e}")
+
             # Step 2: Validate audio (basic checks)
             if len(complete_audio) < 1000:  # Minimum audio size
-                await self._send_error(
-                    session.session_id, "audio_too_short", "Audio too short to process"
-                )
-                return
-            
+                if self.use_mock_services:
+                    padding = 1000 - len(complete_audio)
+                    complete_audio += b"\x00" * padding
+                    self.logger.debug(
+                        f"Padded mock audio to minimum length ({len(complete_audio)} bytes)",
+                        extra={"session_id": session.session_id},
+                    )
+                else:
+                    await self._send_error(
+                        session.session_id, "audio_too_short", "Audio too short to process"
+                    )
+                    return
+
             if len(complete_audio) > 10 * 1024 * 1024:  # Maximum 10MB
                 await self._send_error(
                     session.session_id, "audio_too_large", "Audio file too large"
                 )
                 return
-            
+
             # Step 3: Speech-to-Text conversion
             if not self.stt_provider:
                 self.logger.error("STT provider not available")
                 await self._send_fallback_response(session, "I'm having trouble hearing you right now.")
                 return
-            
+
             try:
                 stt_result = await self.stt_provider.transcribe(
                     complete_audio, language="auto"
                 )
-                
+
                 # Extract text from result
                 if hasattr(stt_result, "text"):
                     transcribed_text = stt_result.text.strip()
@@ -627,11 +739,11 @@ class ESP32ChatServer:
                 else:
                     transcribed_text = str(stt_result).strip()
                     confidence = 0.8
-                
+
                 if not transcribed_text:
                     await self._send_fallback_response(session, "I didn't hear anything. Can you try again?")
                     return
-                
+
                 self.logger.info(
                     f"[{correlation_id}] STT completed: '{transcribed_text[:100]}...'",
                     extra={
@@ -640,19 +752,19 @@ class ESP32ChatServer:
                         "text_length": len(transcribed_text),
                     },
                 )
-                
+
             except Exception as e:
                 self.logger.error(f"STT processing failed: {e}", exc_info=True)
                 await self._send_fallback_response(session, "I'm having trouble understanding you. Can you speak a bit louder?")
                 return
-            
+
             # Step 4: Content safety check
             if self.safety_service:
                 try:
                     is_safe = await self.safety_service.check_content(
                         transcribed_text, session.child_age
                     )
-                    
+
                     if not is_safe:
                         self.logger.warning(
                             f"[{correlation_id}] Unsafe content detected",
@@ -665,21 +777,21 @@ class ESP32ChatServer:
                             session, "Let's talk about something else! What's your favorite animal?"
                         )
                         return
-                        
+
                 except Exception as e:
                     self.logger.error(f"Safety check failed: {e}", exc_info=True)
                     # Continue processing but log the error
-            
+
             # Step 5: AI response generation
             if not self.ai_service:
                 self.logger.error("AI service not available")
                 await self._send_fallback_response(session, "I'm thinking... Can you tell me more?")
                 return
-            
+
             try:
                 # Create child preferences (basic)
                 child_preferences = None  # Could be loaded from database
-                
+
                 # Generate AI response
                 ai_response = await self.ai_service.generate_safe_response(
                     child_id=UUID(session.child_id),
@@ -688,13 +800,13 @@ class ESP32ChatServer:
                     preferences=child_preferences,
                     conversation_context=None,  # Could include recent conversation
                 )
-                
+
                 if not ai_response or not ai_response.content:
                     await self._send_fallback_response(session, "That's interesting! Tell me more!")
                     return
-                
+
                 response_text = ai_response.content.strip()
-                
+
                 self.logger.info(
                     f"[{correlation_id}] AI response generated: '{response_text[:100]}...'",
                     extra={
@@ -702,19 +814,19 @@ class ESP32ChatServer:
                         "response_length": len(response_text),
                     },
                 )
-                
+
             except Exception as e:
                 self.logger.error(f"AI response generation failed: {e}", exc_info=True)
                 await self._send_fallback_response(session, "That's really cool! What else would you like to talk about?")
                 return
-            
+
             # Step 6: Text-to-Speech conversion
             if not self.tts_service:
                 self.logger.error("TTS service not available")
                 # Send text response as fallback
                 await self._send_text_response(session, response_text)
                 return
-            
+
             try:
                 # Convert response to speech
                 if hasattr(self.tts_service, 'convert_text_to_speech'):
@@ -733,7 +845,7 @@ class ESP32ChatServer:
                         TTSRequest, TTSConfiguration, VoiceProfile, ChildSafetyContext
                     )
                     from src.shared.audio_types import VoiceGender, VoiceEmotion, AudioFormat, AudioQuality
-                    
+
                     # Create TTS request
                     voice_profile = VoiceProfile(
                         voice_id="alloy",
@@ -744,42 +856,62 @@ class ESP32ChatServer:
                         description="Child-friendly voice for AI teddy bear",
                         is_child_safe=True,
                     )
-                    
+
                     config = TTSConfiguration(
                         voice_profile=voice_profile,
                         emotion=VoiceEmotion.HAPPY,
                         speed=1.0,
+                        # Request MP3 from provider (default), we'll convert to PCM for ESP32 playback
                         audio_format=AudioFormat.MP3,
                         quality=AudioQuality.STANDARD,
                     )
-                    
+
                     safety_context = ChildSafetyContext(
                         child_age=session.child_age,
                         parental_controls=True,
                         content_filter_level="strict",
                     )
-                    
+
                     request = TTSRequest(
                         text=response_text,
                         config=config,
                         safety_context=safety_context,
                     )
-                    
+
                     tts_result = await self.tts_service.synthesize_speech(request)
                     tts_audio = tts_result.audio_data
+
+                    # Convert provider audio (likely MP3) to raw PCM s16le 16k mono for ESP32
+                    try:
+                        source_fmt = getattr(tts_result.format, 'value', 'mp3') if hasattr(tts_result, 'format') else 'mp3'
+                        tts_audio = self._convert_audio_to_pcm_s16le(tts_audio, source_fmt, target_rate=16000)
+                    except Exception as conv_err:
+                        self.logger.error(f"Failed to convert TTS audio to PCM: {conv_err}", exc_info=True)
+                        # Fallback to text response if conversion fails
+                        await self._send_text_response(session, response_text)
+                        return
                 else:
                     # Fallback - assume it's a simple callable
                     tts_audio = await self.tts_service(response_text)
-                
+
                 if not tts_audio:
                     await self._send_text_response(session, response_text)
                     return
-                
-                # Step 7: Send audio response to ESP32
-                await self._send_audio_response(session, tts_audio, response_text)
-                
+
+                # Ensure PCM output regardless of TTS backend path
+                try:
+                    if not self._looks_like_pcm_s16le(tts_audio):
+                        tts_audio = self._convert_audio_to_pcm_s16le(tts_audio, source_format='mp3', target_rate=16000)
+                except Exception as conv_err:
+                    self.logger.error(f"Audio conversion to PCM failed: {conv_err}", exc_info=True)
+                    await self._send_text_response(session, response_text)
+                    return
+
+                # Step 7: Send audio response to ESP32 (PCM s16le @ 16k)
+                await self._send_audio_response(session, tts_audio, response_text, sample_rate=16000)
+
                 processing_time = (datetime.now() - start_time).total_seconds()
-                
+
                 self.logger.info(
                     f"[{correlation_id}] Audio processing completed successfully",
                     extra={
@@ -790,63 +922,130 @@ class ESP32ChatServer:
                         "audio_size_bytes": len(tts_audio) if isinstance(tts_audio, bytes) else 0,
                     },
                 )
-                
+
             except Exception as e:
                 self.logger.error(f"TTS processing failed: {e}", exc_info=True)
                 # Send text response as fallback
                 await self._send_text_response(session, response_text)
                 return
-            
+
         except Exception as e:
             self.logger.error(
                 f"[{correlation_id}] Audio processing pipeline failed: {e}",
                 exc_info=True,
             )
             await self._send_fallback_response(session, "I'm having some trouble right now. Can you try again?")
-        
+
         finally:
             # Cleanup audio session
             if audio_session_id and audio_session_id in self.audio_sessions:
                 del self.audio_sessions[audio_session_id]
-            
+
             # Clear audio buffer
             if session.session_id in self.audio_buffers:
                 self.audio_buffers[session.session_id] = []
-            
+
             # Reset current audio session
             session.current_audio_session = None
 
+    def _generate_mock_audio_placeholder(self) -> bytes:
+        """Generate a minimal PCM payload suitable for mock pipelines."""
+        # 0.1 seconds of silence @16kHz, 16-bit mono (even length for PCM)
+        frame_count = 1600
+        return b"\x00" * frame_count
+
+    def _convert_audio_to_pcm_s16le(self, audio_bytes: bytes, source_format: str = 'mp3', target_rate: int = 16000) -> bytes:
+        """Convert various audio formats to raw PCM s16le mono at target_rate.
+
+        Requires pydub + ffmpeg in the server environment (already in Dockerfile).
+        """
+        from pydub import AudioSegment
+
+        audio = AudioSegment.from_file(io.BytesIO(audio_bytes), format=source_format)
+        audio = audio.set_frame_rate(target_rate).set_channels(1).set_sample_width(2)
+        return audio.raw_data
+
     async def _send_audio_response(
-        self, session: ESP32Session, audio_data: bytes, text: str
+        self, session: ESP32Session, audio_data: bytes, text: str, sample_rate: int = 16000
     ) -> None:
         """Send audio response to ESP32."""
         try:
             # Encode audio as base64
             audio_b64 = base64.b64encode(audio_data).decode("utf-8")
-            
+
             response_message = {
                 "type": "audio_response",
                 "audio_data": audio_b64,
                 "text": text,
-                "format": "mp3",
-                "sample_rate": 22050,
+                # ESP32 expects raw PCM s16le and "audio_rate" field
+                "format": "pcm_s16le",
+                "audio_rate": sample_rate,
                 "timestamp": datetime.now().isoformat(),
             }
-            
+
             await session.websocket.send_text(json.dumps(response_message))
-            
+
             self.logger.info(
-                f"Audio response sent: {len(audio_data)} bytes",
+                f"Audio response sent (PCM): {len(audio_data)} bytes @ {sample_rate} Hz",
                 extra={
                     "session_id": session.session_id,
                     "text_length": len(text),
                 },
             )
-            
+
         except Exception as e:
             self.logger.error(f"Failed to send audio response: {e}", exc_info=True)
             # Fallback to text response
             await self._send_text_response(session, text)
+
+    def _save_captured_pcm_wav(
+        self,
+        pcm_bytes: bytes,
+        *,
+        sample_rate: int,
+        device_id: str,
+        session_id: str,
+        audio_session_id: str,
+    ) -> str:
+        """Save raw PCM s16le mono to a WAV file under data/esp32_audio/YYYYMMDD/.
+
+        Returns absolute file path.
+        """
+        # Prepare directory structure
+        date_dir = datetime.now().strftime("%Y%m%d")
+        base_dir = os.path.join("data", "esp32_audio", date_dir)
+        os.makedirs(base_dir, exist_ok=True)
+
+        # Build filename
+        ts = datetime.now().strftime("%H%M%S_%f")
+        safe_dev = (device_id or "unknown").replace("/", "_").replace("\\", "_")
+        safe_sess = (session_id or "sess").replace("/", "_").replace("\\", "_")
+        safe_audio = (audio_session_id or "audio").replace("/", "_").replace("\\", "_")
+        filename = f"{safe_dev}_{safe_sess}_{safe_audio}_{ts}.wav"
+        path = os.path.join(base_dir, filename)
+
+        # Write WAV header + frames
+        with wave.open(path, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)  # 16-bit
+            wf.setframerate(sample_rate)
+            wf.writeframes(pcm_bytes)
+
+        return os.path.abspath(path)
+
+    def _looks_like_pcm_s16le(self, data: bytes) -> bool:
+        """Heuristic to check if data is likely PCM s16le.
+
+        - PCM won't start with 'ID3' or typical MP3 frame 0xFFEx.
+        - PCM size should be even (16-bit samples).
+        """
+        if not data or len(data) < 4:
+            return False
+        if data[:3] == b'ID3':
+            return False
+        if data[0] == 0xFF and (data[1] & 0xE0) == 0xE0:
+            return False
+        return (len(data) % 2) == 0
 
     async def _send_text_response(self, session: ESP32Session, text: str) -> None:
         """Send text response to ESP32 as fallback."""
@@ -856,14 +1055,14 @@ class ESP32ChatServer:
                 "text": text,
                 "timestamp": datetime.now().isoformat(),
             }
-            
+
             await session.websocket.send_text(json.dumps(response_message))
-            
+
             self.logger.info(
                 f"Text response sent: '{text[:100]}...'",
                 extra={"session_id": session.session_id},
             )
-            
+
         except Exception as e:
             self.logger.error(f"Failed to send text response: {e}", exc_info=True)
 
@@ -877,21 +1076,21 @@ class ESP32ChatServer:
         """Handle text message from ESP32 (not used for teddy bear, but kept for completeness)."""
         try:
             text = message_data.get("text", "").strip()
-            
+
             if not text:
                 await self._send_error(
                     session.session_id, "empty_text", "No text provided"
                 )
                 return
-            
+
             self.logger.info(
                 f"Text message received: '{text[:100]}...'",
                 extra={"session_id": session.session_id},
             )
-            
+
             # For teddy bear, we primarily use audio, but this could be used for debugging
             await self._send_text_response(session, f"I received your text: {text}")
-            
+
         except Exception as e:
             self.logger.error(f"Text message handling failed: {e}", exc_info=True)
             await self._send_error(
@@ -1144,11 +1343,40 @@ class ESP32ChatServer:
             await self._terminate_session(session_id, "server_shutdown")
 
         self.logger.info("ESP32 Chat Server shutdown complete")
+    
+    async def _send_message_with_seq(
+        self, session: ESP32Session, message: Dict[str, Any], classification: str
+    ) -> bool:
+        """Send message with sequence number for resume support."""
+        try:
+            # Add sequence number
+            session.last_seq += 1
+            message["_seq"] = session.last_seq
+            
+            # Send message
+            await session.websocket.send_text(json.dumps(message))
+            
+            # Store in resume store if available
+            if session.resume_store:
+                await session.resume_store.append(
+                    session_id=session.session_id,
+                    device_id=session.device_id,
+                    seq=session.last_seq,
+                    classification=classification,
+                    payload=message
+                )
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to send message with seq: {e}", exc_info=True)
+            return False
 
 
 class _ESP32ServerProxy:
     """Back-compat proxy: keeps the old import path but defers real instance injection."""
     __slots__ = ("_inst",)
+
     def __init__(self):
         self._inst = None
 
@@ -1162,6 +1390,7 @@ class _ESP32ServerProxy:
                 "Initialize via ESP32ServiceFactory before use."
             )
         return getattr(self._inst, name)
+
 
 # Exported symbol for old imports:
 esp32_chat_server = _ESP32ServerProxy()

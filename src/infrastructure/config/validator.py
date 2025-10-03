@@ -1,10 +1,11 @@
-"""
+﻿"""
 🧸 AI TEDDY BEAR V5 - CONFIGURATION VALIDATOR
 =============================================
 Production-grade configuration validation with runtime checks.
 """
 
 import logging
+import os
 from typing import List, Dict, Any
 from dataclasses import dataclass
 from src.infrastructure.config.production_config import ProductionConfig
@@ -178,9 +179,12 @@ async def _validate_connectivity(
         import asyncpg
 
         # asyncpg only accepts postgresql:// or postgres://
-        db_url = config.DATABASE_URL
-        if db_url.startswith("postgresql+asyncpg://"):
-            db_url = "postgresql://" + db_url[len("postgresql+asyncpg://") :]
+        # Use MIGRATIONS_DATABASE_URL if available, otherwise convert DATABASE_URL
+        db_url = os.getenv("MIGRATIONS_DATABASE_URL")
+        if not db_url:
+            db_url = config.DATABASE_URL
+            if db_url.startswith("postgresql+asyncpg://"):
+                db_url = "postgresql://" + db_url[len("postgresql+asyncpg://") :]
 
         conn = await asyncpg.connect(db_url)
 
@@ -355,28 +359,39 @@ def _validate_production_readiness(
         if "localhost" in redis_url or "127.0.0.1" in redis_url:
             results["errors"].append(
                 "❌ CRITICAL: Redis URL contains localhost/127.0.0.1 in production"
-            )
+            )    # Stripe configuration checks
+        if getattr(config, "STRIPE_ENABLED", False):
+            secret = getattr(config, "STRIPE_SECRET_KEY", None)
+            publishable = getattr(config, "STRIPE_PUBLISHABLE_KEY", None)
 
-        # Stripe configuration checks
-        if hasattr(config, "STRIPE_SECRET_KEY"):
-            if config.STRIPE_SECRET_KEY.startswith("sk_test_"):
+            if not secret or not publishable:
                 results["errors"].append(
-                    "❌ CRITICAL: Using Stripe test key in production environment"
+                    "✖ CRITICAL: STRIPE_ENABLED=true but Stripe keys are not fully configured"
                 )
-            elif not config.STRIPE_SECRET_KEY.startswith("sk_live_"):
+            else:
+                if secret.startswith("sk_test_"):
+                    results["errors"].append(
+                        "✖ CRITICAL: Using Stripe test key in production environment"
+                    )
+                elif not secret.startswith("sk_live_"):
+                    results["warnings"].append(
+                        "⚠️  Stripe secret key format unexpected (should start with sk_live_)"
+                    )
+
+                if publishable.startswith("pk_test_"):
+                    results["errors"].append(
+                        "✖ CRITICAL: Using Stripe test publishable key in production environment"
+                    )
+                elif not publishable.startswith("pk_live_"):
+                    results["warnings"].append(
+                        "⚠️  Stripe publishable key format unexpected (should start with pk_live_)"
+                    )
+        else:
+            if getattr(config, "STRIPE_SECRET_KEY", None) or getattr(config, "STRIPE_PUBLISHABLE_KEY", None):
                 results["warnings"].append(
-                    "⚠️  Stripe secret key format unexpected (should start with sk_live_)"
+                    "⚠️  Stripe keys provided but STRIPE_ENABLED=false; they will be ignored"
                 )
 
-        if hasattr(config, "STRIPE_PUBLISHABLE_KEY"):
-            if config.STRIPE_PUBLISHABLE_KEY.startswith("pk_test_"):
-                results["errors"].append(
-                    "❌ CRITICAL: Using Stripe test publishable key in production environment"
-                )
-            elif not config.STRIPE_PUBLISHABLE_KEY.startswith("pk_live_"):
-                results["warnings"].append(
-                    "⚠️  Stripe publishable key format unexpected (should start with pk_live_)"
-                )
 
         # Optional but recommended settings
         if hasattr(config, "SENTRY_DSN") and not config.SENTRY_DSN:

@@ -20,13 +20,13 @@ DATABASE_ECHO: false
 DATABASE_SSL_MODE: "require"
 
 # Redis Configuration (Production Redis Cluster)
-REDIS_URL: "${REDIS_PRODUCTION_URL}"
+REDIS_URL: "${REDIS_URL}"
 REDIS_MAX_CONNECTIONS: 200
 REDIS_TIMEOUT: 3  # Shorter timeout for production
 
 # AI Providers (Production Keys)
 # ALL API KEYS MUST be set via environment variables or Vault
-OPENAI_API_KEY: "${OPENAI_PRODUCTION_API_KEY}"
+OPENAI_API_KEY: "${OPENAI_API_KEY}"
 ANTHROPIC_API_KEY: "${ANTHROPIC_PRODUCTION_API_KEY}"
 AI_PROVIDER_TIMEOUT: 25  # Shorter timeout for better UX
 AI_PROVIDER_MAX_RETRIES: 2  # Limited retries in production

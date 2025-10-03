@@ -58,12 +58,13 @@
   - `CORS_ALLOWED_ORIGINS`, `ALLOWED_HOSTS` (قوائم بدون *)
 
 ## 🚀 بدء سريع — إنتاج (Docker Compose)
-- احرص على ضبط قيم البيئة في ملف `.env.production` أو متغيرات النظام.
+- استبدل جميع قيم `__SET_ME__` في `.env` بسرية حقيقية قبل أي نشر (لا تُخزَّن في Git).
+- ولّد مفاتيح RSA والسيمتريك عبر `python scripts/generate_production_rsa_keys.py` ثم وفّر ملفات `keys/` في تخزينٍ آمن أو كأسرار تشغيل.
 - من داخل مجلد `deployment/`:
-  - `docker-compose -f deployment/docker-compose.production.yml up -d`
+  - `docker compose --env-file .env -f deployment/docker-compose.production.yml up -d`
   - تحقق من الصحة:
-    - `docker-compose -f deployment/docker-compose.production.yml ps`
-    - `docker-compose -f deployment/docker-compose.production.yml logs -f app`
+    - `docker compose --env-file .env -f deployment/docker-compose.production.yml ps`
+    - `docker compose --env-file .env -f deployment/docker-compose.production.yml logs -f app`
   - الخدمات:
     - API عبر Nginx على المنفذ `443` (المضيف: `api.${PRODUCTION_DOMAIN}`)
     - Prometheus محليًا: `http://localhost:9090`

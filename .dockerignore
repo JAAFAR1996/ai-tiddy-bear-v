@@ -1,258 +1,52 @@
-# AI Teddy Bear - Docker Ignore File
-# Prevents sensitive files from being included in Docker images
-
-# Environment files (CRITICAL - never include in images)
-.env
-.env.*
-!.env.example
-*.env
-
-# Secret files
-*.pem
-*.key
-*.cert
-*.crt
-*.pfx
-*.p12
-secrets/
-vault/
-.vault-token
-
-# Development files
-*.pyc
+# Python
 __pycache__/
+*.py[cod]
 *.pyo
 *.pyd
-.Python
 *.so
-*.egg
-*.egg-info/
-dist/
-build/
-eggs/
-.eggs/
-wheels/
-pip-wheel-metadata/
-*.manifest
-*.spec
-
-# Testing
 .pytest_cache/
-.coverage
-.coverage.*
-htmlcov/
-.tox/
-.nox/
-coverage.xml
-*.cover
-.hypothesis/
-test-results/
-junit.xml
+.mypy_cache/
+.ruff_cache/
 
-# IDE and editor files
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-.project
-.pydevproject
-.settings/
-*.sublime-*
+# Environments
+.env
+.venv/
+venv/
 
-# OS files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-Desktop.ini
+# Node/JS (mobile app)
+node_modules/
+mobile-app/
 
-# Version control
+# VCS
 .git/
 .gitignore
-.gitattributes
-.gitlab-ci.yml
-.github/
 
-# Documentation
-docs/
-*.md
-!README.md
-!SECURITY.md
-
-# Logs (never include in production images)
-logs/
-*.log
-*.log.*
-
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-instance/
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-*.temp
-*.bak
-*.backup
-*.old
-
-# Node modules (if any frontend assets)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Python virtual environments
-venv/
-env/
-ENV/
-env.bak/
-venv.bak/
-.venv/
-
-# Jupyter Notebooks
-.ipynb_checkpoints
-*.ipynb
-
-# Package managers
-poetry.lock
-Pipfile.lock
-
-# CI/CD
-.travis.yml
-.circleci/
-azure-pipelines.yml
-bitbucket-pipelines.yml
-
-# Kubernetes
-*.yaml
-*.yml
-!docker-compose*.yml
-charts/
-helmfile.yaml
-
-# Terraform
-*.tfstate
-*.tfstate.*
-.terraform/
-
-# Custom
-.keys/
-.secrets/
-backups/
-dumps/
-migrations/test_*.py
-
-# Application data directories (excluded from Docker images)
-uploads/
-data/
-secure_storage/
-
-# Archives & Media (large files not needed in prod image)
-*.zip
-*.tar
-*.gz
-*.rar
-*.7z
-*.mp4
-*.mp3
-*.wav
-
-# Local environment configurations (development only)
-.env.local
-.env.development
-.env.production.local
-
-# Tests directory (if not needed in production)
-tests/
-
-# Development containers
-.devcontainer/
-
-# Performance profiling
-*.prof
-*.lprof
-
-# macOS
-.AppleDouble
-.LSOverride
-Icon
-.DocumentRevisions-V100
-.fseventsd
-.TemporaryItems
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
-
-# Windows
-[Dd]esktop.ini
-$RECYCLE.BIN/
-*.cab
-*.msi
-*.msix
-*.msm
-*.msp
-*.lnk
-
-# Security scanning
-.scannerwork/
-dependency-check-report.html
-
-# git & venv & caches
-.git
-.gitignore
-.venv/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.so
-*.egg-info/
-pip-wheel-metadata/
-
-# node/frontend
-node_modules/
+# Build/Cache/Artifacts
 dist/
 build/
 *.log
-
-# data/models/media
-data/
-datasets/
-models/
-checkpoints/
-wandb/
-mlruns/
-*.pt
-*.pth
-*.onnx
-*.bin
-*.safetensors
-*.mp3
-*.wav
-*.mp4
-*.mov
-
-# Project-local large folders not needed in production image
-ESP32_Project/
-mobile-app/
-performance_testing/
-security_system/
-ai-tiddy-bear-v/
-uploads/
 logs/
-tmp/
-.cache/
-.huggingface/
+data/
+backups/
+coverage/
 
-# misc
+# OS/editor
 .DS_Store
-.env
-.env.*
-*.sqlite
+Thumbs.db
+.vscode/
+.idea/
+
+# Large bundles/archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+
+# Keys/secrets
+keys/
+
+# Local dumps/attachments
+uploads/
+temp/
+

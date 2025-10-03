@@ -202,8 +202,61 @@ class TransactionManager:
         self._config = config
         self._sessionmaker = sessionmaker
         self.config_manager = config_manager
-        self.logger = get_logger("transaction_manager")
+        self.logger = get_logger('transaction_manager')
 
+        # Runtime bookkeeping
+        self.active_transactions: Dict[str, 'Transaction'] = {}
+        self.transaction_metrics: List[TransactionMetrics] = []
+        self.max_metrics_history = 10000
+        self.deadlock_detector_task: Optional[asyncio.Task] = None
+        self.deadlock_check_interval = 10.0  # seconds
+
+        # Default transaction configuration derived from environment
+        self.default_config = self._build_default_config()
+
+    def _build_default_config(self) -> TransactionConfig:
+        """Construct transaction defaults without forcing config load at import."""
+        timeout = 300.0
+        retry_attempts = 3
+        deadlock_timeout = 30.0
+
+        manager = self.config_manager
+        cfg_obj: Optional[Any] = None
+
+        if manager:
+            get_float = getattr(manager, 'get_float', None)
+            get_int = getattr(manager, 'get_int', None)
+            get_cfg = getattr(manager, 'get_config', None)
+
+            try:
+                if callable(get_float):
+                    timeout = get_float('TRANSACTION_TIMEOUT', timeout)
+                    deadlock_timeout = get_float('TRANSACTION_DEADLOCK_TIMEOUT', deadlock_timeout)
+                if callable(get_int):
+                    retry_attempts = get_int('TRANSACTION_RETRY_ATTEMPTS', retry_attempts)
+            except Exception:
+                # Non-fatal: fall back to config object or defaults
+                self.logger.debug('Config manager overrides unavailable, using defaults')
+
+            if callable(get_cfg):
+                try:
+                    cfg_obj = get_cfg()
+                except Exception:
+                    cfg_obj = None
+
+        if cfg_obj is None and self._config is not None:
+            cfg_obj = self._config
+
+        if cfg_obj is not None:
+            timeout = getattr(cfg_obj, 'TRANSACTION_TIMEOUT', timeout)
+            retry_attempts = getattr(cfg_obj, 'TRANSACTION_RETRY_ATTEMPTS', retry_attempts)
+            deadlock_timeout = getattr(cfg_obj, 'TRANSACTION_DEADLOCK_TIMEOUT', deadlock_timeout)
+
+        return TransactionConfig(
+            timeout=timeout,
+            retry_attempts=retry_attempts,
+            deadlock_timeout=deadlock_timeout,
+        )
 
     def _get_cfg(self):
         if self._config is not None:
@@ -217,25 +270,6 @@ class TransactionManager:
         cfg = self._get_cfg()
         return getattr(cfg, key, default)
 
-        # Active transactions
-        self.active_transactions: Dict[str, "Transaction"] = {}
-
-        # Configuration
-        self.default_config = TransactionConfig(
-            timeout=self.config_manager.get_float("TRANSACTION_TIMEOUT", 300.0),
-            retry_attempts=self.config_manager.get_int("TRANSACTION_RETRY_ATTEMPTS", 3),
-            deadlock_timeout=self.config_manager.get_float(
-                "TRANSACTION_DEADLOCK_TIMEOUT", 30.0
-            ),
-        )
-
-        # Metrics
-        self.transaction_metrics: List[TransactionMetrics] = []
-        self.max_metrics_history = 10000
-
-        # Deadlock detection
-        self.deadlock_detector_task: Optional[asyncio.Task] = None
-        self.deadlock_check_interval = 10.0  # seconds
 
     async def start(self):
         """Start transaction manager services."""
@@ -880,9 +914,21 @@ class DistributedTransaction(Transaction):
 
 
 def get_transaction_manager() -> TransactionManager:
-    # Use DI config instead of global manager
-    from src.infrastructure.config.production_config import get_config
-    config = get_config()
+    """Build a transaction manager using the shared configuration manager when available."""
+    try:
+        config_manager = get_config_manager()
+        if config_manager is not None:
+            return TransactionManager(config_manager=config_manager)
+    except Exception:
+        logger = get_logger('transaction_manager')
+        logger.warning('Config manager unavailable during transaction manager setup; falling back to static config')
+
+    from ..config import get_config as _get_config, load_config as _load_config
+
+    try:
+        config = _get_config()
+    except Exception:
+        config = _load_config()
     return TransactionManager(config=config)
 
 

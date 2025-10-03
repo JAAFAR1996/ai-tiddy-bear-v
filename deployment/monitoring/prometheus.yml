@@ -32,7 +32,7 @@ scrape_configs:
   # AI Teddy Bear Application
   - job_name: 'ai-teddy-app'
     static_configs:
-      - targets: ['app:9090']
+      - targets: ['app:9090','app_replica:9090']
     metrics_path: /metrics
     scrape_interval: 15s
     scrape_timeout: 10s
@@ -84,8 +84,3 @@ scrape_configs:
 #       username: "user"
 #       password: "password"
 
-# Storage configuration
-storage:
-  tsdb:
-    retention.time: 30d
-    retention.size: 10GB

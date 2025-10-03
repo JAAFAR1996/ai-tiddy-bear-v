@@ -10,7 +10,7 @@
 - [ ] JWT tokens stored in Keychain/Keystore (not AsyncStorage)
 
 ### ✅ Configuration
-- [ ] Production .env.production file created (not committed to git)
+- [ ] Production .env file created (not committed to git)
 - [ ] API_BASE_URL points to production backend
 - [ ] WS_BASE_URL uses WSS protocol
 - [ ] APP_ENV=production
@@ -21,7 +21,7 @@
 
 ## 🔧 Environment Configuration
 
-### Production Environment Variables (.env.production)
+### Production Environment Variables (.env)
 ```bash
 # Production API Configuration
 API_BASE_URL=https://api.aiteddybear.com
@@ -119,7 +119,7 @@ The app includes automatic security checks:
 ## 🚨 Critical Security Notes
 
 ### ⚠️ Never Commit These Files:
-- `.env.production`
+- `.env`
 - `.env.staging`
 - `google-services.json`
 - `GoogleService-Info.plist`
@@ -141,10 +141,10 @@ The app includes automatic security checks:
 ```yaml
 - name: Set up environment
   run: |
-    echo "API_BASE_URL=${{ secrets.API_BASE_URL }}" >> .env.production
-    echo "WS_BASE_URL=${{ secrets.WS_BASE_URL }}" >> .env.production
-    echo "APP_ENV=production" >> .env.production
-    echo "ENABLE_SSL_PINNING=true" >> .env.production
+    echo "API_BASE_URL=${{ secrets.API_BASE_URL }}" >> .env
+    echo "WS_BASE_URL=${{ secrets.WS_BASE_URL }}" >> .env
+    echo "APP_ENV=production" >> .env
+    echo "ENABLE_SSL_PINNING=true" >> .env
 ```
 
 ### Required Secrets in CI/CD:

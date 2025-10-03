@@ -1,14 +1,14 @@
-"""
+﻿"""
 Audio Infrastructure Module
 ===========================
 Production-ready audio services for the AI Teddy Bear application.
 
-This module contains TTS (Text-to-Speech) providers and related audio infrastructure:
+This module contains audio providers and related infrastructure:
 - OpenAI TTS Provider (production-ready)
 - ElevenLabs TTS Provider (production-ready)
-- Azure TTS Provider (future implementation)
+- OpenAI STT Provider (cloud transcription)
 
-All providers implement the unified ITTSService interface and include:
+All providers implement unified interfaces and include:
 - Full COPPA compliance for child safety
 - Comprehensive error handling
 - Performance monitoring and metrics
@@ -18,8 +18,10 @@ All providers implement the unified ITTSService interface and include:
 
 from .openai_tts_provider import OpenAITTSProvider
 from .elevenlabs_tts_provider import ElevenLabsTTSProvider
+from .openai_stt_provider import OpenAISTTProvider
 
 __all__ = [
     "OpenAITTSProvider",
     "ElevenLabsTTSProvider",
+    "OpenAISTTProvider",
 ]

@@ -1,0 +1,189 @@
+name: Build Validation
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-validation:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: 
+          - esp32dev
+          - esp32dev-debug
+          - esp32dev-release
+          - esp32dev-test
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/platformio.ini') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Cache PlatformIO dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.platformio/.cache
+          ~/.platformio/lib_deps
+          ~/.platformio/platforms
+        key: ${{ runner.os }}-${{ hashFiles('**/platformio.ini') }}
+        restore-keys: |
+          ${{ runner.os }}-
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install PlatformIO Core
+      run: pip install --upgrade platformio
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cppcheck
+
+    - name: Build ${{ matrix.environment }}
+      run: |
+        pio run -e ${{ matrix.environment }}
+
+    - name: Check memory usage
+      run: |
+        pio run -e ${{ matrix.environment }} --target size
+
+    - name: Run static analysis
+      if: matrix.environment == 'esp32dev'
+      run: |
+        pio check -e ${{ matrix.environment }} --fail-on-defect medium
+
+    - name: Validate library dependencies
+      run: |
+        pio pkg list -e ${{ matrix.environment }}
+
+    - name: Generate build artifacts info
+      run: |
+        echo "## Build Information for ${{ matrix.environment }}" >> build-info.md
+        echo "- Build Date: $(date)" >> build-info.md
+        echo "- Environment: ${{ matrix.environment }}" >> build-info.md
+        echo "- Commit: ${{ github.sha }}" >> build-info.md
+        pio run -e ${{ matrix.environment }} --target size >> build-info.md
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-info-${{ matrix.environment }}
+        path: build-info.md
+
+  dependency-check:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install PlatformIO Core
+      run: pip install --upgrade platformio
+
+    - name: Check for missing symbols
+      run: |
+        echo "Checking for undefined symbols and missing dependencies..."
+        
+        # Build with verbose output to catch linking errors
+        pio run -v -e esp32dev 2>&1 | tee build.log
+        
+        # Check for common issues
+        if grep -q "undefined reference" build.log; then
+          echo "❌ Found undefined references:"
+          grep "undefined reference" build.log
+          exit 1
+        fi
+        
+        if grep -q "No such file or directory" build.log; then
+          echo "❌ Found missing files:"
+          grep "No such file or directory" build.log
+          exit 1
+        fi
+        
+        echo "✅ No missing symbols detected"
+
+    - name: Validate configuration
+      run: |
+        # Check for required defines
+        echo "Validating configuration..."
+        
+        if ! grep -q "#define.*WIFI_SSID" include/config.h; then
+          echo "⚠️ Warning: WIFI_SSID not properly configured"
+        fi
+        
+        if ! grep -q "#define.*SERVER_HOST" include/config.h; then
+          echo "⚠️ Warning: SERVER_HOST not properly configured" 
+        fi
+        
+        echo "✅ Configuration validation complete"
+
+  compatibility-check:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install PlatformIO Core
+      run: pip install --upgrade platformio
+
+    - name: Check library compatibility
+      run: |
+        echo "Checking library compatibility..."
+        
+        # Update library registry
+        pio pkg update --global
+        
+        # Check for library updates
+        pio pkg outdated -e esp32dev || true
+        
+        # Test installation of dependencies
+        pio pkg install -e esp32dev
+        
+        echo "✅ Library compatibility check complete"
+
+    - name: Memory analysis
+      run: |
+        echo "Analyzing memory usage..."
+        
+        # Build and get memory info
+        pio run -e esp32dev --target size | tee memory-usage.txt
+        
+        # Extract memory usage
+        RAM_USAGE=$(grep "RAM:" memory-usage.txt | grep -o '[0-9.]*%' || echo "N/A")
+        FLASH_USAGE=$(grep "Flash:" memory-usage.txt | grep -o '[0-9.]*%' || echo "N/A")
+        
+        echo "RAM Usage: $RAM_USAGE"
+        echo "Flash Usage: $FLASH_USAGE"
+        
+        # Check if memory usage is reasonable
+        if [[ "$RAM_USAGE" != "N/A" ]]; then
+          RAM_PERCENT=$(echo $RAM_USAGE | sed 's/%//')
+          if (( $(echo "$RAM_PERCENT > 80" | bc -l) )); then
+            echo "⚠️ Warning: High RAM usage detected: $RAM_USAGE"
+          fi
+        fi
+        
+        echo "✅ Memory analysis complete"

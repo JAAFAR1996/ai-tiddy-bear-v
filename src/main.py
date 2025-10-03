@@ -20,25 +20,29 @@ import secrets
 import os
 import time
 import logging
-from contextlib import asynccontextmanager
+import json
+import socket
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 import uvicorn
 import redis.asyncio as redis
-from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi import FastAPI, Request, HTTPException, Depends, WebSocket
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from src.infrastructure.error_handler import setup_error_handlers
+from src.utils.redaction import sanitize_text, sanitize_mapping
 
 
 # ReadinessGate Middleware - Production Grade
 class ReadinessGate(BaseHTTPMiddleware):
-    def __init__(self, app, allow=("/health", "/health/ready", "/openapi.json", "/docs", "/redoc")):
+    def __init__(self, app, allow=("/health", "/healthz", "/ready", "/health/ready", "/openapi.json", "/docs", "/redoc")):
         super().__init__(app)
         self.allow = set(allow)
         self.config_dependent = {"/api/v1/pair/claim", "/api/v1/token/refresh"}
@@ -50,6 +54,9 @@ class ReadinessGate(BaseHTTPMiddleware):
         if path in self.allow:
             return await call_next(req)
             
+        if path.startswith("/admin/drain"):
+            return await call_next(req)
+
         # ESP32 pairing endpoints: allow if config is ready
         if path.startswith("/api/v1/pair"):
             if getattr(req.app.state, "config_ready", False):
@@ -418,8 +425,11 @@ async def lifespan(app: FastAPI):
 
     correlation_id = str(uuid4())
     try:
-        await initialize_production_database(config)
-        logger.info("✅ Database initialized")
+        if getattr(config, "ENABLE_DATABASE", True):
+            await initialize_production_database(config)
+            logger.info("✅ Database initialized")
+        else:
+            logger.info("⚠️ Database initialization skipped (ENABLE_DATABASE=false)")
 
         if config and config.ENABLE_REDIS:
             try:
@@ -498,6 +508,12 @@ async def lifespan(app: FastAPI):
             app.state.token_manager = token_manager
             app.state.user_authenticator = user_authenticator
 
+            from src.services.service_registry import get_service_registry
+
+            registry = await get_service_registry(config)
+            app.state.service_registry = registry
+            app.state.drain_manager = registry.get_drain_manager()
+
             # تمرير الـ connection manager إلى الـ compat shim (لأي كود قديم)
             set_connection_manager(db_adapter.connection_manager)
 
@@ -543,25 +559,24 @@ async def lifespan(app: FastAPI):
             
             logger.info("✅ All routers registered via RouteManager")
 
-            # Initialize ESP32 Chat Server services eagerly (production-grade)
+            # Eager ESP32 pipeline initialization (blocks startup to guarantee WS readiness)
             try:
-                from src.services.esp32_production_runner import (
-                    esp32_production_runner,
-                )
-                # Run initialization in the background to avoid blocking startup and worker timeouts
-                import asyncio as _asyncio
-                _asyncio.create_task(esp32_production_runner.initialize_services(config=config))
-                logger.info("ESP32 services background init started (non-blocking)")
+                from src.services.esp32_production_runner import esp32_production_runner
+
+                logger.info("🔁 Initializing ESP32 production services (eager phase)...")
+                await esp32_production_runner.initialize_services(config=config)
+                app.state.esp32_services_ready = True
+                logger.info("✅ ESP32 services ready for WebSocket traffic")
             except Exception as e:
-                # Do not crash the whole API; WS endpoint will attempt lazy init as fallback
-                logger.error(
-                    f"ESP32 services eager init scheduling failed: {e}", exc_info=True
+                logger.critical(
+                    "🚨 ESP32 services failed to initialize during startup", extra={"error": str(e)}
                 )
-            
+                raise
+
         logger.info(
             "✅ API started in %s mode", config.ENVIRONMENT if config else "unknown"
         )
-        
+
         # All resources initialized - mark as ready
         app.state.ready = True
         logger.info("🚀 Application is now ready to serve requests")
@@ -612,19 +627,45 @@ def create_app() -> FastAPI:
     from src.infrastructure.config.production_config import load_config
     config = load_config()
     
-    # 2) Create FastAPI app with lifespan
+    # 2) Determine docs/openapi URLs with env overrides, then create app
+    def _env_bool(name: str, default: None | bool = None) -> None | bool:
+        v = os.getenv(name)
+        if v is None:
+            return default
+        return v.strip().lower() in {"1", "true", "yes", "on"}
+
+    _docs_enabled = _env_bool("DOCS_ENABLED", None)
+    _redoc_enabled = _env_bool("REDOC_ENABLED", None)
+    _openapi_enabled = _env_bool("OPENAPI_ENABLED", None)
+    _docs_url_env = os.getenv("DOCS_URL")
+    _redoc_url_env = os.getenv("REDOC_URL")
+    _openapi_url_env = os.getenv("OPENAPI_URL")
+
+    _docs_url_default = "/docs" if config.ENVIRONMENT != "production" else None
+    _redoc_url_default = "/redoc" if config.ENVIRONMENT != "production" else None
+    _openapi_url_default = "/openapi.json" if config.ENVIRONMENT != "production" else None
+
+    def _resolve_url(enabled_override, url_override, default_url):
+        if enabled_override is False:
+            return None
+        if url_override == "":
+            return None
+        if url_override:
+            return url_override
+        return default_url if (enabled_override in (None, True)) else None
+
+    _docs_url = _resolve_url(_docs_enabled, _docs_url_env, _docs_url_default)
+    _redoc_url = _resolve_url(_redoc_enabled, _redoc_url_env, _redoc_url_default)
+    _openapi_url = _resolve_url(_openapi_enabled, _openapi_url_env, _openapi_url_default)
+
     app = FastAPI(
         title="AI Teddy Bear API",
         description="Child-safe AI conversations with enterprise security and COPPA compliance",
         version="1.0.0",
         lifespan=lifespan,
-        docs_url=(
-            "/docs" if config.ENVIRONMENT != "production" else None
-        ),  # Disable docs in production
-        redoc_url="/redoc" if config.ENVIRONMENT != "production" else None,
-        openapi_url=(
-            "/openapi.json" if config.ENVIRONMENT != "production" else None
-        ),
+        docs_url=_docs_url,
+        redoc_url=_redoc_url,
+        openapi_url=_openapi_url,
         contact={
             "name": "AI Teddy Bear Support",
             "url": "https://aiteddybear.com/support", 
@@ -647,6 +688,7 @@ def create_app() -> FastAPI:
     app.state.config = config
     app.state.config_ready = True  # ESP32 endpoints can work immediately
     app.state.ready = False        # Full system readiness set in lifespan
+    app.state.esp32_services_ready = False
     
     # 3.5) Database bootstrap (production-grade and safe)
     try:
@@ -693,10 +735,65 @@ def create_app() -> FastAPI:
     if not os.environ.get("PYTEST_CURRENT_TEST"):
         from fastapi.middleware.cors import CORSMiddleware
         from fastapi.middleware.trustedhost import TrustedHostMiddleware
-        
+
         app.add_middleware(SecurityHeadersMiddleware)
         app.add_middleware(RequestValidationMiddleware)
-        app.add_middleware(TrustedHostMiddleware, allowed_hosts=config.ALLOWED_HOSTS)
+        # Ensure local health checks within containers are allowed by TrustedHostMiddleware
+        try:
+            allowed_hosts_config = config.ALLOWED_HOSTS
+        except Exception:
+            allowed_hosts_config = []
+
+        normalized_hosts = []
+        if isinstance(allowed_hosts_config, (list, tuple, set)):
+            normalized_hosts.extend(str(host).strip() for host in allowed_hosts_config if host)
+        elif isinstance(allowed_hosts_config, str):
+            import json
+
+            try:
+                parsed_hosts = json.loads(allowed_hosts_config)
+            except json.JSONDecodeError:
+                parsed_hosts = [h.strip() for h in allowed_hosts_config.split(',') if h.strip()]
+
+            if isinstance(parsed_hosts, (list, tuple, set)):
+                normalized_hosts.extend(str(host).strip() for host in parsed_hosts if host)
+            elif isinstance(parsed_hosts, str) and parsed_hosts.strip():
+                normalized_hosts.append(parsed_hosts.strip())
+        elif allowed_hosts_config:
+            normalized_hosts.append(str(allowed_hosts_config).strip())
+
+        normalized_hosts.extend(["127.0.0.1", "localhost", "0.0.0.0", "testserver"])
+
+        container_host = socket.gethostname()
+        if container_host:
+            normalized_hosts.append(container_host)
+
+        extra_hosts_env = os.getenv('EXTRA_TRUSTED_HOSTS', '')
+        if extra_hosts_env:
+            normalized_hosts.extend([h.strip() for h in extra_hosts_env.split(',') if h.strip()])
+
+        expanded_hosts = []
+        for host in normalized_hosts:
+            if not host:
+                continue
+            expanded_hosts.append(host)
+            if ':' not in host:
+                expanded_hosts.append(f"{host}:80")
+                expanded_hosts.append(f"{host}:443")
+
+        normalized_hosts = expanded_hosts
+
+        seen = set()
+        _allowed_hosts = []
+        for host in normalized_hosts:
+            if not host:
+                continue
+            if host in seen:
+                continue
+            seen.add(host)
+            _allowed_hosts.append(host)
+
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts)
         app.add_middleware(
             CORSMiddleware,
             allow_origins=config.CORS_ALLOWED_ORIGINS,
@@ -757,7 +854,7 @@ def include_api_routes():
         
         # Production assertion: Verify critical routes are registered
         routes = {route.path for route in app.routes if hasattr(route, 'path')}
-        critical_routes = ["/api/v1/pair/claim", "/health", "/api/auth/login"]
+        critical_routes = ["/api/v1/pair/claim", "/health", "/ready", "/api/auth/login"]
         missing_routes = [r for r in critical_routes if r not in routes]
         if missing_routes:
             logger.critical("❌ Critical routes missing", extra={"missing_routes": missing_routes})
@@ -975,6 +1072,32 @@ async def root(request: Request, _: bool = Depends(rate_limit_30_per_minute)):
     }
 
 
+
+@app.get("/healthz", include_in_schema=False)
+async def healthz():
+    """Fast liveness probe with no external dependencies."""
+    return {
+        "status": "ok",
+        "timestamp": time.time(),
+        "ready": bool(getattr(app.state, "ready", False)),
+        "esp32_ready": bool(getattr(app.state, "esp32_services_ready", False)),
+    }
+
+
+@app.get("/ready", include_in_schema=False)
+async def readiness_probe():
+    """Readiness endpoint reflecting ESP32 pipeline state."""
+    ready = bool(getattr(app.state, "ready", False))
+    esp32_ready = bool(getattr(app.state, "esp32_services_ready", False))
+    payload = {
+        "status": "ready" if ready and esp32_ready else "initializing",
+        "ready": ready,
+        "esp32_ready": esp32_ready,
+        "timestamp": time.time(),
+    }
+    if not (ready and esp32_ready):
+        return JSONResponse(status_code=503, content=payload)
+    return payload
 @app.get("/health")
 async def health_check(request: Request, _: bool = Depends(rate_limit_60_per_minute)):
     """Health check endpoint with strict readiness check for all critical services."""
@@ -992,11 +1115,13 @@ async def health_check(request: Request, _: bool = Depends(rate_limit_60_per_min
             readiness = await registry.check_readiness()
             status = "healthy"
         except Exception as e:
-            readiness = getattr(e, "args", [str(e)])[0]
+            readiness = sanitize_text(getattr(e, "args", [str(e)])[0])
             status = "unhealthy"
             logger.error(f"Readiness check failed: {readiness}")
 
         environment = config.ENVIRONMENT if config else "test"
+        if isinstance(readiness, dict):
+            readiness = sanitize_mapping(dict(readiness))
         return {
             "status": status,
             "timestamp": time.time(),
@@ -1015,6 +1140,19 @@ async def health_check(request: Request, _: bool = Depends(rate_limit_60_per_min
             f"Health check failed - Error: {str(e)}, Type: {type(e).__name__}, CorrelationID: {correlation_id}"
         )
         raise HTTPException(status_code=503, detail="Service unhealthy")
+
+
+@app.websocket("/ws/ping")
+async def ws_ping(ws: WebSocket):
+    """Diagnostic WS endpoint: accepts and replies 'pong'."""
+    await ws.accept()
+    try:
+        await ws.send_text("pong")
+        # Keep open for manual tests
+        while True:
+            await ws.receive_text()
+    except Exception:
+        pass
 
 
 @app.get("/security-status")
@@ -1209,3 +1347,5 @@ async def initialize_configuration():
             str(e),
         )
         raise RuntimeError(f"CRITICAL: Configuration initialization failed (ID: {correlation_id})")
+
+

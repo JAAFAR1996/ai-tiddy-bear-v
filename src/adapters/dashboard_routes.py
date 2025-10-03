@@ -56,7 +56,7 @@ logger = get_logger(__name__, "dashboard_routes")
 
 # Business Logic Validation Functions
 async def validate_parent_authorization(
-    db: AsyncSession, parent_id: str, user_role: str = "parent"
+    db: AsyncSession, parent_id: str, user_role: str = "PARENT"
 ) -> User:
     """Validate parent exists, is authorized, and return User object."""
     try:
@@ -281,7 +281,7 @@ async def get_children(
 ):
     """Get all children for the authenticated parent with complete business logic."""
     # تحقق صريح من الدور
-    if current_user.get("role") != "parent":
+    if current_user.get("role") != "PARENT":
         raise AuthorizationError("Only parents can access this endpoint")
     try:
         # Validate parent_id
@@ -296,7 +296,7 @@ async def get_children(
         parent_stmt = select(User).where(
             and_(
                 User.id == parent_uuid,
-                User.role == "parent",
+                User.role == "PARENT",
                 User.is_active,
                 ~User.is_deleted,
             )
@@ -613,7 +613,7 @@ async def get_safety_alerts(
             .where(
                 and_(
                     User.id == parent_uuid,
-                    User.role == "parent",
+                    User.role == "PARENT",
                     User.is_active,
                     ~User.is_deleted,
                 )
@@ -916,7 +916,7 @@ async def get_dashboard_stats(
 ):
     """Get comprehensive dashboard statistics with full business logic."""
     # تحقق صريح من الدور
-    if current_user.get("role") != "parent":
+    if current_user.get("role") != "PARENT":
         raise AuthorizationError("Only parents can access this endpoint")
     try:
         # Validate parent_id
@@ -931,7 +931,7 @@ async def get_dashboard_stats(
         parent_stmt = select(User).where(
             and_(
                 User.id == parent_uuid,
-                User.role == "parent",
+                User.role == "PARENT",
                 User.is_active == True,
                 User.is_deleted == False,
             )
@@ -1333,7 +1333,7 @@ async def update_child(
     """Update child information with full validation and audit logging."""
 
     # Explicit role check for defense-in-depth
-    if current_user.get("role") != "parent":
+    if current_user.get("role") != "PARENT":
         logger.warning(
             f"Unauthorized update attempt on child {child_id} by user {current_user.get('id')}, role={current_user.get('role')}"
         )
